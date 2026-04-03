@@ -7,7 +7,7 @@ describe('App', () => {
   it('mounts renders properly', () => {
     const wrapper = mount(App)
     expect(wrapper.text()).toContain(
-      'One workspace for files, text tools, and daily developer utilities.',
+      'Одно рабочее пространство для файлов, текста и ежедневных dev-утилит.',
     )
   })
 })

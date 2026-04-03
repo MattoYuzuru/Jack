@@ -1,46 +1,46 @@
 # AGENTS.md
 
-## Workflow Rules
+## Правила Рабочего Процесса
 
-Before starting any new task:
+Перед началом любой новой задачи:
 
-1. Fetch the latest repository state from remote.
-2. Make sure local `main` matches the latest `origin/main`.
-3. Make sure the work does not start from a branch that is already ahead of `main`.
-4. If the user did not explicitly ask to stay on the current branch, create a new feature branch from fresh `main`.
+1. Забери актуальное состояние репозитория с remote.
+2. Убедись, что локальный `main` совпадает с последним `origin/main`.
+3. Убедись, что работа не начинается из ветки, которая уже ушла вперед относительно `main`.
+4. Если пользователь явно не попросил иное, создай новую feature-ветку от свежего `main`.
 
-## Commits
+## Коммиты
 
-1. Every important logical chunk of work must be committed separately.
-2. Use conventional commits only.
-3. Do not accumulate many unrelated edits into one commit.
+1. Каждый важный логический блок работы должен коммититься отдельно.
+2. Используй только conventional commits.
+3. Не складывай в один коммит много несвязанных изменений.
 
-Examples:
+Примеры:
 
 - `feat(viewer): add image metadata panel`
 - `fix(pdf): preserve page rotation during merge`
 - `docs(roadmap): update iteration 2 scope`
 - `test(converter): cover heic to jpg pipeline`
 
-## Code Comments
+## Комментарии В Коде
 
-1. Complex or key implementation points must be commented in Russian.
-2. Comments should explain why the logic exists or what non-obvious constraint is being handled.
-3. Do not add noisy comments for trivial code.
+1. Сложные или ключевые места реализации нужно комментировать на русском.
+2. Комментарии должны объяснять, зачем существует логика или какое неочевидное ограничение она учитывает.
+3. Не добавляй шумные комментарии к тривиальному коду.
 
-## Finish Checklist
+## Чеклист Перед Завершением
 
-Before finishing the task:
+Перед завершением задачи:
 
-1. Run all relevant tests.
-2. Run lint and formatting checks for the touched parts.
-3. Update docs and roadmap if behavior or scope changed.
-4. Commit the work.
-5. Push the branch to remote.
-6. Prepare the change for an MR unless the user explicitly asked not to.
+1. Прогони все релевантные тесты.
+2. Прогони линтеры и форматирование для затронутых частей.
+3. Обнови документацию и roadmap, если изменился scope или поведение.
+4. Сделай коммит.
+5. Запушь ветку в remote.
+6. Подготовь изменение к MR, если пользователь явно не попросил обратное.
 
-## Safety
+## Безопасность
 
-1. Do not rewrite history unless the user explicitly asked for it.
-2. Do not force-push without explicit permission.
-3. Do not revert user changes that are unrelated to the current task.
+1. Не переписывай историю, если пользователь явно не попросил об этом.
+2. Не делай force push без явного разрешения.
+3. Не откатывай несвязанные пользовательские изменения.
