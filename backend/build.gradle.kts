@@ -6,10 +6,11 @@ plugins {
 
 group = "com.keykomi"
 version = "0.0.1-SNAPSHOT"
+val targetJavaVersion = JavaLanguageVersion.of(26)
 
 java {
 	toolchain {
-		languageVersion = JavaLanguageVersion.of(26)
+		languageVersion = targetJavaVersion
 	}
 }
 
@@ -18,6 +19,7 @@ repositories {
 }
 
 dependencies {
+	implementation("org.springframework.boot:spring-boot-starter-actuator")
 	implementation("org.springframework.boot:spring-boot-starter-data-jpa")
 	implementation("org.springframework.boot:spring-boot-starter-webmvc")
 	compileOnly("org.projectlombok:lombok")
@@ -29,6 +31,14 @@ dependencies {
 	testRuntimeOnly("com.h2database:h2")
 	testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 	testAnnotationProcessor("org.projectlombok:lombok")
+}
+
+// Для bootRun и других JavaExec-задач принудительно используем Java 26 toolchain,
+// чтобы контейнер и локальная JDK 21 одинаково запускали приложение.
+tasks.withType<JavaExec>().configureEach {
+	javaLauncher = javaToolchains.launcherFor {
+		languageVersion = targetJavaVersion
+	}
 }
 
 tasks.withType<Test> {
