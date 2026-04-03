@@ -1,0 +1,41 @@
+:root {
+  color-scheme: light;
+  font-family: Aptos, 'Segoe UI', 'Trebuchet MS', 'DejaVu Sans', sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color: #132021;
+  background:
+    radial-gradient(circle at top left, rgba(255, 207, 143, 0.34), transparent 32%),
+    radial-gradient(circle at top right, rgba(29, 92, 85, 0.18), transparent 28%),
+    linear-gradient(180deg, #f7f1e5 0%, #f3eee2 100%);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  min-height: 100%;
+  margin: 0;
+}
+
+body {
+  min-width: 320px;
+}
+
+a {
+  color: inherit;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}

@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 200" role="img" aria-labelledby="jackLogoTitle jackLogoDesc">
+  <title id="jackLogoTitle">Jack logo</title>
+  <desc id="jackLogoDesc">Brand logo for Jack, a multi-tool workspace.</desc>
+  <defs>
+    <linearGradient id="jackLogoBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#12302d" />
+      <stop offset="100%" stop-color="#1d5c55" />
+    </linearGradient>
+    <linearGradient id="jackLogoAccent" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffcf8f" />
+      <stop offset="100%" stop-color="#ff8b4d" />
+    </linearGradient>
+  </defs>
+
+  <g transform="translate(20 20)">
+    <rect width="160" height="160" rx="36" fill="url(#jackLogoBg)" />
+    <path
+      d="M99 42h22v62c0 30-19 48-49 48-14 0-28-5-38-14l11-18c7 6 15 9 24 9 19 0 30-10 30-28V42Z"
+      fill="#f6efe3"
+    />
+    <circle cx="123" cy="46" r="14" fill="url(#jackLogoAccent)" />
+  </g>
+
+  <g fill="#0d1717">
+    <text x="212" y="88" font-size="72" font-weight="700" font-family="Segoe UI, DejaVu Sans, Arial, sans-serif">Jack</text>
+    <text x="216" y="126" font-size="22" font-weight="500" font-family="Segoe UI, DejaVu Sans, Arial, sans-serif" fill="#365a57">
+      Jack of all trades
+    </text>
+    <text x="216" y="156" font-size="18" font-weight="400" font-family="Segoe UI, DejaVu Sans, Arial, sans-serif" fill="#5d7471">
+      Multi-tool workspace for files, text, and daily dev utilities
+    </text>
+  </g>
+</svg>
