@@ -3,47 +3,47 @@
     <section class="hero">
       <div class="hero-copy">
         <p class="eyebrow">Jack of all trades</p>
-        <h1>One workspace for files, text tools, and daily developer utilities.</h1>
+        <h1>Одно рабочее пространство для файлов, текста и ежедневных dev-утилит.</h1>
         <p class="lead">
-          The repository currently contains the bootstrap layer only: a Spring Boot backend, a Vue
-          frontend, reusable brand assets, and a roadmap designed for iterative delivery.
+          Сейчас в репозитории подготовлен bootstrap-слой: Spring Boot backend, Vue frontend,
+          бренд-ассеты и roadmap, рассчитанный на итеративную разработку.
         </p>
 
         <div class="pill-row">
           <span>Spring Boot 4.0.5</span>
           <span>Java 26</span>
           <span>Vue 3</span>
-          <span>Roadmap-driven</span>
+          <span>Docker Compose</span>
         </div>
       </div>
 
       <div class="hero-card">
-        <img class="logo" src="/logo.svg" alt="Jack logo" />
+        <img class="logo" src="/logo.svg" alt="Логотип Jack" />
       </div>
     </section>
 
     <section class="grid">
       <article class="card">
-        <h2>Workspace Scope</h2>
+        <h2>Что Будет Внутри</h2>
         <p>
-          File viewing, conversion, compression, PDF flows, live editors, validators, hashes,
-          encoders, decoders, JWT utilities, and more.
+          Просмотр файлов, конвертация, сжатие, PDF-сценарии, live-редакторы, валидаторы, хеши,
+          кодировки, декодеры, JWT-инструменты и другие полезные утилиты.
         </p>
       </article>
 
       <article class="card">
-        <h2>Repo Shape</h2>
+        <h2>Как Устроен Репозиторий</h2>
         <p>
-          <strong>backend</strong> for Spring Boot, <strong>frontend</strong> for Vue, and
-          <strong>assets/brand</strong> for the shared logo and favicon source files.
+          <strong>backend</strong> отвечает за Spring Boot, <strong>frontend</strong> — за Vue, а
+          <strong>assets/brand</strong> хранит логотип и favicon для дальнейшего переиспользования.
         </p>
       </article>
 
       <article class="card">
-        <h2>Next Iterations</h2>
+        <h2>Что Дальше</h2>
         <p>
-          Future work can start from a clean feature branch and implement one roadmap slice at a
-          time, with tests, docs, and MR-ready delivery.
+          Следующие итерации можно делать независимо: новая ветка от свежего main, отдельный scope,
+          тесты, обновление roadmap и финализация в MR-ready состоянии.
         </p>
       </article>
     </section>

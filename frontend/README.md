@@ -1,8 +1,8 @@
 # Frontend
 
-Vue starter for Jack.
+Стартовая Vue-база для Jack.
 
-## Stack
+## Стек
 
 - Vue 3
 - Vite
@@ -13,7 +13,7 @@ Vue starter for Jack.
 - ESLint
 - Prettier
 
-## Commands
+## Команды
 
 ```bash
 npm install

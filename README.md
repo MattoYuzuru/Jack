@@ -1,34 +1,76 @@
-# <img src="./assets/brand/logo.svg" alt="Jack logo" width="196">
+# <img src="./assets/brand/logo.svg" alt="Логотип Jack" width="196">
 
-**Jack** (`Jack of all trades`) is a web-based multi-tool workspace built around one idea: keep routine file operations, text tooling, and developer utilities in one fast interface.
+**Jack** (`Jack of all trades`) — это веб-приложение-мультитул, в котором повседневные операции с файлами, текстом и дев-инструментами собираются в одном удобном интерфейсе.
 
-The project starts as a mono-repo with:
+Сейчас репозиторий оформлен как монорепо:
 
-- `backend/` - Spring Boot 4.0.5, Java 26
-- `frontend/` - Vue 3 starter on the current stable release line
-- `assets/brand/` - reusable logo and favicon source files
+- `backend/` — Spring Boot 4.0.5, Java 26
+- `frontend/` — Vue 3 на актуальной стабильной ветке
+- `assets/brand/` — исходники логотипа и favicon
 
-## What Jack Is For
+## Для Чего Нужен Jack
 
-Jack is planned as a practical daily-use toolbox for:
+Jack задуман как практичный рабочий набор инструментов для:
 
-- file viewing and previewing
-- converting files between popular formats
-- compression with size targets
-- PDF workflows
-- text editing with live preview
-- developer utilities like encoders, decoders, hash generators, validators, JWT tools, and short links
+- просмотра и предпросмотра файлов
+- конвертации между популярными форматами
+- сжатия файлов с ограничением по размеру
+- PDF-сценариев
+- текстовых редакторов с live preview
+- дев-утилит: кодировок, декодеров, хешей, валидаторов, JWT-инструментов, коротких ссылок и не только
 
-## Current Status
+## Что Уже Есть
 
-This repository currently contains the bootstrap foundation only:
+На текущем этапе собран стартовый bootstrap-слой:
 
-- backend and frontend are separated into dedicated folders
-- a basic branded landing page exists in the frontend
-- logo and favicon assets are prepared for future UI usage
-- roadmap and team workflow rules are documented for future iteration work
+- backend и frontend разнесены по отдельным каталогам
+- есть стартовая брендированная страница во frontend
+- подготовлены логотип и favicon для дальнейшего использования
+- есть `docker compose`-окружение для локального старта
+- задокументированы workflow-правила и roadmap для будущих итераций
 
-## Local Start
+## Быстрый Старт Через Docker Compose
+
+Запуск всех сервисов:
+
+```bash
+docker compose up -d --build
+```
+
+После старта будут доступны:
+
+- frontend: `http://localhost:5173`
+- backend: `http://localhost:8080`
+- backend health: `http://localhost:8080/actuator/health`
+- postgres: `localhost:5432`
+
+Остановка:
+
+```bash
+docker compose down
+```
+
+Остановка с удалением томов:
+
+```bash
+docker compose down -v
+```
+
+## Переменные Окружения
+
+При необходимости можно создать локальный `.env` на основе [.env.example](/home/mattoyudzuru/IdeaProjects/Jack/.env.example).
+
+Основные переменные:
+
+- `JACK_FRONTEND_PORT`
+- `JACK_BACKEND_PORT`
+- `JACK_DB_PORT`
+- `JACK_DB_NAME`
+- `JACK_DB_USERNAME`
+- `JACK_DB_PASSWORD`
+- `JACK_API_BASE_URL`
+
+## Локальный Запуск Без Docker
 
 Backend:
 
@@ -45,64 +87,72 @@ npm install
 npm run dev
 ```
 
+## Структура Репозитория
+
+- `compose.yaml` — единый контейнерный запуск
+- `backend/Dockerfile` — контейнер backend-сервиса
+- `frontend/Dockerfile` — контейнер frontend-сервиса
+- `AGENTS.md` — правила работы для будущих агентных итераций
+- `assets/brand/` — логотип, favicon и сопутствующие ассеты
+
 ## Roadmap
 
 ### 0. Initial Bootstrap
 
-- [ ] Empty but working project bootstrap
-- [ ] Containerized local environment via `docker compose up -d --build`
-- [ ] Project docs, repository rules, and basic development workflow
-- [ ] Ready baseline for future iteration work
+- [x] Пустой, но рабочий bootstrap проекта
+- [x] Контейнеризированный локальный запуск через `docker compose up -d --build`
+- [x] Документация, правила репозитория и базовый workflow
+- [x] Готовая основа для следующих итераций
 
 ### 1. UI/UX Foundation
 
-- [ ] Define the visual system for the whole product
-- [ ] Lock in palette, spacing, typography, and interaction patterns
-- [ ] Build a foundation where future tools mostly add new pages, blocks, or small components
+- [ ] Задать визуальную систему для всего продукта
+- [ ] Зафиксировать палитру, типографику, отступы и паттерны взаимодействия
+- [ ] Подготовить фундамент, на который дальше будут добавляться новые страницы, блоки и компоненты
 
 ### 2. File Viewer
 
-- [ ] Unified upload flow and in-app preview workspace
-- [ ] Support images, audio, video, office files, database files, and other useful formats
+- [ ] Унифицированная загрузка файлов и рабочая зона предпросмотра
+- [ ] Поддержка изображений, аудио, видео, офисных документов, файлов БД и других полезных форматов
 
 #### 2.1 Image Viewer
 
-- [ ] Convenient image viewer UI
-- [ ] Scale, zoom, fullscreen, rotation
-- [ ] Metadata viewing and editing
-- [ ] Color picker with magnifier
-- [ ] Support: `jpg`, `jpeg`, `png`, `webp`, `avif`, `heic`, `gif`, `bmp`, `tiff`, `svg`, `raw`, `ico`
+- [ ] Удобный интерфейс просмотра изображений
+- [ ] Масштаб, zoom, fullscreen, rotation
+- [ ] Просмотр и редактирование метаданных
+- [ ] Color picker с увеличительным стеклом
+- [ ] Поддержка: `jpg`, `jpeg`, `png`, `webp`, `avif`, `heic`, `gif`, `bmp`, `tiff`, `svg`, `raw`, `ico`
 
 #### 2.2 Office Documents
 
-- [ ] Beautiful preview and navigation UI
-- [ ] Search, metadata, password-aware flows where possible
-- [ ] Editing selected content when format support allows it
-- [ ] Support: `doc`, `docx`, `pdf`, `txt`, `rtf`, `odt`, `xls`, `xlsx`, `csv`, `pptx`, `html`, `epub`, `db`, `sqlite`
+- [ ] Красивый preview и удобная навигация
+- [ ] Поиск, метаданные, сценарии с паролями там, где это возможно
+- [ ] Частичное редактирование содержимого там, где формат это позволяет
+- [ ] Поддержка: `doc`, `docx`, `pdf`, `txt`, `rtf`, `odt`, `xls`, `xlsx`, `csv`, `pptx`, `html`, `epub`, `db`, `sqlite`
 
 #### 2.3 Video Viewer
 
-- [ ] Comfortable player UI
-- [ ] Rewind, speed control, and standard playback tools
-- [ ] Support: `mp4`, `mov`, `avi`, `mkv`, `webm`, `wmv`, `flv`
+- [ ] Удобный видеоплеер
+- [ ] Перемотка, скорость воспроизведения и стандартные инструменты проигрывания
+- [ ] Поддержка: `mp4`, `mov`, `avi`, `mkv`, `webm`, `wmv`, `flv`
 
 #### 2.4 Audio Viewer
 
-- [ ] Metadata support
-- [ ] Custom player with practical navigation controls
-- [ ] Support: `mp3`, `wav`, `aac`, `flac`, `ogg`, `opus`, `aiff`
+- [ ] Работа с метаданными
+- [ ] Удобный аудиоплеер с нужной навигацией
+- [ ] Поддержка: `mp3`, `wav`, `aac`, `flac`, `ogg`, `opus`, `aiff`
 
-#### 2.5 Other Formats
+#### 2.5 Другие Форматы
 
-- [ ] Additional viewers for niche and utility-oriented formats
+- [ ] Дополнительные viewer-сценарии для нишевых и служебных форматов
 
-### 3. File Conversion
+### 3. Конвертация Файлов
 
-- [ ] Broad conversion coverage with a focus on practical real-world flows
-- [ ] Image, document, spreadsheet, presentation, video, and audio conversion
-- [ ] Media transformations between containers, codecs, sizes, and quality targets
+- [ ] Широкое покрытие конвертаций с фокусом на реальные пользовательские сценарии
+- [ ] Конвертация изображений, документов, таблиц, презентаций, видео и аудио
+- [ ] Трансформации контейнеров, кодеков, размеров и параметров качества
 
-#### 3.1 Common Image Conversion Flows
+#### 3.1 Частые Сценарии Для Изображений
 
 - [ ] `HEIC -> JPG`
 - [ ] `PNG -> JPG`
@@ -114,7 +164,7 @@ npm run dev
 - [ ] `TIFF -> JPG/PDF`
 - [ ] `PNG <-> WebP`
 - [ ] `SVG -> PNG`
-- [ ] `PNG -> SVG` via tracing/vectorization
+- [ ] `PNG -> SVG` через трассировку / векторизацию
 - [ ] `RAW -> JPG`
 - [ ] `RAW -> TIFF`
 - [ ] `PSD -> JPG/PNG/WebP`
@@ -122,7 +172,7 @@ npm run dev
 - [ ] `PNG -> ICO`
 - [ ] `SVG -> ICO`
 
-#### 3.2 Common Office Conversion Flows
+#### 3.2 Частые Сценарии Для Офисных Форматов
 
 - [ ] `DOC -> DOCX`
 - [ ] `DOCX -> PDF`
@@ -147,7 +197,7 @@ npm run dev
 - [ ] `PPTX -> JPG/PNG`
 - [ ] `PPTX -> video`
 
-#### 3.3 Common Video and Audio Conversion Flows
+#### 3.3 Частые Сценарии Для Видео И Аудио
 
 - [ ] `MOV -> MP4`
 - [ ] `MKV -> MP4`
@@ -165,24 +215,24 @@ npm run dev
 - [ ] `M4A <-> MP3`
 - [ ] `WAV <-> FLAC`
 
-#### 3.4 Known Conversion Limits
+#### 3.4 Известные Ограничения Конвертации
 
-- [ ] Account for layout loss in `PDF -> Word`
-- [ ] Handle OCR prerequisites for scanned PDFs
-- [ ] Explain CSV format limitations clearly
-- [ ] Distinguish containers, codecs, bitrate, resolution, and FPS changes
+- [ ] Учитывать потери верстки в `PDF -> Word`
+- [ ] Обрабатывать сценарии, где для сканированных PDF сначала нужен OCR
+- [ ] Ясно объяснять ограничения CSV
+- [ ] Разделять контейнер, кодек, битрейт, разрешение и FPS
 
-### 4. Compression
+### 4. Сжатие
 
-- [ ] Compression for different file groups
-- [ ] Maximum practical reduction mode
-- [ ] Compression-to-target-size mode
-- [ ] User-facing quality and limit controls
+- [ ] Сжатие для разных групп файлов
+- [ ] Режим максимального практического уменьшения
+- [ ] Режим сжатия до целевого размера
+- [ ] Пользовательские настройки качества и лимитов
 
 ### 5. PDF Toolkit
 
-- [ ] Redirects from compatible flows into PDF conversion
-- [ ] Redirects into PDF viewer/editor flows
+- [ ] Переходы из совместимых сценариев в конвертацию в PDF
+- [ ] Переходы в сценарии просмотра и редактирования PDF
 - [ ] `merge PDF`
 - [ ] `split PDF`
 - [ ] `rotate PDF`
@@ -194,27 +244,33 @@ npm run dev
 
 ### 6. Multi-Format Editor
 
-- [ ] Rich editor block for multiple text-based formats
-- [ ] Familiar shortcuts and toolbar equivalents
-- [ ] Format-aware helpers for Markdown, HTML, CSS, JS, and more
-- [ ] Syntax highlighting and live preview
-- [ ] Safe validation against dangerous payloads and obvious abuse cases
-- [ ] Export as plain text or finished files
-- [ ] Built-in formatting similar to IDE-style code formatting actions
+- [ ] Полноценный редактор для нескольких текстовых форматов
+- [ ] Знакомые шорткаты и их UI-аналог
+- [ ] Форматно-специфичные помощники для Markdown, HTML, CSS, JS и других форматов
+- [ ] Подсветка синтаксиса и live preview
+- [ ] Безопасная валидация против вредоносных payload и очевидных уязвимостей
+- [ ] Экспорт в plain text или готовые файлы
+- [ ] Встроенное форматирование по аналогии с IDE
 
 ### 7. Dev Tools And Utils
 
-- [ ] Encoders and decoders
-- [ ] JWT decoder and helpers
-- [ ] Hash generators
-- [ ] Short-link tools
-- [ ] Text format validators
-- [ ] Additional daily-use developer utilities
+- [ ] Кодировки и декодеры
+- [ ] JWT-декодер и сопутствующие утилиты
+- [ ] Генераторы хешей
+- [ ] Инструменты для коротких ссылок
+- [ ] Валидаторы текстовых форматов
+- [ ] Дополнительные ежедневные дев-утилиты
 
-## Iteration Model
+## Модель Итераций
 
-This repo is intentionally prepared so a future task can be phrased like:
+Репозиторий специально подготовлен так, чтобы в новом чате можно было дать задачу вида:
 
-> "Do iteration 1 for the viewer, start with these formats"
+> "Сделай итерацию 1 для viewer, начни с таких-то форматов"
 
-After that, the agent should be able to create a fresh feature branch, implement the requested slice, add tests, update the roadmap, and finish the work as a normal MR-ready change.
+После этого агент должен суметь сам:
+
+- создать новую ветку от свежего `main`
+- реализовать нужный срез
+- добавить тесты
+- обновить roadmap и документацию
+- закончить работу в состоянии, готовом к MR
