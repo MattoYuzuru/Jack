@@ -6,8 +6,8 @@ import App from '../App.vue'
 describe('App', () => {
   it('mounts renders properly', () => {
     const wrapper = mount(App)
-    expect(wrapper.text()).toContain(
-      'Одно рабочее пространство для файлов, текста и ежедневных dev-утилит.',
-    )
+    expect(wrapper.text()).toContain('Главный экран Jack как мягкий big-tech control center.')
+    expect(wrapper.findAll('.tool-card')).toHaveLength(6)
+    expect(wrapper.text()).toContain('Viewer')
   })
 })
