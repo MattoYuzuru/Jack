@@ -112,16 +112,19 @@ npm run dev
 
 ### 2. File Viewer
 
-- [ ] Унифицированная загрузка файлов и рабочая зона предпросмотра
+- [x] Унифицированная загрузка файлов и рабочая зона предпросмотра
 - [ ] Поддержка изображений, аудио, видео, офисных документов, файлов БД и других полезных форматов
 
 #### 2.1 Image Viewer
 
-- [ ] Удобный интерфейс просмотра изображений
-- [ ] Масштаб, zoom, fullscreen, rotation
+- [x] Удобный интерфейс просмотра изображений
+- [x] Масштаб, zoom, fullscreen, rotation
 - [ ] Просмотр и редактирование метаданных
 - [ ] Color picker с увеличительным стеклом
-- [ ] Поддержка: `jpg`, `jpeg`, `png`, `webp`, `avif`, `heic`, `gif`, `bmp`, `tiff`, `svg`, `raw`, `ico`
+- [x] Поддержка: `jpg`, `jpeg`, `png`, `webp`, `avif`, `heic`, `gif`, `bmp`, `tiff`, `svg`, `raw`, `ico`
+
+Viewer уже даёт browser-native preview для `jpg`, `jpeg`, `png`, `webp`, `avif`, `gif`, `bmp`, `svg`, `ico`.
+`heic` декодируется в клиенте через HEIC adapter, `tiff` проходит через TIFF decode-layer, а `raw` закрывается через RAW-family preview extraction (`raw`, `dng`, `cr2`, `cr3`, `nef`, `arw`, `raf`, `rw2`, `orf`, `pef`, `srw`).
 
 #### 2.2 Office Documents
 
