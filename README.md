@@ -165,6 +165,8 @@ Viewer уже даёт browser-native preview для `jpg`, `jpeg`, `png`, `webp
 новые форматы добавлялись через расширение capability-слоя, а не через логику внутри UI.
 Следующий срез уже поднял и первый document-target: single-page PDF собирается поверх того же raster
 contract, без отдельной ветки UI и без дублирования source decode-логики.
+Текущий слой поверх этого добавляет preset-профили с централизованным resize/quality baseline, чтобы
+дальнейшие batch- и delivery-сценарии не размазывались по UI-настройкам.
 
 #### 3.1 Частые Сценарии Для Изображений
 
@@ -191,6 +193,8 @@ contract, без отдельной ветки UI и без дублирован
 Для них уже есть practical outputs в `JPG`, `PNG`, `WebP` и single-page `PDF`. PDF в этой итерации
 собирается как raster document без редактируемого текстового/векторного слоя, но при этом открывает
 `JPG/PNG -> PDF`, `TIFF -> PDF`, `SVG -> PDF`, `HEIC -> PDF` и `RAW -> PDF` на том же runtime.
+Поверх target-слоя уже заведены пресеты `Original`, `Web Balanced`, `Email Attachment` и `Thumbnail`,
+которые централизованно управляют размерностью и базовым quality-profile до encode-шага.
 
 #### 3.2 Частые Сценарии Для Офисных Форматов
 

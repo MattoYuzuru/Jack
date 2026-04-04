@@ -2,10 +2,10 @@ import { describe, expect, it } from 'vitest'
 import { createConverterRuntime, type ConverterPreparedSource } from '../converter-runtime'
 import type { RasterImageFrame } from '../../../imaging/application/browser-raster'
 
-function createRasterFrame(hasTransparency = false): RasterImageFrame {
+function createRasterFrame(width = 1280, height = 720, hasTransparency = false): RasterImageFrame {
   return {
-    width: 1280,
-    height: 720,
+    width,
+    height,
     imageData: {} as ImageData,
     hasTransparency,
   }
@@ -53,12 +53,14 @@ describe('converter runtime', () => {
     expect(encoderCalls).toBe(1)
     expect(result.fileName).toBe('capture.jpg')
     expect(result.kind).toBe('image')
+    expect(result.preset.id).toBe('original')
     expect(result.scenario.id).toBe('heic->jpg')
   })
 
   it('emits an alpha warning when transparent pixels go to jpeg', async () => {
     const runtime = createConverterRuntime({
-      decodeNativeRaster: async (_prepared: ConverterPreparedSource) => createRasterFrame(true),
+      decodeNativeRaster: async (_prepared: ConverterPreparedSource) =>
+        createRasterFrame(1280, 720, true),
       encodeJpeg: async () => ({
         blob: new Blob(['jpg'], { type: 'image/jpeg' }),
         warnings: [],
@@ -84,7 +86,8 @@ describe('converter runtime', () => {
 
   it('builds document outputs through the pdf target strategy', async () => {
     const runtime = createConverterRuntime({
-      decodeNativeRaster: async (_prepared: ConverterPreparedSource) => createRasterFrame(true),
+      decodeNativeRaster: async (_prepared: ConverterPreparedSource) =>
+        createRasterFrame(1280, 720, true),
       encodePdf: async () => ({
         blob: new Blob(['pdf'], { type: 'application/pdf' }),
         warnings: ['PDF собран как single-page raster document без отдельного текстового слоя.'],
@@ -110,5 +113,57 @@ describe('converter runtime', () => {
       'Прозрачные области переведены в сплошной фон перед сборкой PDF.',
       'PDF собран как single-page raster document без отдельного текстового слоя.',
     ])
+  })
+
+  it('applies preset-driven resize and preset quality before encode', async () => {
+    let receivedQuality: number | undefined
+    let receivedPresetId = ''
+
+    const runtime = createConverterRuntime({
+      decodeNativeRaster: async (_prepared: ConverterPreparedSource) =>
+        createRasterFrame(4000, 3000, false),
+      resizeRaster: async (raster, preset) => {
+        receivedPresetId = preset.id
+
+        expect(raster.width).toBe(4000)
+        expect(raster.height).toBe(3000)
+
+        return {
+          raster: createRasterFrame(1600, 1200, false),
+          warnings: ['Preset Email Attachment уменьшил размерность: 4000x3000 -> 1600x1200.'],
+        }
+      },
+      encodeJpeg: async (input) => {
+        receivedQuality = input.quality
+
+        return {
+          blob: new Blob(['jpg'], { type: 'image/jpeg' }),
+          warnings: [],
+        }
+      },
+    })
+
+    const prepared = runtime.inspect(new File(['image'], 'hero.png', { type: 'image/png' }))
+
+    if (!prepared) {
+      throw new Error('Expected a prepared source for PNG.')
+    }
+
+    const result = await runtime.convert({
+      prepared,
+      targetExtension: 'jpg',
+      presetId: 'email-attachment',
+    })
+
+    expect(receivedPresetId).toBe('email-attachment')
+    expect(receivedQuality).toBe(0.78)
+    expect(result.preset.id).toBe('email-attachment')
+    expect(result.sourceWidth).toBe(4000)
+    expect(result.sourceHeight).toBe(3000)
+    expect(result.width).toBe(1600)
+    expect(result.height).toBe(1200)
+    expect(result.warnings).toContain(
+      'Preset Email Attachment уменьшил размерность: 4000x3000 -> 1600x1200.',
+    )
   })
 })

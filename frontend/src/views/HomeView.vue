@@ -27,6 +27,7 @@ const signalPills = [
   'Converter route',
   'Shared imaging layer',
   'Decode + encode + PDF',
+  'Preset profiles',
   'SVG-first navigation',
 ]
 
@@ -42,7 +43,7 @@ const foundationPillars: FoundationPillar[] = [
   {
     name: 'Архитектура',
     detail:
-      'Home, viewer и converter разведены по маршрутам, а тяжёлые image-path и PDF-target layer живут в shared imaging + registry/strategy-слоях.',
+      'Home, viewer и converter разведены по маршрутам, а тяжёлые image-path, PDF-target layer и preset transform-профили живут в shared imaging + registry/strategy-слоях.',
   },
 ]
 
@@ -65,12 +66,12 @@ const toolCards: ToolCard[] = [
     label: '02 · Conversion',
     title: 'Converter',
     description:
-      'Browser-first converter уже поднимает и image-, и document-target сценарии через scenario registry, unified raster contract и decode/encode pipeline.',
+      'Browser-first converter уже поднимает и image-, и document-target сценарии через scenario registry, unified raster contract, preset transforms и decode/encode pipeline.',
     detail:
-      'На старте закрыты HEIC, TIFF, RAW, SVG, базовые raster-конверсии в JPG/PNG/WebP и single-page PDF output.',
+      'На старте закрыты HEIC, TIFF, RAW, SVG, базовые raster-конверсии в JPG/PNG/WebP, single-page PDF output и preset-driven resize profiles.',
     status: 'Active route',
     route: '/converter',
-    accents: ['Image', 'PDF', 'Pipeline'],
+    accents: ['Image', 'PDF', 'Presets'],
     span: 'tool-card--standard',
   },
   {
