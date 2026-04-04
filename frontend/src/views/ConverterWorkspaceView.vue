@@ -11,6 +11,7 @@ const fileInput = ref<HTMLInputElement | null>(null)
 const isDragActive = ref(false)
 
 const imageScenarios = listConverterScenariosByFamily('image')
+const documentScenarios = listConverterScenariosByFamily('document')
 
 const {
   prepared,
@@ -124,7 +125,7 @@ function onDrop(event: DragEvent) {
 
         <div class="converter-signal-row">
           <span class="chip-pill">HEIC / TIFF / RAW decode</span>
-          <span class="chip-pill">JPG / PNG / WebP encode</span>
+          <span class="chip-pill">JPG / PNG / WebP / PDF targets</span>
           <span class="chip-pill">Scenario registry</span>
           <span class="chip-pill">Shared imaging layer</span>
         </div>
@@ -143,6 +144,16 @@ function onDrop(event: DragEvent) {
             <span class="chip-pill chip-pill--compact chip-pill--accent">{{
               scenario.statusLabel
             }}</span>
+          </article>
+        </div>
+
+        <div class="scenario-list scenario-list--secondary" aria-label="Документные сценарии">
+          <article v-for="scenario in documentScenarios" :key="scenario.id" class="scenario-item">
+            <div>
+              <h3>{{ scenario.label }}</h3>
+              <p>{{ scenario.notes }}</p>
+            </div>
+            <span class="chip-pill chip-pill--compact">{{ scenario.statusLabel }}</span>
           </article>
         </div>
       </article>
@@ -182,7 +193,7 @@ function onDrop(event: DragEvent) {
           <strong>Загрузи `jpg`, `png`, `webp`, `bmp`, `svg`, `heic`, `tiff` или `raw`.</strong>
           <span>
             Конвертер сам определит, какой decode-path нужен: нативный browser raster либо
-            heavy-format adapter.
+            heavy-format adapter, а затем соберёт image либо PDF target.
           </span>
         </button>
 
@@ -234,7 +245,7 @@ function onDrop(event: DragEvent) {
               </div>
             </label>
 
-            <label v-if="activeTarget?.extension === 'jpg'" class="form-field">
+            <label v-if="activeTarget && !activeTarget.supportsTransparency" class="form-field">
               <span class="control-label">Background for alpha</span>
               <div class="color-row">
                 <input v-model="backgroundColor" type="color" />
@@ -273,7 +284,17 @@ function onDrop(event: DragEvent) {
 
         <div v-if="result" class="result-stack">
           <div class="result-preview">
-            <img :src="result.objectUrl" :alt="`Converted preview ${result.fileName}`" />
+            <img
+              v-if="result.kind === 'image'"
+              :src="result.objectUrl"
+              :alt="`Converted preview ${result.fileName}`"
+            />
+            <iframe
+              v-else
+              class="result-preview__frame"
+              :src="result.objectUrl"
+              title="PDF preview"
+            />
           </div>
 
           <div class="result-facts">
@@ -284,6 +305,10 @@ function onDrop(event: DragEvent) {
             <article class="fact-card">
               <span>Сценарий</span>
               <strong>{{ result.source.label }} -> {{ result.target.label }}</strong>
+            </article>
+            <article class="fact-card">
+              <span>Тип результата</span>
+              <strong>{{ result.kind === 'document' ? 'Document output' : 'Image output' }}</strong>
             </article>
             <article class="fact-card">
               <span>Размерность</span>
@@ -400,6 +425,10 @@ h1 {
 
 .scenario-list {
   margin-top: 22px;
+}
+
+.scenario-list--secondary {
+  margin-top: 16px;
 }
 
 .scenario-item,
@@ -619,6 +648,15 @@ h1 {
   max-width: 100%;
   max-height: 420px;
   border-radius: 22px;
+  box-shadow: var(--shadow-floating);
+}
+
+.result-preview__frame {
+  width: 100%;
+  min-height: 420px;
+  border: 0;
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.75);
   box-shadow: var(--shadow-floating);
 }
 

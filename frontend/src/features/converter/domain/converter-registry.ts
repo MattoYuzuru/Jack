@@ -6,7 +6,11 @@ export type ConverterSourceStrategyId =
   | 'tiff-raster'
   | 'raw-raster'
 
-export type ConverterTargetStrategyId = 'jpeg-encoder' | 'png-encoder' | 'webp-encoder'
+export type ConverterTargetStrategyId =
+  | 'jpeg-encoder'
+  | 'png-encoder'
+  | 'webp-encoder'
+  | 'pdf-document'
 
 export interface ConverterSourceFormatDefinition {
   extension: string
@@ -176,6 +180,20 @@ const targetFormatDefinitions: ConverterTargetFormatDefinition[] = [
     notes: 'Современный target для более компактного raster-выхода.',
     accents: ['Modern', 'Compact'],
   },
+  {
+    extension: 'pdf',
+    label: 'PDF',
+    family: 'document',
+    mimeType: 'application/pdf',
+    targetStrategyId: 'pdf-document',
+    supportsQuality: true,
+    supportsTransparency: false,
+    defaultQuality: 0.92,
+    statusLabel: 'Single-page document',
+    notes:
+      'Документный target: текущая итерация собирает single-page PDF из подготовленного raster contract.',
+    accents: ['Document', 'Single-page'],
+  },
 ]
 
 const scenarioDefinitions: ConverterScenarioDefinition[] = [
@@ -189,8 +207,16 @@ const scenarioDefinitions: ConverterScenarioDefinition[] = [
   buildScenario('bmp', 'jpg', 'BMP -> JPG'),
   buildScenario('bmp', 'png', 'BMP -> PNG'),
   buildScenario('tiff', 'jpg', 'TIFF -> JPG'),
+  buildScenario('tiff', 'pdf', 'TIFF -> PDF', 'document'),
   buildScenario('raw', 'jpg', 'RAW -> JPG'),
+  buildScenario('raw', 'pdf', 'RAW -> PDF', 'document'),
+  buildScenario('jpg', 'pdf', 'JPG -> PDF', 'document'),
+  buildScenario('png', 'pdf', 'PNG -> PDF', 'document'),
+  buildScenario('webp', 'pdf', 'WebP -> PDF', 'document'),
+  buildScenario('bmp', 'pdf', 'BMP -> PDF', 'document'),
+  buildScenario('heic', 'pdf', 'HEIC -> PDF', 'document'),
   buildScenario('svg', 'png', 'SVG -> PNG'),
+  buildScenario('svg', 'pdf', 'SVG -> PDF', 'document'),
 ]
 
 const sourceByExtension = new Map<string, ConverterSourceFormatDefinition>()
@@ -292,10 +318,11 @@ function buildScenario(
   sourceExtension: string,
   targetExtension: string,
   label: string,
+  family: ConverterFormatFamily = 'image',
 ): ConverterScenarioDefinition {
   return {
     id: buildScenarioKey(sourceExtension, targetExtension),
-    family: 'image',
+    family,
     label,
     sourceExtension,
     targetExtension,
