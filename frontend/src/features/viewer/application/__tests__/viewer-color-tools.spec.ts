@@ -23,22 +23,7 @@ describe('viewer color tools', () => {
 
   it('builds normalized channel histograms and skips fully transparent pixels', () => {
     const data = new Uint8ClampedArray([
-      255,
-      0,
-      0,
-      255,
-      0,
-      255,
-      0,
-      255,
-      0,
-      0,
-      255,
-      255,
-      255,
-      255,
-      255,
-      0,
+      255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 255, 255, 255, 0,
     ])
 
     const histogram = computeHistogram(data, 4)

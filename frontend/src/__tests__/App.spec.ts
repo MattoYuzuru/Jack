@@ -5,7 +5,7 @@ import App from '../App.vue'
 import router from '../router'
 
 describe('App', () => {
-  it('renders the home route and exposes the viewer entry point', async () => {
+  it('renders the home route and exposes active workspace entry points', async () => {
     router.push('/')
     await router.isReady()
 
@@ -15,8 +15,11 @@ describe('App', () => {
       },
     })
 
-    expect(wrapper.text()).toContain('Главный экран Jack теперь ведёт в рабочий viewer-маршрут.')
+    expect(wrapper.text()).toContain(
+      'Главный экран Jack теперь ведёт сразу в viewer и browser-first converter.',
+    )
     expect(wrapper.findAll('.tool-card')).toHaveLength(6)
     expect(wrapper.text()).toContain('Open Viewer')
+    expect(wrapper.text()).toContain('Open Converter')
   })
 })

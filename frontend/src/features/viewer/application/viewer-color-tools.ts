@@ -19,7 +19,10 @@ export function rgbaToHex(color: ViewerColorValue, includeAlpha = false): string
     channels.push(Math.round(color.a * 255))
   }
 
-  return `#${channels.map((channel) => channel.toString(16).padStart(2, '0')).join('').toUpperCase()}`
+  return `#${channels
+    .map((channel) => channel.toString(16).padStart(2, '0'))
+    .join('')
+    .toUpperCase()}`
 }
 
 export function rgbaToRgbString(color: ViewerColorValue): string {
@@ -37,8 +40,7 @@ export function rgbaToHslString(color: ViewerColorValue): string {
   const delta = max - min
 
   const lightness = (max + min) / 2
-  const saturation =
-    delta === 0 ? 0 : delta / (1 - Math.abs(2 * lightness - 1))
+  const saturation = delta === 0 ? 0 : delta / (1 - Math.abs(2 * lightness - 1))
 
   let hue = 0
 
