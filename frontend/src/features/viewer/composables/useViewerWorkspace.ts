@@ -32,7 +32,9 @@ export function useViewerWorkspace() {
       selection.value = await viewerRuntime.resolve(file)
     } catch (error) {
       errorMessage.value =
-        error instanceof Error ? error.message : 'Не удалось подготовить preview для выбранного файла.'
+        error instanceof Error
+          ? error.message
+          : 'Не удалось подготовить preview для выбранного файла.'
     } finally {
       isLoading.value = false
     }

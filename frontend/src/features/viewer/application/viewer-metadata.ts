@@ -76,7 +76,9 @@ export function createEmptyMetadataPayload(): ViewerMetadataPayload {
   }
 }
 
-export async function loadViewerMetadataPayload(buffer: ArrayBuffer): Promise<ViewerMetadataPayload> {
+export async function loadViewerMetadataPayload(
+  buffer: ArrayBuffer,
+): Promise<ViewerMetadataPayload> {
   const module = (await import('exifreader')) as unknown as ExifReaderModule
   const expanded = (await module.load(buffer, {
     async: true,
@@ -233,7 +235,11 @@ function formatUnknownTagValue(rawValue: unknown): string | null {
     return null
   }
 
-  if (typeof rawValue === 'string' || typeof rawValue === 'number' || typeof rawValue === 'boolean') {
+  if (
+    typeof rawValue === 'string' ||
+    typeof rawValue === 'number' ||
+    typeof rawValue === 'boolean'
+  ) {
     return String(rawValue)
   }
 

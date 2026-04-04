@@ -148,7 +148,7 @@ export function useViewerImageTools(
 
     swatches.value = [
       {
-        id: swatchId += 1,
+        id: (swatchId += 1),
         sample: {
           ...activeSample.value,
           color: { ...activeSample.value.color },

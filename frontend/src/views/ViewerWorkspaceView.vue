@@ -69,9 +69,7 @@ const {
 watch(
   () => (selection.value?.kind === 'image' ? selection.value.metadata.editable : null),
   (editableMetadata) => {
-    metadataDraft.value = editableMetadata
-      ? { ...editableMetadata }
-      : createEmptyEditableMetadata()
+    metadataDraft.value = editableMetadata ? { ...editableMetadata } : createEmptyEditableMetadata()
     metadataSaveMessage.value = ''
     metadataQuery.value = ''
   },
@@ -283,7 +281,9 @@ onBeforeUnmount(() => {
 
           <div class="viewer-dropzone__copy">
             <strong>Загрузить файл в viewer</strong>
-            <span>Drag and drop или ручной выбор. Фокус этого прохода на image analysis tooling.</span>
+            <span
+              >Drag and drop или ручной выбор. Фокус этого прохода на image analysis tooling.</span
+            >
           </div>
 
           <div class="viewer-dropzone__actions">
@@ -294,7 +294,12 @@ onBeforeUnmount(() => {
             >
               Pick File
             </button>
-            <button class="action-button" type="button" :disabled="!selection" @click="clearSelection">
+            <button
+              class="action-button"
+              type="button"
+              :disabled="!selection"
+              @click="clearSelection"
+            >
               Clear
             </button>
           </div>
@@ -317,16 +322,36 @@ onBeforeUnmount(() => {
           </div>
 
           <div class="viewer-toolbar">
-            <button class="icon-button" type="button" :disabled="selection?.kind !== 'image'" @click="zoomOut">
+            <button
+              class="icon-button"
+              type="button"
+              :disabled="selection?.kind !== 'image'"
+              @click="zoomOut"
+            >
               -
             </button>
-            <button class="icon-button" type="button" :disabled="selection?.kind !== 'image'" @click="zoomIn">
+            <button
+              class="icon-button"
+              type="button"
+              :disabled="selection?.kind !== 'image'"
+              @click="zoomIn"
+            >
               +
             </button>
-            <button class="icon-button" type="button" :disabled="selection?.kind !== 'image'" @click="rotateLeft">
+            <button
+              class="icon-button"
+              type="button"
+              :disabled="selection?.kind !== 'image'"
+              @click="rotateLeft"
+            >
               Left
             </button>
-            <button class="icon-button" type="button" :disabled="selection?.kind !== 'image'" @click="rotateRight">
+            <button
+              class="icon-button"
+              type="button"
+              :disabled="selection?.kind !== 'image'"
+              @click="rotateRight"
+            >
               Right
             </button>
             <button
@@ -399,8 +424,8 @@ onBeforeUnmount(() => {
           <div v-else class="viewer-empty-state">
             <strong>Viewer готов к первой загрузке</strong>
             <span>
-              Сейчас закрыт весь image-format set из roadmap: `jpg`, `jpeg`, `png`, `webp`,
-              `avif`, `heic`, `gif`, `bmp`, `tiff`, `svg`, `raw`, `ico`.
+              Сейчас закрыт весь image-format set из roadmap: `jpg`, `jpeg`, `png`, `webp`, `avif`,
+              `heic`, `gif`, `bmp`, `tiff`, `svg`, `raw`, `ico`.
             </span>
           </div>
         </div>
@@ -695,7 +720,10 @@ onBeforeUnmount(() => {
           </article>
           <article class="architecture-card">
             <strong>Metadata Payload</strong>
-            <p>Держит summary, grouped inspector, editable draft и embedded thumbnail в одном контракте.</p>
+            <p>
+              Держит summary, grouped inspector, editable draft и embedded thumbnail в одном
+              контракте.
+            </p>
           </article>
           <article class="architecture-card">
             <strong>Workspace State</strong>
@@ -703,11 +731,16 @@ onBeforeUnmount(() => {
           </article>
           <article class="architecture-card">
             <strong>Color Lab</strong>
-            <p>Поверх image model строит pixel picker, loupe, swatches и histogram через offscreen canvas.</p>
+            <p>
+              Поверх image model строит pixel picker, loupe, swatches и histogram через offscreen
+              canvas.
+            </p>
           </article>
           <article class="architecture-card">
             <strong>Metadata Export</strong>
-            <p>JPEG пишет common EXIF в новый файл, а остальные форматы отдают sidecar JSON patch.</p>
+            <p>
+              JPEG пишет common EXIF в новый файл, а остальные форматы отдают sidecar JSON patch.
+            </p>
           </article>
         </div>
       </article>
@@ -844,7 +877,12 @@ h2 {
     linear-gradient(45deg, transparent 75%, rgba(255, 203, 148, 0.16) 75%),
     linear-gradient(-45deg, transparent 75%, rgba(255, 203, 148, 0.16) 75%),
     linear-gradient(155deg, rgba(255, 251, 245, 0.8), rgba(227, 216, 201, 0.86));
-  background-size: 24px 24px, 24px 24px, 24px 24px, 24px 24px, auto;
+  background-size:
+    24px 24px,
+    24px 24px,
+    24px 24px,
+    24px 24px,
+    auto;
   background-position:
     0 0,
     0 12px,
