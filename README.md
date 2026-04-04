@@ -119,12 +119,15 @@ npm run dev
 
 - [x] Удобный интерфейс просмотра изображений
 - [x] Масштаб, zoom, fullscreen, rotation
-- [ ] Просмотр и редактирование метаданных
-- [ ] Color picker с увеличительным стеклом
+- [x] Просмотр и редактирование метаданных
+- [x] Color picker с увеличительным стеклом
+- [x] EXIF / ICC inspector, thumbnail preview и grouped metadata browser
+- [x] Histogram, saved swatches и transparency checker как часть viewer workspace
 - [x] Поддержка: `jpg`, `jpeg`, `png`, `webp`, `avif`, `heic`, `gif`, `bmp`, `tiff`, `svg`, `raw`, `ico`
 
 Viewer уже даёт browser-native preview для `jpg`, `jpeg`, `png`, `webp`, `avif`, `gif`, `bmp`, `svg`, `ico`.
 `heic` декодируется в клиенте через HEIC adapter, `tiff` проходит через TIFF decode-layer, а `raw` закрывается через RAW-family preview extraction (`raw`, `dng`, `cr2`, `cr3`, `nef`, `arw`, `raf`, `rw2`, `orf`, `pef`, `srw`).
+Поверх preview viewer теперь поднимает metadata payload с summary/groups/editable draft, даёт EXIF/ICC inspection, экспорт metadata patch и image analysis tooling прямо в той же рабочей зоне.
 
 #### 2.2 Office Documents
 
