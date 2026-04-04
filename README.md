@@ -121,10 +121,10 @@ npm run dev
 - [x] Масштаб, zoom, fullscreen, rotation
 - [ ] Просмотр и редактирование метаданных
 - [ ] Color picker с увеличительным стеклом
-- [ ] Поддержка: `jpg`, `jpeg`, `png`, `webp`, `avif`, `heic`, `gif`, `bmp`, `tiff`, `svg`, `raw`, `ico`
+- [x] Поддержка: `jpg`, `jpeg`, `png`, `webp`, `avif`, `heic`, `gif`, `bmp`, `tiff`, `svg`, `raw`, `ico`
 
-Первый проход viewer уже даёт browser-native preview для `jpg`, `jpeg`, `png`, `webp`, `avif`, `gif`, `bmp`, `svg`, `ico`.
-`heic`, `tiff` и `raw` заведены в форматный registry как pipeline-required форматы для следующей итерации.
+Viewer уже даёт browser-native preview для `jpg`, `jpeg`, `png`, `webp`, `avif`, `gif`, `bmp`, `svg`, `ico`.
+`heic` декодируется в клиенте через HEIC adapter, `tiff` проходит через TIFF decode-layer, а `raw` закрывается через RAW-family preview extraction (`raw`, `dng`, `cr2`, `cr3`, `nef`, `arw`, `raf`, `rw2`, `orf`, `pef`, `srw`).
 
 #### 2.2 Office Documents
 

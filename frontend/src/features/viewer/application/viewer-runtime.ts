@@ -4,6 +4,14 @@ import {
   type PreviewStrategyId,
   type ViewerFormatDefinition,
 } from '../domain/viewer-registry'
+import {
+  decodeHeicPreview,
+  decodeRawPreview,
+  decodeTiffPreview,
+  loadStructuredMetadata,
+  type ViewerBinaryPreview,
+  type ViewerMetadataItem,
+} from './viewer-preview'
 
 export interface ViewerResolvedImage {
   kind: 'image'
@@ -15,16 +23,8 @@ export interface ViewerResolvedImage {
     width: number
     height: number
   }
-}
-
-export interface ViewerResolvedDeferred {
-  kind: 'deferred'
-  file: File
-  extension: string
-  format: ViewerFormatDefinition
-  headline: string
-  detail: string
-  nextStep: string
+  metadata: ViewerMetadataItem[]
+  previewLabel: string
 }
 
 export interface ViewerResolvedUnknown {
@@ -36,7 +36,7 @@ export interface ViewerResolvedUnknown {
   nextStep: string
 }
 
-export type ViewerResolvedEntry = ViewerResolvedImage | ViewerResolvedDeferred | ViewerResolvedUnknown
+export type ViewerResolvedEntry = ViewerResolvedImage | ViewerResolvedUnknown
 
 interface PreviewStrategyContext {
   file: File
@@ -54,25 +54,61 @@ export interface ViewerRuntime {
 
 export interface ViewerRuntimeDependencies {
   inspectNativeImage?: (objectUrl: string) => Promise<{ width: number; height: number }>
+  loadNativeMetadata?: (
+    buffer: ArrayBuffer,
+    context: PreviewStrategyContext,
+  ) => Promise<ViewerMetadataItem[]>
+  decodeHeicImage?: (
+    buffer: ArrayBuffer,
+    context: PreviewStrategyContext,
+  ) => Promise<ViewerBinaryPreview>
+  decodeTiffImage?: (
+    buffer: ArrayBuffer,
+    context: PreviewStrategyContext,
+  ) => Promise<ViewerBinaryPreview>
+  decodeRawImage?: (
+    buffer: ArrayBuffer,
+    context: PreviewStrategyContext,
+  ) => Promise<ViewerBinaryPreview>
 }
 
 const previewStrategies = (
   inspectNativeImage: (objectUrl: string) => Promise<{ width: number; height: number }>,
+  loadNativeMetadata: (
+    buffer: ArrayBuffer,
+    context: PreviewStrategyContext,
+  ) => Promise<ViewerMetadataItem[]>,
+  decodeHeicImage: (
+    buffer: ArrayBuffer,
+    context: PreviewStrategyContext,
+  ) => Promise<ViewerBinaryPreview>,
+  decodeTiffImage: (
+    buffer: ArrayBuffer,
+    context: PreviewStrategyContext,
+  ) => Promise<ViewerBinaryPreview>,
+  decodeRawImage: (
+    buffer: ArrayBuffer,
+    context: PreviewStrategyContext,
+  ) => Promise<ViewerBinaryPreview>,
 ): Record<PreviewStrategyId, PreviewStrategy<ViewerResolvedEntry>> => ({
   'native-image': {
-    async resolve({ file, extension, format }) {
-      const objectUrl = URL.createObjectURL(file)
+    async resolve(context) {
+      const buffer = await context.file.arrayBuffer()
+      const metadata = await loadNativeMetadata(buffer, context)
+      const objectUrl = URL.createObjectURL(context.file)
 
       try {
         const dimensions = await inspectNativeImage(objectUrl)
 
         return {
           kind: 'image',
-          file,
-          extension,
-          format,
+          file: context.file,
+          extension: context.extension,
+          format: context.format,
           objectUrl,
           dimensions,
+          metadata,
+          previewLabel: context.format.statusLabel,
         }
       } catch (error) {
         URL.revokeObjectURL(objectUrl)
@@ -80,27 +116,39 @@ const previewStrategies = (
       }
     },
   },
-  deferred: {
-    async resolve({ file, extension, format }) {
-      return {
-        kind: 'deferred',
-        file,
-        extension,
-        format,
-        headline: `${format.label} требует отдельный decode pipeline`,
-        detail: format.notes,
-        nextStep:
-          'Следующий проход: backend adapter + единый preview contract для сложных image-форматов.',
-      }
+  'heic-image': {
+    async resolve(context) {
+      const buffer = await context.file.arrayBuffer()
+      const preview = await decodeHeicImage(buffer, context)
+      return buildDecodedImageSelection(preview, context, inspectNativeImage)
+    },
+  },
+  'tiff-image': {
+    async resolve(context) {
+      const buffer = await context.file.arrayBuffer()
+      const preview = await decodeTiffImage(buffer, context)
+      return buildDecodedImageSelection(preview, context, inspectNativeImage)
+    },
+  },
+  'raw-image': {
+    async resolve(context) {
+      const buffer = await context.file.arrayBuffer()
+      const preview = await decodeRawImage(buffer, context)
+      return buildDecodedImageSelection(preview, context, inspectNativeImage)
     },
   },
 })
 
-export function createViewerRuntime(
-  dependencies: ViewerRuntimeDependencies = {},
-): ViewerRuntime {
+export function createViewerRuntime(dependencies: ViewerRuntimeDependencies = {}): ViewerRuntime {
   const inspectNativeImage = dependencies.inspectNativeImage ?? defaultInspectNativeImage
-  const strategies = previewStrategies(inspectNativeImage)
+  const loadNativeMetadata = dependencies.loadNativeMetadata ?? defaultLoadNativeMetadata
+  const strategies = previewStrategies(
+    inspectNativeImage,
+    loadNativeMetadata,
+    dependencies.decodeHeicImage ?? defaultDecodeHeicImage,
+    dependencies.decodeTiffImage ?? defaultDecodeTiffImage,
+    dependencies.decodeRawImage ?? defaultDecodeRawImage,
+  )
 
   return {
     async resolve(file) {
@@ -116,7 +164,7 @@ export function createViewerRuntime(
           detail:
             'Файл загружен, но для него ещё не описаны capability, маршрут preview и fallback-поведение.',
           nextStep:
-            'Нужно добавить definition в registry и назначить ему browser-native либо server-pipeline стратегию.',
+            'Нужно добавить definition в registry и назначить ему browser-native либо client-decode стратегию.',
         }
       }
 
@@ -129,9 +177,56 @@ export function createViewerRuntime(
   }
 }
 
-function defaultInspectNativeImage(
-  objectUrl: string,
-): Promise<{ width: number; height: number }> {
+async function buildDecodedImageSelection(
+  preview: ViewerBinaryPreview,
+  context: PreviewStrategyContext,
+  inspectNativeImage: (objectUrl: string) => Promise<{ width: number; height: number }>,
+): Promise<ViewerResolvedImage> {
+  // UI работает только с единым object URL контрактом, поэтому даже декодированные
+  // форматы приводим к тому же виду, что и browser-native изображения.
+  const previewBuffer = preview.bytes.slice().buffer
+  const objectUrl = URL.createObjectURL(new Blob([previewBuffer], { type: preview.mimeType }))
+
+  try {
+    const dimensions = await inspectNativeImage(objectUrl)
+
+    return {
+      kind: 'image',
+      file: context.file,
+      extension: context.extension,
+      format: context.format,
+      objectUrl,
+      dimensions,
+      metadata: preview.metadata,
+      previewLabel: preview.previewLabel,
+    }
+  } catch (error) {
+    URL.revokeObjectURL(objectUrl)
+    throw error
+  }
+}
+
+async function defaultLoadNativeMetadata(buffer: ArrayBuffer): Promise<ViewerMetadataItem[]> {
+  try {
+    return await loadStructuredMetadata(buffer)
+  } catch {
+    return []
+  }
+}
+
+async function defaultDecodeHeicImage(buffer: ArrayBuffer): Promise<ViewerBinaryPreview> {
+  return decodeHeicPreview(buffer)
+}
+
+async function defaultDecodeTiffImage(buffer: ArrayBuffer): Promise<ViewerBinaryPreview> {
+  return decodeTiffPreview(buffer)
+}
+
+async function defaultDecodeRawImage(buffer: ArrayBuffer): Promise<ViewerBinaryPreview> {
+  return decodeRawPreview(buffer)
+}
+
+function defaultInspectNativeImage(objectUrl: string): Promise<{ width: number; height: number }> {
   return new Promise((resolve, reject) => {
     const image = new Image()
 

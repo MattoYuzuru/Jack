@@ -23,7 +23,7 @@ interface ToolCard {
 const signalPills = [
   'Iteration 02',
   'Viewer workspace',
-  'Registry-driven preview',
+  'All image formats online',
   'SVG-first navigation',
 ]
 
@@ -39,7 +39,7 @@ const foundationPillars: FoundationPillar[] = [
   {
     name: 'Архитектура',
     detail:
-      'Home и viewer разведены по маршрутам, а preview-логика уходит в registry и strategy-слой.',
+      'Home и viewer разведены по маршрутам, а preview-логика уходит в registry и adapter-driven strategy-слой.',
   },
 ]
 
@@ -49,10 +49,10 @@ const toolCards: ToolCard[] = [
     label: '01 · File Viewer',
     title: 'Viewer',
     description:
-      'Новый рабочий маршрут для image-first preview: загрузка файла, viewport, форматный registry и явные статусы по сложным форматам.',
-    detail: 'Первый рабочий проход по viewer уже поднят и открыт из home-экрана.',
+      'Рабочий маршрут для image-first preview: загрузка файла, viewport, форматный registry, metadata и decode adapters для HEIC, TIFF и RAW-family.',
+    detail: 'Viewer уже закрывает весь стартовый image-format set и открыт из home-экрана.',
     status: 'Active route',
-    accents: ['Images', 'Workspace', 'Registry'],
+    accents: ['Images', 'Decode', 'Metadata'],
     span: 'tool-card--wide',
   },
   {
@@ -136,8 +136,8 @@ const toolCards: ToolCard[] = [
         <h1>Главный экран Jack теперь ведёт в рабочий viewer-маршрут.</h1>
         <p class="lead">
           Home сохраняет soft industrial foundation, но перестаёт быть статичным макетом: viewer уже
-          вынесен в отдельную рабочую зону с форматным registry, preview viewport и явными
-          pipeline-статусами для сложных image-форматов.
+          вынесен в отдельную рабочую зону с форматным registry, preview viewport, metadata-path и
+          decode-адаптерами для сложных image-форматов.
         </p>
 
         <div class="signal-row">
@@ -150,12 +150,12 @@ const toolCards: ToolCard[] = [
             <span>экрана уже разведены через router</span>
           </article>
           <article class="stats-card">
-            <strong>9</strong>
-            <span>image-форматов заведены в browser-native preview path</span>
+            <strong>12</strong>
+            <span>image-форматов из roadmap заведены в viewer прямо сейчас</span>
           </article>
           <article class="stats-card">
-            <strong>3</strong>
-            <span>слоя viewer-архитектуры: registry, strategy, workspace state</span>
+            <strong>4</strong>
+            <span>слоя viewer-архитектуры: registry, adapters, metadata, workspace state</span>
           </article>
         </div>
       </article>

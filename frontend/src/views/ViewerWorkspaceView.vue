@@ -18,8 +18,8 @@ const browserNativeFormats = computed(() =>
   imageFormats.filter((definition) => definition.previewPipeline === 'browser-native'),
 )
 
-const pipelineFormats = computed(() =>
-  imageFormats.filter((definition) => definition.previewPipeline === 'server-pipeline'),
+const decodeFormats = computed(() =>
+  imageFormats.filter((definition) => definition.previewPipeline === 'client-decode'),
 )
 
 const {
@@ -60,15 +60,9 @@ const selectionFacts = computed(() => {
     })
     items.push({
       label: 'Preview path',
-      value: selection.value.format.statusLabel,
+      value: selection.value.previewLabel,
     })
-  }
-
-  if (selection.value.kind === 'deferred') {
-    items.push({
-      label: 'Стратегия',
-      value: selection.value.format.statusLabel,
-    })
+    items.push(...selection.value.metadata)
   }
 
   return items
@@ -160,11 +154,11 @@ onBeforeUnmount(() => {
     <section class="viewer-hero-grid">
       <article class="panel-surface viewer-intro">
         <p class="eyebrow">Iteration 02 · Image Viewer</p>
-        <h1>Первый viewer-проход уже не макет, а рабочая зона preview.</h1>
+        <h1>Viewer уже закрывает весь первый image-format set, а не только browser-native слой.</h1>
         <p class="lead">
-          Архитектура построена от registry и preview-стратегий: browser-native форматы открываются
-          сразу, а тяжёлые вроде `heic`, `tiff` и `raw` честно показывают необходимость decode
-          pipeline вместо молчаливого фейла.
+          Архитектура построена от registry и decode-стратегий: быстрые форматы идут напрямую через
+          браузер, а `heic`, `tiff` и `raw` проходят через отдельные client-side adapters без
+          развала общего viewer-потока.
         </p>
 
         <div
@@ -280,7 +274,7 @@ onBeforeUnmount(() => {
           <div v-if="isLoading" class="viewer-empty-state">
             <strong>Подготавливаю preview...</strong>
             <span
-              >Runtime определяет формат, стратегию и, если нужно, читает размерность
+              >Runtime определяет формат, decode-стратегию и, если нужно, читает размерность
               изображения.</span
             >
           </div>
@@ -300,15 +294,6 @@ onBeforeUnmount(() => {
           </div>
 
           <div
-            v-else-if="selection?.kind === 'deferred'"
-            class="viewer-empty-state viewer-empty-state--pipeline"
-          >
-            <strong>{{ selection.headline }}</strong>
-            <span>{{ selection.detail }}</span>
-            <p>{{ selection.nextStep }}</p>
-          </div>
-
-          <div
             v-else-if="selection?.kind === 'unknown'"
             class="viewer-empty-state viewer-empty-state--warning"
           >
@@ -320,8 +305,8 @@ onBeforeUnmount(() => {
           <div v-else class="viewer-empty-state">
             <strong>Viewer готов к первой загрузке</strong>
             <span>
-              Лучший сценарий этого прохода: `jpg`, `jpeg`, `png`, `webp`, `avif`, `gif`, `bmp`,
-              `svg`, `ico`.
+              На этом проходе заведены все image-форматы из roadmap: `jpg`, `jpeg`, `png`, `webp`,
+              `avif`, `heic`, `gif`, `bmp`, `tiff`, `svg`, `raw`, `ico`.
             </span>
           </div>
         </div>
@@ -333,7 +318,7 @@ onBeforeUnmount(() => {
             v-if="selection?.kind === 'image'"
             class="chip-pill chip-pill--compact chip-pill--accent"
           >
-            {{ selection.format.label }} active
+            {{ selection.previewLabel }}
           </span>
         </div>
       </article>
@@ -368,6 +353,9 @@ onBeforeUnmount(() => {
               <span class="chip-pill chip-pill--compact">{{ format.statusLabel }}</span>
             </div>
             <p>{{ format.notes }}</p>
+            <p v-if="format.aliases.length" class="format-card__extensions">
+              Extensions: .{{ format.extension }}, .{{ format.aliases.join(',.') }}
+            </p>
             <div class="format-card__tags">
               <span
                 v-for="accent in format.accents"
@@ -382,11 +370,11 @@ onBeforeUnmount(() => {
       </article>
 
       <article class="panel-surface viewer-panel">
-        <p class="eyebrow">Deferred Formats</p>
-        <h2>Следующая зона роста</h2>
+        <p class="eyebrow">Decode Adapters</p>
+        <h2>Тяжёлые форматы уже проходят через отдельные client-side adapters</h2>
         <div class="format-grid">
           <article
-            v-for="format in pipelineFormats"
+            v-for="format in decodeFormats"
             :key="format.extension"
             class="format-card format-card--pipeline"
           >
@@ -397,6 +385,9 @@ onBeforeUnmount(() => {
               }}</span>
             </div>
             <p>{{ format.notes }}</p>
+            <p v-if="format.aliases.length" class="format-card__extensions">
+              Extensions: .{{ format.extension }}, .{{ format.aliases.join(',.') }}
+            </p>
             <div class="format-card__tags">
               <span
                 v-for="accent in format.accents"
@@ -421,8 +412,8 @@ onBeforeUnmount(() => {
           <article class="architecture-card">
             <strong>Strategy Resolver</strong>
             <p>
-              Назначает формату конкретный runtime-path: browser-native preview или deferred
-              pipeline.
+              Назначает формату конкретный runtime-path: browser-native preview или client-side
+              decode adapter.
             </p>
           </article>
           <article class="architecture-card">
@@ -636,6 +627,7 @@ h2 {
 
 .facts-grid dd,
 .viewer-panel__empty,
+.format-card__extensions,
 .format-card p,
 .architecture-card p {
   color: var(--text-soft);

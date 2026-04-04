@@ -1,11 +1,12 @@
 export type ViewerFormatFamily = 'image' | 'document' | 'media' | 'data'
 
-export type ViewerPreviewPipeline = 'browser-native' | 'server-pipeline' | 'planned'
+export type ViewerPreviewPipeline = 'browser-native' | 'client-decode' | 'planned'
 
-export type PreviewStrategyId = 'native-image' | 'deferred'
+export type PreviewStrategyId = 'native-image' | 'heic-image' | 'tiff-image' | 'raw-image'
 
 export interface ViewerFormatDefinition {
   extension: string
+  aliases: string[]
   label: string
   family: ViewerFormatFamily
   mimeTypes: string[]
@@ -19,6 +20,7 @@ export interface ViewerFormatDefinition {
 const imageFormatDefinitions: ViewerFormatDefinition[] = [
   {
     extension: 'jpg',
+    aliases: [],
     label: 'JPG',
     family: 'image',
     mimeTypes: ['image/jpeg'],
@@ -30,6 +32,7 @@ const imageFormatDefinitions: ViewerFormatDefinition[] = [
   },
   {
     extension: 'jpeg',
+    aliases: [],
     label: 'JPEG',
     family: 'image',
     mimeTypes: ['image/jpeg'],
@@ -41,6 +44,7 @@ const imageFormatDefinitions: ViewerFormatDefinition[] = [
   },
   {
     extension: 'png',
+    aliases: [],
     label: 'PNG',
     family: 'image',
     mimeTypes: ['image/png'],
@@ -52,6 +56,7 @@ const imageFormatDefinitions: ViewerFormatDefinition[] = [
   },
   {
     extension: 'webp',
+    aliases: [],
     label: 'WebP',
     family: 'image',
     mimeTypes: ['image/webp'],
@@ -63,17 +68,19 @@ const imageFormatDefinitions: ViewerFormatDefinition[] = [
   },
   {
     extension: 'avif',
+    aliases: [],
     label: 'AVIF',
     family: 'image',
     mimeTypes: ['image/avif'],
     previewPipeline: 'browser-native',
     previewStrategyId: 'native-image',
     statusLabel: 'Browser preview',
-    notes: 'В современных браузерах открывается напрямую, без backend pipeline.',
+    notes: 'В современных браузерах открывается напрямую, без дополнительного decode-шага.',
     accents: ['Modern', 'High efficiency'],
   },
   {
     extension: 'gif',
+    aliases: [],
     label: 'GIF',
     family: 'image',
     mimeTypes: ['image/gif'],
@@ -85,6 +92,7 @@ const imageFormatDefinitions: ViewerFormatDefinition[] = [
   },
   {
     extension: 'bmp',
+    aliases: [],
     label: 'BMP',
     family: 'image',
     mimeTypes: ['image/bmp'],
@@ -96,6 +104,7 @@ const imageFormatDefinitions: ViewerFormatDefinition[] = [
   },
   {
     extension: 'svg',
+    aliases: [],
     label: 'SVG',
     family: 'image',
     mimeTypes: ['image/svg+xml'],
@@ -107,6 +116,7 @@ const imageFormatDefinitions: ViewerFormatDefinition[] = [
   },
   {
     extension: 'ico',
+    aliases: [],
     label: 'ICO',
     family: 'image',
     mimeTypes: ['image/x-icon', 'image/vnd.microsoft.icon'],
@@ -118,47 +128,64 @@ const imageFormatDefinitions: ViewerFormatDefinition[] = [
   },
   {
     extension: 'heic',
+    aliases: ['heif'],
     label: 'HEIC',
     family: 'image',
     mimeTypes: ['image/heic', 'image/heif'],
-    previewPipeline: 'server-pipeline',
-    previewStrategyId: 'deferred',
-    statusLabel: 'Pipeline required',
-    notes: 'Для надёжного preview нужен серверный decode и нормализация в web-friendly представление.',
+    previewPipeline: 'client-decode',
+    previewStrategyId: 'heic-image',
+    statusLabel: 'Decode adapter',
+    notes:
+      'Файл декодируется в web-friendly raster прямо в клиенте через отдельную decode-стратегию.',
     accents: ['Apple', 'Decode'],
   },
   {
     extension: 'tiff',
+    aliases: ['tif'],
     label: 'TIFF',
     family: 'image',
     mimeTypes: ['image/tiff'],
-    previewPipeline: 'server-pipeline',
-    previewStrategyId: 'deferred',
-    statusLabel: 'Pipeline required',
-    notes: 'Многостраничность и вариативность кодеков лучше закрывать через backend adapter.',
-    accents: ['Archive', 'Multi-page'],
+    previewPipeline: 'client-decode',
+    previewStrategyId: 'tiff-image',
+    statusLabel: 'Decode adapter',
+    notes:
+      'Многостраничные и сжатые TIFF рендерятся через отдельный decode-layer с переводом в PNG preview.',
+    accents: ['Archive', 'Decode'],
   },
   {
     extension: 'raw',
+    aliases: ['dng', 'cr2', 'cr3', 'nef', 'arw', 'raf', 'rw2', 'orf', 'pef', 'srw'],
     label: 'RAW',
     family: 'image',
     mimeTypes: [],
-    previewPipeline: 'server-pipeline',
-    previewStrategyId: 'deferred',
-    statusLabel: 'Pipeline required',
-    notes: 'Для RAW понадобится семейство адаптеров под конкретные камеры и контейнеры.',
-    accents: ['Camera', 'Decode'],
+    previewPipeline: 'client-decode',
+    previewStrategyId: 'raw-image',
+    statusLabel: 'Decode adapter',
+    notes:
+      'RAW family идёт через TIFF-ish adapter: viewer ищет renderable preview/IFD и поднимает metadata без деградации остальных форматов.',
+    accents: ['Camera', 'Preview extraction'],
   },
 ]
 
 const registry = [...imageFormatDefinitions]
 
-const formatByExtension = new Map(registry.map((definition) => [definition.extension, definition]))
-const formatByMime = new Map(
-  registry.flatMap((definition) => definition.mimeTypes.map((mimeType) => [mimeType, definition] as const)),
-)
+const formatByExtension = new Map<string, ViewerFormatDefinition>()
+const formatByMime = new Map<string, ViewerFormatDefinition>()
 
-export const viewerAcceptAttribute = registry.map((definition) => `.${definition.extension}`).join(',')
+for (const definition of registry) {
+  for (const extension of [definition.extension, ...definition.aliases]) {
+    formatByExtension.set(extension, definition)
+  }
+
+  for (const mimeType of definition.mimeTypes) {
+    formatByMime.set(mimeType, definition)
+  }
+}
+
+export const viewerAcceptAttribute = registry
+  .flatMap((definition) => [definition.extension, ...definition.aliases])
+  .map((extension) => `.${extension}`)
+  .join(',')
 
 export function listViewerFormatsByFamily(family: ViewerFormatFamily): ViewerFormatDefinition[] {
   return registry.filter((definition) => definition.family === family)

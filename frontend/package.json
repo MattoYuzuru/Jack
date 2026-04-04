@@ -16,7 +16,10 @@
     "format": "prettier --write --experimental-cli src/"
   },
   "dependencies": {
+    "exifreader": "^4.37.0",
+    "heic2any": "^0.0.4",
     "pinia": "^3.0.4",
+    "utif2": "^4.1.0",
     "vue": "^3.5.32",
     "vue-router": "^5.0.4"
   },
