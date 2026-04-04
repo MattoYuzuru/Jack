@@ -11,6 +11,10 @@ import {
   type RasterImageFrame,
 } from '../../imaging/application/browser-raster'
 import { buildSinglePagePdfFromRaster } from '../../imaging/application/pdf-document'
+import {
+  buildTiffFromRaster,
+  buildTiffPreviewFromRaster,
+} from '../../imaging/application/tiff-image'
 import { resolveConverterPreset, type ConverterPresetDefinition } from '../domain/converter-presets'
 import {
   detectConverterExtension,
@@ -38,6 +42,7 @@ export interface ConverterResult {
   kind: 'image' | 'document'
   fileName: string
   blob: Blob
+  previewBlob: Blob
   previewMimeType: string
   preset: ConverterPresetDefinition
   source: ConverterSourceFormatDefinition
@@ -76,6 +81,8 @@ interface ConverterTargetStrategy {
 
 interface ConverterEncodedArtifact {
   blob: Blob
+  previewBlob?: Blob
+  previewMimeType?: string
   warnings: string[]
 }
 
@@ -107,6 +114,12 @@ export interface ConverterRuntimeDependencies {
     backgroundColor?: string
   }) => Promise<ConverterEncodedArtifact>
   encodePdf?: (input: {
+    raster: RasterImageFrame
+    target: ConverterTargetFormatDefinition
+    quality?: number
+    backgroundColor?: string
+  }) => Promise<ConverterEncodedArtifact>
+  encodeTiff?: (input: {
     raster: RasterImageFrame
     target: ConverterTargetFormatDefinition
     quality?: number
@@ -182,7 +195,8 @@ export function createConverterRuntime(
         kind: target.family === 'document' ? 'document' : 'image',
         fileName: replaceExtension(prepared.file.name, target.extension),
         blob: encoded.blob,
-        previewMimeType: target.mimeType,
+        previewBlob: encoded.previewBlob ?? encoded.blob,
+        previewMimeType: encoded.previewMimeType ?? target.mimeType,
         preset,
         source: prepared.source,
         target,
@@ -231,6 +245,9 @@ function createTargetStrategies(
     },
     'pdf-document': {
       encode: dependencies.encodePdf ?? defaultEncodePdf,
+    },
+    'tiff-image': {
+      encode: dependencies.encodeTiff ?? defaultEncodeTiff,
     },
   }
 }
@@ -294,6 +311,7 @@ async function defaultEncodeJpeg(input: {
       quality: input.quality,
       backgroundColor: input.backgroundColor,
     }),
+    previewMimeType: 'image/jpeg',
     warnings: [],
   }
 }
@@ -305,6 +323,7 @@ async function defaultEncodePng(input: {
     blob: await encodeRasterFrame(input.raster, {
       mimeType: 'image/png',
     }),
+    previewMimeType: 'image/png',
     warnings: [],
   }
 }
@@ -318,6 +337,7 @@ async function defaultEncodeWebp(input: {
       mimeType: 'image/webp',
       quality: input.quality,
     }),
+    previewMimeType: 'image/webp',
     warnings: [],
   }
 }
@@ -332,8 +352,22 @@ async function defaultEncodePdf(input: {
       quality: input.quality,
       backgroundColor: input.backgroundColor,
     }),
+    previewMimeType: 'application/pdf',
     warnings: [
       'PDF собран как single-page raster document без отдельного текстового или векторного слоя.',
+    ],
+  }
+}
+
+async function defaultEncodeTiff(input: {
+  raster: RasterImageFrame
+}): Promise<ConverterEncodedArtifact> {
+  return {
+    blob: await buildTiffFromRaster(input.raster),
+    previewBlob: await buildTiffPreviewFromRaster(input.raster),
+    previewMimeType: 'image/png',
+    warnings: [
+      'TIFF собран как single-frame RGBA image без multi-page контейнера и без исходных metadata-блоков.',
     ],
   }
 }

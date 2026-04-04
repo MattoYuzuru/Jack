@@ -114,7 +114,7 @@ export function useConverterWorkspace() {
 
       result.value = {
         ...converted,
-        objectUrl: URL.createObjectURL(converted.blob),
+        objectUrl: URL.createObjectURL(converted.previewBlob),
       }
     } catch (error) {
       errorMessage.value =

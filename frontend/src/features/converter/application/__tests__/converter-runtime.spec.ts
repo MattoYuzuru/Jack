@@ -17,7 +17,12 @@ describe('converter runtime', () => {
     const prepared = runtime.inspect(new File(['image'], 'poster.png', { type: 'image/png' }))
 
     expect(prepared?.source.extension).toBe('png')
-    expect(prepared?.targets.map((target) => target.extension)).toEqual(['jpg', 'webp', 'pdf'])
+    expect(prepared?.targets.map((target) => target.extension)).toEqual([
+      'jpg',
+      'tiff',
+      'webp',
+      'pdf',
+    ])
   })
 
   it('routes heavy formats through their decode strategy and target encoder', async () => {
@@ -165,5 +170,35 @@ describe('converter runtime', () => {
     expect(result.warnings).toContain(
       'Preset Email Attachment уменьшил размерность: 4000x3000 -> 1600x1200.',
     )
+  })
+
+  it('returns a png preview layer for tiff targets while keeping the download blob as tiff', async () => {
+    const runtime = createConverterRuntime({
+      decodeRawSource: async (_prepared: ConverterPreparedSource) =>
+        createRasterFrame(2400, 1600, false),
+      encodeTiff: async () => ({
+        blob: new Blob(['tiff'], { type: 'image/tiff' }),
+        previewBlob: new Blob(['png-preview'], { type: 'image/png' }),
+        previewMimeType: 'image/png',
+        warnings: ['TIFF собран как single-frame RGBA image.'],
+      }),
+    })
+
+    const prepared = runtime.inspect(new File(['raw'], 'capture.nef'))
+
+    if (!prepared) {
+      throw new Error('Expected a prepared source for RAW.')
+    }
+
+    const result = await runtime.convert({
+      prepared,
+      targetExtension: 'tiff',
+    })
+
+    expect(result.kind).toBe('image')
+    expect(result.fileName).toBe('capture.tiff')
+    expect(result.blob.type).toBe('image/tiff')
+    expect(result.previewBlob.type).toBe('image/png')
+    expect(result.previewMimeType).toBe('image/png')
   })
 })

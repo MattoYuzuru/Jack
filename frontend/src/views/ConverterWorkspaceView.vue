@@ -117,8 +117,8 @@ function onDrop(event: DragEvent) {
       <article class="panel-surface converter-hero-copy">
         <p class="eyebrow">Iteration 03 · Converter</p>
         <h1>
-          Первый проход конвертера уже умеет брать сложные image-source и собирать практичные
-          target-форматы.
+          Конвертер уже умеет брать сложные image-source и собирать delivery, archive и document
+          targets.
         </h1>
         <p class="lead">
           Модуль строится не как набор случайных кнопок, а как реестр сценариев поверх decode/encode
@@ -128,7 +128,7 @@ function onDrop(event: DragEvent) {
 
         <div class="converter-signal-row">
           <span class="chip-pill">HEIC / TIFF / RAW decode</span>
-          <span class="chip-pill">JPG / PNG / WebP / PDF targets</span>
+          <span class="chip-pill">JPG / PNG / WebP / TIFF / PDF targets</span>
           <span class="chip-pill">Preset-driven resize</span>
           <span class="chip-pill">Scenario registry</span>
           <span class="chip-pill">Shared imaging layer</span>
@@ -197,7 +197,7 @@ function onDrop(event: DragEvent) {
           <strong>Загрузи `jpg`, `png`, `webp`, `bmp`, `svg`, `heic`, `tiff` или `raw`.</strong>
           <span>
             Конвертер сам определит, какой decode-path нужен: нативный browser raster либо
-            heavy-format adapter, а затем соберёт image либо PDF target.
+            heavy-format adapter, а затем соберёт image, archive-friendly TIFF либо PDF target.
           </span>
         </button>
 
