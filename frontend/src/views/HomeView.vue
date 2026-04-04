@@ -16,15 +16,17 @@ interface ToolCard {
   description: string
   detail: string
   status: string
+  route?: string
   accents: string[]
   span: 'tool-card--wide' | 'tool-card--standard'
 }
 
 const signalPills = [
-  'Iteration 02',
+  'Iteration 03',
   'Viewer workspace',
-  'All image formats online',
-  'Color + metadata tools',
+  'Converter route',
+  'Shared imaging layer',
+  'Decode + encode pipeline',
   'SVG-first navigation',
 ]
 
@@ -40,7 +42,7 @@ const foundationPillars: FoundationPillar[] = [
   {
     name: 'Архитектура',
     detail:
-      'Home и viewer разведены по маршрутам, а preview-логика уходит в registry и adapter-driven strategy-слой.',
+      'Home, viewer и converter разведены по маршрутам, а тяжёлые image-path живут в shared imaging + registry/strategy-слоях.',
   },
 ]
 
@@ -51,8 +53,10 @@ const toolCards: ToolCard[] = [
     title: 'Viewer',
     description:
       'Рабочий маршрут для image-first preview и анализа: загрузка файла, viewport, color lab, metadata inspector/editor и decode adapters для HEIC, TIFF и RAW-family.',
-    detail: 'Viewer уже закрывает весь стартовый image-format set и даёт EXIF/ICC, histogram, swatches и metadata export.',
+    detail:
+      'Viewer уже закрывает весь стартовый image-format set и даёт EXIF/ICC, histogram, swatches и metadata export.',
     status: 'Active route',
+    route: '/viewer',
     accents: ['Images', 'Decode', 'Metadata', 'Color'],
     span: 'tool-card--wide',
   },
@@ -61,10 +65,11 @@ const toolCards: ToolCard[] = [
     label: '02 · Conversion',
     title: 'Converter',
     description:
-      'Частые и тяжёлые конвертации собраны в отдельный быстрый маршрут без перегруза второстепенными настройками.',
-    detail: 'Подготовлен как будущий switchboard для форматов и пресетов.',
-    status: 'Queued',
-    accents: ['Image', 'Office', 'Video'],
+      'Первый browser-first converter уже поднимает image-сценарии через scenario registry, unified raster contract и decode/encode pipeline.',
+    detail: 'На старте закрыты HEIC, TIFF, RAW, SVG и базовые raster-конверсии в JPG/PNG/WebP.',
+    status: 'Active route',
+    route: '/converter',
+    accents: ['Image', 'Pipeline', 'Presets'],
     span: 'tool-card--standard',
   },
   {
@@ -126,19 +131,20 @@ const toolCards: ToolCard[] = [
       </div>
 
       <div class="app-topbar__status">
-        <span class="chip-pill">Iteration 02</span>
-        <span class="chip-pill chip-pill--accent">Viewer started</span>
+        <span class="chip-pill">Iteration 03</span>
+        <span class="chip-pill chip-pill--accent">Converter started</span>
       </div>
     </header>
 
     <section class="hero-grid">
       <article class="panel-surface hero-copy">
-        <p class="eyebrow">Iteration 02 · File Viewer</p>
-        <h1>Главный экран Jack теперь ведёт в рабочий viewer-маршрут.</h1>
+        <p class="eyebrow">Iteration 03 · Viewer + Converter</p>
+        <h1>Главный экран Jack теперь ведёт сразу в viewer и browser-first converter.</h1>
         <p class="lead">
-          Home сохраняет soft industrial foundation, но перестаёт быть статичным макетом: viewer уже
-          вынесен в отдельную рабочую зону с форматным registry, preview viewport, color tools,
-          metadata-path и decode-адаптерами для сложных image-форматов.
+          Home сохраняет soft industrial foundation, но теперь работает как switchboard для двух
+          живых маршрутов: viewer отвечает за preview и анализ, а converter закрывает первую волну
+          image-конвертаций через scenario registry, shared imaging и отдельные decode/encode
+          стратегии.
         </p>
 
         <div class="signal-row">
@@ -147,16 +153,19 @@ const toolCards: ToolCard[] = [
 
         <div class="stats-grid" aria-label="Ключевые показатели foundation">
           <article class="stats-card">
-            <strong>2</strong>
+            <strong>3</strong>
             <span>экрана уже разведены через router</span>
           </article>
           <article class="stats-card">
             <strong>12</strong>
-            <span>image-форматов из roadmap заведены в viewer прямо сейчас</span>
+            <span>image-сценариев конвертации и просмотра уже заведены в рабочие маршруты</span>
           </article>
           <article class="stats-card">
-            <strong>6</strong>
-            <span>слоёв viewer-архитектуры: registry, adapters, metadata, workspace state, color lab, export</span>
+            <strong>7</strong>
+            <span
+              >слоёв foundation: shared imaging, registry, adapters, metadata, workspace state,
+              color lab, export</span
+            >
           </article>
         </div>
       </article>
@@ -189,7 +198,7 @@ const toolCards: ToolCard[] = [
         :class="[
           card.span,
           `tool-card--${card.id}`,
-          { 'tool-card--interactive': card.id === 'viewer' },
+          { 'tool-card--interactive': Boolean(card.route) },
         ]"
       >
         <div class="tool-card__meta">
@@ -215,11 +224,11 @@ const toolCards: ToolCard[] = [
           <div class="tool-card__actions">
             <p class="tool-card__detail">{{ card.detail }}</p>
             <RouterLink
-              v-if="card.id === 'viewer'"
+              v-if="card.route"
               class="action-button action-button--accent"
-              to="/viewer"
+              :to="card.route"
             >
-              Open Viewer
+              Open {{ card.title }}
             </RouterLink>
             <span v-else class="tool-card__queued">Roadmap queued</span>
           </div>

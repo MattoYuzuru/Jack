@@ -13,6 +13,11 @@ const router = createRouter({
       name: 'viewer',
       component: () => import('../views/ViewerWorkspaceView.vue'),
     },
+    {
+      path: '/converter',
+      name: 'converter',
+      component: () => import('../views/ConverterWorkspaceView.vue'),
+    },
   ],
 })
 

@@ -25,6 +25,8 @@ Jack задуман как практичный рабочий набор инс
 
 - backend и frontend разнесены по отдельным каталогам
 - есть новый UI foundation с neumorphic home-dashboard и крупной навигационной сеткой модулей
+- home уже ведёт в два живых маршрута: `viewer` и первый `converter`
+- есть shared imaging-слой для тяжёлых image decode-сценариев, который переиспользуют модули просмотра и конвертации
 - подготовлены логотип и favicon для дальнейшего использования
 - есть `docker compose`-окружение для локального старта
 - задокументированы workflow-правила и roadmap для будущих итераций
@@ -158,25 +160,34 @@ Viewer уже даёт browser-native preview для `jpg`, `jpeg`, `png`, `webp
 - [ ] Конвертация изображений, документов, таблиц, презентаций, видео и аудио
 - [ ] Трансформации контейнеров, кодеков, размеров и параметров качества
 
+Первая browser-first итерация конвертера уже заведена в отдельный маршрут. Архитектура построена через
+`scenario registry -> source decode strategy -> unified raster contract -> target encode strategy`, чтобы
+новые форматы добавлялись через расширение capability-слоя, а не через логику внутри UI.
+
 #### 3.1 Частые Сценарии Для Изображений
 
-- [ ] `HEIC -> JPG`
-- [ ] `PNG -> JPG`
-- [ ] `JPG -> PNG`
-- [ ] `JPG/PNG -> WebP`
+- [x] `HEIC -> JPG`
+- [x] `PNG -> JPG`
+- [x] `JPG -> PNG`
+- [x] `JPG/PNG -> WebP`
 - [ ] `JPG/PNG -> AVIF`
-- [ ] `WebP -> JPG/PNG`
-- [ ] `BMP -> JPG/PNG`
+- [x] `WebP -> JPG/PNG`
+- [x] `BMP -> JPG/PNG`
 - [ ] `TIFF -> JPG/PDF`
-- [ ] `PNG <-> WebP`
-- [ ] `SVG -> PNG`
+- [x] `PNG <-> WebP`
+- [x] `SVG -> PNG`
 - [ ] `PNG -> SVG` через трассировку / векторизацию
-- [ ] `RAW -> JPG`
+- [x] `RAW -> JPG`
 - [ ] `RAW -> TIFF`
 - [ ] `PSD -> JPG/PNG/WebP`
 - [ ] `AI/EPS/SVG -> PNG/PDF`
 - [ ] `PNG -> ICO`
 - [ ] `SVG -> ICO`
+
+Сейчас в converter-роуте реально работают `jpg`, `png`, `webp`, `bmp`, `svg`, `heic`, `tiff` и
+`raw`/camera-alias family (`dng`, `cr2`, `cr3`, `nef`, `arw`, `raf`, `rw2`, `orf`, `pef`, `srw`).
+`TIFF -> JPG` уже закрыт как часть этой первой волны, а PDF/office/media-конверсии пока остаются
+следующим архитектурным срезом.
 
 #### 3.2 Частые Сценарии Для Офисных Форматов
 
