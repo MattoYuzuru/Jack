@@ -10,8 +10,8 @@ import {
   decodeTiffPreview,
   loadStructuredMetadata,
   type ViewerBinaryPreview,
-  type ViewerMetadataItem,
 } from './viewer-preview'
+import type { ViewerMetadataPayload } from './viewer-metadata'
 
 export interface ViewerResolvedImage {
   kind: 'image'
@@ -23,7 +23,7 @@ export interface ViewerResolvedImage {
     width: number
     height: number
   }
-  metadata: ViewerMetadataItem[]
+  metadata: ViewerMetadataPayload
   previewLabel: string
 }
 
@@ -57,7 +57,7 @@ export interface ViewerRuntimeDependencies {
   loadNativeMetadata?: (
     buffer: ArrayBuffer,
     context: PreviewStrategyContext,
-  ) => Promise<ViewerMetadataItem[]>
+  ) => Promise<ViewerMetadataPayload>
   decodeHeicImage?: (
     buffer: ArrayBuffer,
     context: PreviewStrategyContext,
@@ -77,7 +77,7 @@ const previewStrategies = (
   loadNativeMetadata: (
     buffer: ArrayBuffer,
     context: PreviewStrategyContext,
-  ) => Promise<ViewerMetadataItem[]>,
+  ) => Promise<ViewerMetadataPayload>,
   decodeHeicImage: (
     buffer: ArrayBuffer,
     context: PreviewStrategyContext,
@@ -206,12 +206,8 @@ async function buildDecodedImageSelection(
   }
 }
 
-async function defaultLoadNativeMetadata(buffer: ArrayBuffer): Promise<ViewerMetadataItem[]> {
-  try {
-    return await loadStructuredMetadata(buffer)
-  } catch {
-    return []
-  }
+async function defaultLoadNativeMetadata(buffer: ArrayBuffer): Promise<ViewerMetadataPayload> {
+  return loadStructuredMetadata(buffer)
 }
 
 async function defaultDecodeHeicImage(buffer: ArrayBuffer): Promise<ViewerBinaryPreview> {

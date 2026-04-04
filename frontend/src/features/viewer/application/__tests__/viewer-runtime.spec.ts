@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { createEmptyMetadataPayload } from '../viewer-metadata'
 import { createViewerRuntime } from '../viewer-runtime'
 
 const originalCreateObjectUrl = URL.createObjectURL
@@ -30,7 +31,10 @@ describe('viewer runtime', () => {
 
     const runtime = createViewerRuntime({
       inspectNativeImage: async () => ({ width: 1440, height: 900 }),
-      loadNativeMetadata: async () => [{ label: 'Камера', value: 'JackCam' }],
+      loadNativeMetadata: async () => ({
+        ...createEmptyMetadataPayload(),
+        summary: [{ label: 'Камера', value: 'JackCam' }],
+      }),
     })
 
     const result = await runtime.resolve(new File(['image'], 'poster.png', { type: 'image/png' }))
@@ -42,7 +46,7 @@ describe('viewer runtime', () => {
     expect(result.objectUrl).toBe('blob:preview')
     expect(result.dimensions).toEqual({ width: 1440, height: 900 })
     expect(result.format.extension).toBe('png')
-    expect(result.metadata).toEqual([{ label: 'Камера', value: 'JackCam' }])
+    expect(result.metadata.summary).toEqual([{ label: 'Камера', value: 'JackCam' }])
   })
 
   it('builds a decoded preview for heic files', async () => {
@@ -56,7 +60,10 @@ describe('viewer runtime', () => {
       decodeHeicImage: async () => ({
         bytes: new Uint8Array([1, 2, 3]),
         mimeType: 'image/jpeg',
-        metadata: [{ label: 'Тип файла', value: 'HEIC' }],
+        metadata: {
+          ...createEmptyMetadataPayload(),
+          summary: [{ label: 'Тип файла', value: 'HEIC' }],
+        },
         previewLabel: 'HEIC decode adapter',
       }),
     })
@@ -71,7 +78,7 @@ describe('viewer runtime', () => {
 
     expect(result.format.extension).toBe('heic')
     expect(result.previewLabel).toBe('HEIC decode adapter')
-    expect(result.metadata).toEqual([{ label: 'Тип файла', value: 'HEIC' }])
+    expect(result.metadata.summary).toEqual([{ label: 'Тип файла', value: 'HEIC' }])
   })
 
   it('routes raw aliases through the raw preview adapter', async () => {
@@ -85,7 +92,10 @@ describe('viewer runtime', () => {
       decodeRawImage: async () => ({
         bytes: new Uint8Array([4, 5, 6]),
         mimeType: 'image/png',
-        metadata: [{ label: 'Камера', value: 'RAW Body' }],
+        metadata: {
+          ...createEmptyMetadataPayload(),
+          summary: [{ label: 'Камера', value: 'RAW Body' }],
+        },
         previewLabel: 'RAW preview extraction',
       }),
     })
@@ -98,5 +108,6 @@ describe('viewer runtime', () => {
 
     expect(result.format.extension).toBe('raw')
     expect(result.previewLabel).toBe('RAW preview extraction')
+    expect(result.metadata.summary).toEqual([{ label: 'Камера', value: 'RAW Body' }])
   })
 })

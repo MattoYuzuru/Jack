@@ -16,8 +16,10 @@
     "format": "prettier --write --experimental-cli src/"
   },
   "dependencies": {
+    "@types/piexifjs": "^1.0.0",
     "exifreader": "^4.37.0",
     "heic2any": "^0.0.4",
+    "piexifjs": "^1.0.6",
     "pinia": "^3.0.4",
     "utif2": "^4.1.0",
     "vue": "^3.5.32",
