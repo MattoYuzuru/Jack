@@ -26,7 +26,7 @@ const signalPills = [
   'Viewer workspace',
   'Converter route',
   'Shared imaging layer',
-  'Decode + encode pipeline',
+  'Decode + encode + PDF',
   'SVG-first navigation',
 ]
 
@@ -42,7 +42,7 @@ const foundationPillars: FoundationPillar[] = [
   {
     name: 'Архитектура',
     detail:
-      'Home, viewer и converter разведены по маршрутам, а тяжёлые image-path живут в shared imaging + registry/strategy-слоях.',
+      'Home, viewer и converter разведены по маршрутам, а тяжёлые image-path и PDF-target layer живут в shared imaging + registry/strategy-слоях.',
   },
 ]
 
@@ -65,11 +65,12 @@ const toolCards: ToolCard[] = [
     label: '02 · Conversion',
     title: 'Converter',
     description:
-      'Первый browser-first converter уже поднимает image-сценарии через scenario registry, unified raster contract и decode/encode pipeline.',
-    detail: 'На старте закрыты HEIC, TIFF, RAW, SVG и базовые raster-конверсии в JPG/PNG/WebP.',
+      'Browser-first converter уже поднимает и image-, и document-target сценарии через scenario registry, unified raster contract и decode/encode pipeline.',
+    detail:
+      'На старте закрыты HEIC, TIFF, RAW, SVG, базовые raster-конверсии в JPG/PNG/WebP и single-page PDF output.',
     status: 'Active route',
     route: '/converter',
-    accents: ['Image', 'Pipeline', 'Presets'],
+    accents: ['Image', 'PDF', 'Pipeline'],
     span: 'tool-card--standard',
   },
   {
@@ -139,12 +140,12 @@ const toolCards: ToolCard[] = [
     <section class="hero-grid">
       <article class="panel-surface hero-copy">
         <p class="eyebrow">Iteration 03 · Viewer + Converter</p>
-        <h1>Главный экран Jack теперь ведёт сразу в viewer и browser-first converter.</h1>
+        <h1>Главный экран Jack теперь ведёт сразу в viewer и converter с image плюс PDF-output.</h1>
         <p class="lead">
           Home сохраняет soft industrial foundation, но теперь работает как switchboard для двух
           живых маршрутов: viewer отвечает за preview и анализ, а converter закрывает первую волну
-          image-конвертаций через scenario registry, shared imaging и отдельные decode/encode
-          стратегии.
+          image-конвертаций и первый document-target через scenario registry, shared imaging и
+          отдельные decode/encode стратегии.
         </p>
 
         <div class="signal-row">
@@ -158,7 +159,9 @@ const toolCards: ToolCard[] = [
           </article>
           <article class="stats-card">
             <strong>12</strong>
-            <span>image-сценариев конвертации и просмотра уже заведены в рабочие маршруты</span>
+            <span
+              >image- и PDF-сценариев конвертации и просмотра уже заведены в рабочие маршруты</span
+            >
           </article>
           <article class="stats-card">
             <strong>7</strong>

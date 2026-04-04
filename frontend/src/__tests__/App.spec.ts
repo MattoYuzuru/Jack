@@ -16,7 +16,7 @@ describe('App', () => {
     })
 
     expect(wrapper.text()).toContain(
-      'Главный экран Jack теперь ведёт сразу в viewer и browser-first converter.',
+      'Главный экран Jack теперь ведёт сразу в viewer и converter с image плюс PDF-output.',
     )
     expect(wrapper.findAll('.tool-card')).toHaveLength(6)
     expect(wrapper.text()).toContain('Open Viewer')

@@ -163,6 +163,8 @@ Viewer уже даёт browser-native preview для `jpg`, `jpeg`, `png`, `webp
 Первая browser-first итерация конвертера уже заведена в отдельный маршрут. Архитектура построена через
 `scenario registry -> source decode strategy -> unified raster contract -> target encode strategy`, чтобы
 новые форматы добавлялись через расширение capability-слоя, а не через логику внутри UI.
+Следующий срез уже поднял и первый document-target: single-page PDF собирается поверх того же raster
+contract, без отдельной ветки UI и без дублирования source decode-логики.
 
 #### 3.1 Частые Сценарии Для Изображений
 
@@ -173,7 +175,7 @@ Viewer уже даёт browser-native preview для `jpg`, `jpeg`, `png`, `webp
 - [ ] `JPG/PNG -> AVIF`
 - [x] `WebP -> JPG/PNG`
 - [x] `BMP -> JPG/PNG`
-- [ ] `TIFF -> JPG/PDF`
+- [x] `TIFF -> JPG/PDF`
 - [x] `PNG <-> WebP`
 - [x] `SVG -> PNG`
 - [ ] `PNG -> SVG` через трассировку / векторизацию
@@ -186,8 +188,9 @@ Viewer уже даёт browser-native preview для `jpg`, `jpeg`, `png`, `webp
 
 Сейчас в converter-роуте реально работают `jpg`, `png`, `webp`, `bmp`, `svg`, `heic`, `tiff` и
 `raw`/camera-alias family (`dng`, `cr2`, `cr3`, `nef`, `arw`, `raf`, `rw2`, `orf`, `pef`, `srw`).
-`TIFF -> JPG` уже закрыт как часть этой первой волны, а PDF/office/media-конверсии пока остаются
-следующим архитектурным срезом.
+Для них уже есть practical outputs в `JPG`, `PNG`, `WebP` и single-page `PDF`. PDF в этой итерации
+собирается как raster document без редактируемого текстового/векторного слоя, но при этом открывает
+`JPG/PNG -> PDF`, `TIFF -> PDF`, `SVG -> PDF`, `HEIC -> PDF` и `RAW -> PDF` на том же runtime.
 
 #### 3.2 Частые Сценарии Для Офисных Форматов
 
@@ -199,7 +202,7 @@ Viewer уже даёт browser-native preview для `jpg`, `jpeg`, `png`, `webp
 - [ ] `RTF <-> DOCX`
 - [ ] `ODT <-> DOCX`
 - [ ] `PDF -> JPG/PNG`
-- [ ] `JPG/PNG -> PDF`
+- [x] `JPG/PNG -> PDF`
 - [ ] `PDF -> TXT`
 - [ ] `PDF -> XLSX`
 - [ ] `PDF -> PPTX`

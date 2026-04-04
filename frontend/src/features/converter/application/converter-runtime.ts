@@ -9,6 +9,7 @@ import {
   rasterizeBlob,
   type RasterImageFrame,
 } from '../../imaging/application/browser-raster'
+import { buildSinglePagePdfFromRaster } from '../../imaging/application/pdf-document'
 import {
   detectConverterExtension,
   listConverterScenariosByFamily,
@@ -32,8 +33,10 @@ export interface ConverterPreparedSource {
 }
 
 export interface ConverterResult {
+  kind: 'image' | 'document'
   fileName: string
   blob: Blob
+  previewMimeType: string
   source: ConverterSourceFormatDefinition
   target: ConverterTargetFormatDefinition
   scenario: ConverterScenarioDefinition
@@ -62,7 +65,12 @@ interface ConverterTargetStrategy {
     target: ConverterTargetFormatDefinition
     quality?: number
     backgroundColor?: string
-  }): Promise<Blob>
+  }): Promise<ConverterEncodedArtifact>
+}
+
+interface ConverterEncodedArtifact {
+  blob: Blob
+  warnings: string[]
 }
 
 export interface ConverterRuntimeDependencies {
@@ -75,19 +83,25 @@ export interface ConverterRuntimeDependencies {
     target: ConverterTargetFormatDefinition
     quality?: number
     backgroundColor?: string
-  }) => Promise<Blob>
+  }) => Promise<ConverterEncodedArtifact>
   encodePng?: (input: {
     raster: RasterImageFrame
     target: ConverterTargetFormatDefinition
     quality?: number
     backgroundColor?: string
-  }) => Promise<Blob>
+  }) => Promise<ConverterEncodedArtifact>
   encodeWebp?: (input: {
     raster: RasterImageFrame
     target: ConverterTargetFormatDefinition
     quality?: number
     backgroundColor?: string
-  }) => Promise<Blob>
+  }) => Promise<ConverterEncodedArtifact>
+  encodePdf?: (input: {
+    raster: RasterImageFrame
+    target: ConverterTargetFormatDefinition
+    quality?: number
+    backgroundColor?: string
+  }) => Promise<ConverterEncodedArtifact>
 }
 
 export function createConverterRuntime(
@@ -104,9 +118,10 @@ export function createConverterRuntime(
       }
 
       const targets = listConverterTargetsForSource(file.name, file.type)
-      const scenarios = listConverterScenariosByFamily(source.family).filter(
-        (scenario) => scenario.sourceExtension === source.extension,
-      )
+      const scenarios = [
+        ...listConverterScenariosByFamily('image'),
+        ...listConverterScenariosByFamily('document'),
+      ].filter((scenario) => scenario.sourceExtension === source.extension)
 
       return {
         file,
@@ -126,7 +141,7 @@ export function createConverterRuntime(
       }
 
       const raster = await sourceStrategies[prepared.source.sourceStrategyId].decode(prepared)
-      const blob = await targetStrategies[target.targetStrategyId].encode({
+      const encoded = await targetStrategies[target.targetStrategyId].encode({
         raster,
         target,
         quality: target.supportsQuality
@@ -135,14 +150,21 @@ export function createConverterRuntime(
         backgroundColor,
       })
 
-      const warnings =
-        target.extension === 'jpg' && raster.hasTransparency
-          ? ['Прозрачные области переведены в сплошной фон перед JPEG encode.']
-          : []
+      const warnings = [...encoded.warnings]
+
+      if (!target.supportsTransparency && raster.hasTransparency) {
+        warnings.unshift(
+          target.family === 'document'
+            ? `Прозрачные области переведены в сплошной фон перед сборкой ${target.label}.`
+            : `Прозрачные области переведены в сплошной фон перед ${target.label} encode.`,
+        )
+      }
 
       return {
+        kind: target.family === 'document' ? 'document' : 'image',
         fileName: replaceExtension(prepared.file.name, target.extension),
-        blob,
+        blob: encoded.blob,
+        previewMimeType: target.mimeType,
         source: prepared.source,
         target,
         scenario,
@@ -186,6 +208,9 @@ function createTargetStrategies(
     'webp-encoder': {
       encode: dependencies.encodeWebp ?? defaultEncodeWebp,
     },
+    'pdf-document': {
+      encode: dependencies.encodePdf ?? defaultEncodePdf,
+    },
   }
 }
 
@@ -217,28 +242,55 @@ async function defaultEncodeJpeg(input: {
   raster: RasterImageFrame
   quality?: number
   backgroundColor?: string
-}): Promise<Blob> {
-  return encodeRasterFrame(input.raster, {
-    mimeType: 'image/jpeg',
-    quality: input.quality,
-    backgroundColor: input.backgroundColor,
-  })
+}): Promise<ConverterEncodedArtifact> {
+  return {
+    blob: await encodeRasterFrame(input.raster, {
+      mimeType: 'image/jpeg',
+      quality: input.quality,
+      backgroundColor: input.backgroundColor,
+    }),
+    warnings: [],
+  }
 }
 
-async function defaultEncodePng(input: { raster: RasterImageFrame }): Promise<Blob> {
-  return encodeRasterFrame(input.raster, {
-    mimeType: 'image/png',
-  })
+async function defaultEncodePng(input: {
+  raster: RasterImageFrame
+}): Promise<ConverterEncodedArtifact> {
+  return {
+    blob: await encodeRasterFrame(input.raster, {
+      mimeType: 'image/png',
+    }),
+    warnings: [],
+  }
 }
 
 async function defaultEncodeWebp(input: {
   raster: RasterImageFrame
   quality?: number
-}): Promise<Blob> {
-  return encodeRasterFrame(input.raster, {
-    mimeType: 'image/webp',
-    quality: input.quality,
-  })
+}): Promise<ConverterEncodedArtifact> {
+  return {
+    blob: await encodeRasterFrame(input.raster, {
+      mimeType: 'image/webp',
+      quality: input.quality,
+    }),
+    warnings: [],
+  }
+}
+
+async function defaultEncodePdf(input: {
+  raster: RasterImageFrame
+  quality?: number
+  backgroundColor?: string
+}): Promise<ConverterEncodedArtifact> {
+  return {
+    blob: await buildSinglePagePdfFromRaster(input.raster, {
+      quality: input.quality,
+      backgroundColor: input.backgroundColor,
+    }),
+    warnings: [
+      'PDF собран как single-page raster document без отдельного текстового или векторного слоя.',
+    ],
+  }
 }
 
 async function decodeBinaryFile(

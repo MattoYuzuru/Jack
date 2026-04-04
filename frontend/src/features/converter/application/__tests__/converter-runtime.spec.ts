@@ -17,7 +17,7 @@ describe('converter runtime', () => {
     const prepared = runtime.inspect(new File(['image'], 'poster.png', { type: 'image/png' }))
 
     expect(prepared?.source.extension).toBe('png')
-    expect(prepared?.targets.map((target) => target.extension)).toEqual(['jpg', 'webp'])
+    expect(prepared?.targets.map((target) => target.extension)).toEqual(['jpg', 'webp', 'pdf'])
   })
 
   it('routes heavy formats through their decode strategy and target encoder', async () => {
@@ -31,7 +31,10 @@ describe('converter runtime', () => {
       },
       encodeJpeg: async () => {
         encoderCalls += 1
-        return new Blob(['jpg'], { type: 'image/jpeg' })
+        return {
+          blob: new Blob(['jpg'], { type: 'image/jpeg' }),
+          warnings: [],
+        }
       },
     })
 
@@ -49,13 +52,17 @@ describe('converter runtime', () => {
     expect(decoderCalls).toBe(1)
     expect(encoderCalls).toBe(1)
     expect(result.fileName).toBe('capture.jpg')
+    expect(result.kind).toBe('image')
     expect(result.scenario.id).toBe('heic->jpg')
   })
 
   it('emits an alpha warning when transparent pixels go to jpeg', async () => {
     const runtime = createConverterRuntime({
       decodeNativeRaster: async (_prepared: ConverterPreparedSource) => createRasterFrame(true),
-      encodeJpeg: async () => new Blob(['jpg'], { type: 'image/jpeg' }),
+      encodeJpeg: async () => ({
+        blob: new Blob(['jpg'], { type: 'image/jpeg' }),
+        warnings: [],
+      }),
     })
 
     const prepared = runtime.inspect(new File(['image'], 'poster.png', { type: 'image/png' }))
@@ -71,7 +78,37 @@ describe('converter runtime', () => {
     })
 
     expect(result.warnings).toEqual([
-      'Прозрачные области переведены в сплошной фон перед JPEG encode.',
+      'Прозрачные области переведены в сплошной фон перед JPG encode.',
+    ])
+  })
+
+  it('builds document outputs through the pdf target strategy', async () => {
+    const runtime = createConverterRuntime({
+      decodeNativeRaster: async (_prepared: ConverterPreparedSource) => createRasterFrame(true),
+      encodePdf: async () => ({
+        blob: new Blob(['pdf'], { type: 'application/pdf' }),
+        warnings: ['PDF собран как single-page raster document без отдельного текстового слоя.'],
+      }),
+    })
+
+    const prepared = runtime.inspect(new File(['image'], 'sheet.png', { type: 'image/png' }))
+
+    if (!prepared) {
+      throw new Error('Expected a prepared source for PNG.')
+    }
+
+    const result = await runtime.convert({
+      prepared,
+      targetExtension: 'pdf',
+      backgroundColor: '#fffaf0',
+    })
+
+    expect(result.kind).toBe('document')
+    expect(result.previewMimeType).toBe('application/pdf')
+    expect(result.fileName).toBe('sheet.pdf')
+    expect(result.warnings).toEqual([
+      'Прозрачные области переведены в сплошной фон перед сборкой PDF.',
+      'PDF собран как single-page raster document без отдельного текстового слоя.',
     ])
   })
 })
