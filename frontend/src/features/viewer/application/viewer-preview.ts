@@ -1,28 +1,17 @@
 import * as UTIF from 'utif2'
-
-export interface ViewerMetadataItem {
-  label: string
-  value: string
-}
+import {
+  createEmptyMetadataPayload,
+  loadViewerMetadataPayload,
+  mergeMetadataPayload,
+  type ViewerMetadataItem,
+  type ViewerMetadataPayload,
+} from './viewer-metadata'
 
 export interface ViewerBinaryPreview {
   bytes: Uint8Array
   mimeType: string
-  metadata: ViewerMetadataItem[]
+  metadata: ViewerMetadataPayload
   previewLabel: string
-}
-
-interface ExifTagLike {
-  computed?: unknown
-  description?: unknown
-  value?: unknown
-}
-
-type ExifReaderModule = {
-  load: (
-    input: ArrayBuffer,
-    options?: Record<string, unknown>,
-  ) => Promise<Record<string, ExifTagLike>>
 }
 
 type HeicConvert = (input: {
@@ -32,22 +21,6 @@ type HeicConvert = (input: {
   multiple?: true
   gifInterval?: number
 }) => Promise<Blob | Blob[]>
-
-const metadataTagMap = [
-  ['FileType', 'Тип файла'],
-  ['Image Width', 'Ширина'],
-  ['Image Height', 'Высота'],
-  ['Make', 'Камера'],
-  ['Model', 'Модель'],
-  ['LensModel', 'Объектив'],
-  ['DateTimeOriginal', 'Снято'],
-  ['Orientation', 'Ориентация'],
-  ['ISO', 'ISO'],
-  ['ExposureTime', 'Выдержка'],
-  ['FNumber', 'Диафрагма'],
-  ['FocalLength', 'Фокусное расстояние'],
-  ['ColorSpace', 'Цветовое пространство'],
-] as const
 
 const tiffRawTagMap = [
   [271, 'Камера'],
@@ -61,26 +34,12 @@ const tiffRawTagMap = [
   [42036, 'Объектив'],
 ] as const
 
-export async function loadStructuredMetadata(buffer: ArrayBuffer): Promise<ViewerMetadataItem[]> {
-  const module = (await import('exifreader')) as unknown as ExifReaderModule
-  const tags = await module.load(buffer, { async: true, computed: true })
-  const metadata: ViewerMetadataItem[] = []
-
-  for (const [tagName, label] of metadataTagMap) {
-    const tag = tags[tagName]
-    if (!tag) {
-      continue
-    }
-
-    const value = formatExifValue(tag)
-    if (!value) {
-      continue
-    }
-
-    metadata.push({ label, value })
+export async function loadStructuredMetadata(buffer: ArrayBuffer): Promise<ViewerMetadataPayload> {
+  try {
+    return await loadViewerMetadataPayload(buffer)
+  } catch {
+    return createEmptyMetadataPayload()
   }
-
-  return metadata
 }
 
 export async function decodeHeicPreview(buffer: ArrayBuffer): Promise<ViewerBinaryPreview> {
@@ -120,7 +79,20 @@ export async function decodeTiffPreview(buffer: ArrayBuffer): Promise<ViewerBina
 
 export async function decodeRawPreview(buffer: ArrayBuffer): Promise<ViewerBinaryPreview> {
   const raster = await decodeTiffLikePreview(buffer)
-  const metadata = extractTiffTagMetadata(buffer)
+  const fallbackEntries = extractTiffTagMetadata(buffer)
+  const metadata = mergeMetadataPayload(
+    await loadStructuredMetadata(buffer),
+    fallbackEntries,
+    fallbackEntries.length
+      ? [
+          {
+            id: 'raw-fallback',
+            label: 'RAW Fallback',
+            entries: fallbackEntries,
+          },
+        ]
+      : [],
+  )
 
   return {
     ...raster,
@@ -253,24 +225,6 @@ function describeOrientation(value: number): string {
   }
 
   return map[value] ?? String(value)
-}
-
-function formatExifValue(tag: ExifTagLike): string | null {
-  const value = tag.computed ?? tag.description ?? tag.value
-
-  if (value == null) {
-    return null
-  }
-
-  if (Array.isArray(value)) {
-    return value.join(', ')
-  }
-
-  if (typeof value === 'object') {
-    return JSON.stringify(value)
-  }
-
-  return String(value)
 }
 
 function rgbaToPngBytes(rgba: Uint8Array, width: number, height: number): Promise<Uint8Array> {

@@ -24,6 +24,7 @@ const signalPills = [
   'Iteration 02',
   'Viewer workspace',
   'All image formats online',
+  'Color + metadata tools',
   'SVG-first navigation',
 ]
 
@@ -49,10 +50,10 @@ const toolCards: ToolCard[] = [
     label: '01 · File Viewer',
     title: 'Viewer',
     description:
-      'Рабочий маршрут для image-first preview: загрузка файла, viewport, форматный registry, metadata и decode adapters для HEIC, TIFF и RAW-family.',
-    detail: 'Viewer уже закрывает весь стартовый image-format set и открыт из home-экрана.',
+      'Рабочий маршрут для image-first preview и анализа: загрузка файла, viewport, color lab, metadata inspector/editor и decode adapters для HEIC, TIFF и RAW-family.',
+    detail: 'Viewer уже закрывает весь стартовый image-format set и даёт EXIF/ICC, histogram, swatches и metadata export.',
     status: 'Active route',
-    accents: ['Images', 'Decode', 'Metadata'],
+    accents: ['Images', 'Decode', 'Metadata', 'Color'],
     span: 'tool-card--wide',
   },
   {
@@ -136,8 +137,8 @@ const toolCards: ToolCard[] = [
         <h1>Главный экран Jack теперь ведёт в рабочий viewer-маршрут.</h1>
         <p class="lead">
           Home сохраняет soft industrial foundation, но перестаёт быть статичным макетом: viewer уже
-          вынесен в отдельную рабочую зону с форматным registry, preview viewport, metadata-path и
-          decode-адаптерами для сложных image-форматов.
+          вынесен в отдельную рабочую зону с форматным registry, preview viewport, color tools,
+          metadata-path и decode-адаптерами для сложных image-форматов.
         </p>
 
         <div class="signal-row">
@@ -154,8 +155,8 @@ const toolCards: ToolCard[] = [
             <span>image-форматов из roadmap заведены в viewer прямо сейчас</span>
           </article>
           <article class="stats-card">
-            <strong>4</strong>
-            <span>слоя viewer-архитектуры: registry, adapters, metadata, workspace state</span>
+            <strong>6</strong>
+            <span>слоёв viewer-архитектуры: registry, adapters, metadata, workspace state, color lab, export</span>
           </article>
         </div>
       </article>
