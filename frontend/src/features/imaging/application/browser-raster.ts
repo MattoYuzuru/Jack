@@ -16,6 +16,23 @@ export interface RasterResizeOptions {
   maxHeight?: number | null
 }
 
+export interface RasterCanvasOptions {
+  width?: number
+  height?: number
+  offsetX?: number
+  offsetY?: number
+  drawWidth?: number
+  drawHeight?: number
+  backgroundColor?: string
+}
+
+export interface RasterContainRect {
+  width: number
+  height: number
+  offsetX: number
+  offsetY: number
+}
+
 export async function rasterizeBlob(blob: Blob): Promise<RasterImageFrame> {
   const objectUrl = URL.createObjectURL(blob)
 
@@ -48,35 +65,9 @@ export function encodeRasterFrame(
   frame: RasterImageFrame,
   options: RasterEncodeOptions,
 ): Promise<Blob> {
-  const canvas = document.createElement('canvas')
-  canvas.width = frame.width
-  canvas.height = frame.height
-
-  const context = canvas.getContext('2d')
-  if (!context) {
-    throw new Error('Canvas 2D context недоступен для encode-шага.')
-  }
-
-  const sourceCanvas = document.createElement('canvas')
-  sourceCanvas.width = frame.width
-  sourceCanvas.height = frame.height
-
-  const sourceContext = sourceCanvas.getContext('2d')
-  if (!sourceContext) {
-    throw new Error('Canvas 2D context недоступен для промежуточного raster layer.')
-  }
-
-  sourceContext.putImageData(frame.imageData, 0, 0)
-
-  // JPEG не умеет хранить alpha-канал, поэтому для прозрачных источников
-  // заранее подстилаем фон и только потом композим исходный raster.
-  if (options.mimeType === 'image/jpeg') {
-    context.fillStyle = options.backgroundColor ?? '#ffffff'
-    context.fillRect(0, 0, frame.width, frame.height)
-    context.drawImage(sourceCanvas, 0, 0)
-  } else {
-    context.drawImage(sourceCanvas, 0, 0)
-  }
+  const canvas = rasterFrameToCanvas(frame, {
+    backgroundColor: options.mimeType === 'image/jpeg' ? options.backgroundColor ?? '#ffffff' : undefined,
+  })
 
   return new Promise((resolve, reject) => {
     canvas.toBlob(
@@ -120,38 +111,92 @@ export function resizeRasterFrame(
 
   const nextWidth = Math.max(1, Math.round(frame.width * scale))
   const nextHeight = Math.max(1, Math.round(frame.height * scale))
-
-  const sourceCanvas = document.createElement('canvas')
-  sourceCanvas.width = frame.width
-  sourceCanvas.height = frame.height
-
-  const sourceContext = sourceCanvas.getContext('2d')
-  if (!sourceContext) {
-    throw new Error('Canvas 2D context недоступен для подготовки resize-источника.')
-  }
-
-  sourceContext.putImageData(frame.imageData, 0, 0)
-
-  const targetCanvas = document.createElement('canvas')
-  targetCanvas.width = nextWidth
-  targetCanvas.height = nextHeight
-
-  const targetContext = targetCanvas.getContext('2d')
-  if (!targetContext) {
-    throw new Error('Canvas 2D context недоступен для resize-шага.')
-  }
+  const sourceCanvas = rasterFrameToCanvas(frame)
+  const targetCanvas = createCanvasSurface(nextWidth, nextHeight, 'Canvas 2D context недоступен для resize-шага.')
+  const targetContext = getCanvasContext(
+    targetCanvas,
+    'Canvas 2D context недоступен для resize-шага.',
+  )
 
   // Resize идёт через отдельный canvas, чтобы все preset-профили проходили через один
   // и тот же downscale-путь до encode-стратегий и не дублировались по target-веткам.
   targetContext.drawImage(sourceCanvas, 0, 0, nextWidth, nextHeight)
 
-  const imageData = targetContext.getImageData(0, 0, nextWidth, nextHeight)
+  return canvasToRasterFrame(targetCanvas)
+}
 
+export function rasterFrameToCanvas(
+  frame: RasterImageFrame,
+  options: RasterCanvasOptions = {},
+): HTMLCanvasElement {
+  const canvas = createCanvasSurface(
+    options.width ?? frame.width,
+    options.height ?? frame.height,
+    'Canvas 2D context недоступен для сборки raster layer.',
+  )
+  const context = getCanvasContext(canvas, 'Canvas 2D context недоступен для сборки raster layer.')
+
+  if (options.backgroundColor) {
+    context.fillStyle = options.backgroundColor
+    context.fillRect(0, 0, canvas.width, canvas.height)
+  }
+
+  const sourceCanvas = createCanvasSurface(
+    frame.width,
+    frame.height,
+    'Canvas 2D context недоступен для промежуточного raster layer.',
+  )
+  const sourceContext = getCanvasContext(
+    sourceCanvas,
+    'Canvas 2D context недоступен для промежуточного raster layer.',
+  )
+
+  sourceContext.putImageData(frame.imageData, 0, 0)
+
+  context.drawImage(
+    sourceCanvas,
+    options.offsetX ?? 0,
+    options.offsetY ?? 0,
+    options.drawWidth ?? frame.width,
+    options.drawHeight ?? frame.height,
+  )
+
+  return canvas
+}
+
+export function canvasToRasterFrame(canvas: HTMLCanvasElement): RasterImageFrame {
+  const context = getCanvasContext(
+    canvas,
+    'Canvas 2D context недоступен для чтения raster frame из canvas.',
+  )
+
+  return createRasterFrame(context.getImageData(0, 0, canvas.width, canvas.height))
+}
+
+export function createRasterFrame(imageData: ImageData): RasterImageFrame {
   return {
-    width: nextWidth,
-    height: nextHeight,
+    width: imageData.width,
+    height: imageData.height,
     imageData,
     hasTransparency: detectTransparency(imageData),
+  }
+}
+
+export function resolveContainRect(
+  sourceWidth: number,
+  sourceHeight: number,
+  targetWidth: number,
+  targetHeight: number,
+): RasterContainRect {
+  const scale = Math.min(targetWidth / sourceWidth, targetHeight / sourceHeight)
+  const width = Math.max(1, Math.round(sourceWidth * scale))
+  const height = Math.max(1, Math.round(sourceHeight * scale))
+
+  return {
+    width,
+    height,
+    offsetX: Math.floor((targetWidth - width) / 2),
+    offsetY: Math.floor((targetHeight - height) / 2),
   }
 }
 
@@ -186,4 +231,30 @@ function detectTransparency(imageData: ImageData): boolean {
   }
 
   return false
+}
+
+function createCanvasSurface(
+  width: number,
+  height: number,
+  errorMessage: string,
+): HTMLCanvasElement {
+  const canvas = document.createElement('canvas')
+  canvas.width = width
+  canvas.height = height
+
+  // Защищаемся единым guard'ом: все encode/decode helper'ы зависят от
+  // доступности 2D-контекста, поэтому не размазываем эту проверку по модулям.
+  getCanvasContext(canvas, errorMessage)
+
+  return canvas
+}
+
+function getCanvasContext(canvas: HTMLCanvasElement, errorMessage: string): CanvasRenderingContext2D {
+  const context = canvas.getContext('2d')
+
+  if (!context) {
+    throw new Error(errorMessage)
+  }
+
+  return context
 }

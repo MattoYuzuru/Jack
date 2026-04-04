@@ -129,10 +129,12 @@ export function useConverterWorkspace() {
       return
     }
 
+    const downloadUrl = URL.createObjectURL(result.value.blob)
     const anchor = document.createElement('a')
-    anchor.href = result.value.objectUrl
+    anchor.href = downloadUrl
     anchor.download = result.value.fileName
     anchor.click()
+    URL.revokeObjectURL(downloadUrl)
   }
 
   onBeforeUnmount(() => {

@@ -11,6 +11,13 @@ function createRasterFrame(width = 1280, height = 720, hasTransparency = false):
   }
 }
 
+function createDecodedSource(width = 1280, height = 720, hasTransparency = false) {
+  return {
+    raster: createRasterFrame(width, height, hasTransparency),
+    warnings: [],
+  }
+}
+
 describe('converter runtime', () => {
   it('inspects supported files and exposes available targets', () => {
     const runtime = createConverterRuntime()
@@ -19,8 +26,11 @@ describe('converter runtime', () => {
     expect(prepared?.source.extension).toBe('png')
     expect(prepared?.targets.map((target) => target.extension)).toEqual([
       'jpg',
-      'tiff',
       'webp',
+      'avif',
+      'svg',
+      'ico',
+      'tiff',
       'pdf',
     ])
   })
@@ -32,7 +42,7 @@ describe('converter runtime', () => {
     const runtime = createConverterRuntime({
       decodeHeicSource: async () => {
         decoderCalls += 1
-        return createRasterFrame()
+        return createDecodedSource()
       },
       encodeJpeg: async () => {
         encoderCalls += 1
@@ -64,8 +74,7 @@ describe('converter runtime', () => {
 
   it('emits an alpha warning when transparent pixels go to jpeg', async () => {
     const runtime = createConverterRuntime({
-      decodeNativeRaster: async (_prepared: ConverterPreparedSource) =>
-        createRasterFrame(1280, 720, true),
+      decodeNativeRaster: async (_prepared: ConverterPreparedSource) => createDecodedSource(1280, 720, true),
       encodeJpeg: async () => ({
         blob: new Blob(['jpg'], { type: 'image/jpeg' }),
         warnings: [],
@@ -91,8 +100,7 @@ describe('converter runtime', () => {
 
   it('builds document outputs through the pdf target strategy', async () => {
     const runtime = createConverterRuntime({
-      decodeNativeRaster: async (_prepared: ConverterPreparedSource) =>
-        createRasterFrame(1280, 720, true),
+      decodeNativeRaster: async (_prepared: ConverterPreparedSource) => createDecodedSource(1280, 720, true),
       encodePdf: async () => ({
         blob: new Blob(['pdf'], { type: 'application/pdf' }),
         warnings: ['PDF собран как single-page raster document без отдельного текстового слоя.'],
@@ -125,8 +133,7 @@ describe('converter runtime', () => {
     let receivedPresetId = ''
 
     const runtime = createConverterRuntime({
-      decodeNativeRaster: async (_prepared: ConverterPreparedSource) =>
-        createRasterFrame(4000, 3000, false),
+      decodeNativeRaster: async (_prepared: ConverterPreparedSource) => createDecodedSource(4000, 3000, false),
       resizeRaster: async (raster, preset) => {
         receivedPresetId = preset.id
 
@@ -174,8 +181,7 @@ describe('converter runtime', () => {
 
   it('returns a png preview layer for tiff targets while keeping the download blob as tiff', async () => {
     const runtime = createConverterRuntime({
-      decodeRawSource: async (_prepared: ConverterPreparedSource) =>
-        createRasterFrame(2400, 1600, false),
+      decodeRawSource: async (_prepared: ConverterPreparedSource) => createDecodedSource(2400, 1600, false),
       encodeTiff: async () => ({
         blob: new Blob(['tiff'], { type: 'image/tiff' }),
         previewBlob: new Blob(['png-preview'], { type: 'image/png' }),
@@ -200,5 +206,70 @@ describe('converter runtime', () => {
     expect(result.blob.type).toBe('image/tiff')
     expect(result.previewBlob.type).toBe('image/png')
     expect(result.previewMimeType).toBe('image/png')
+  })
+
+  it('collects source warnings from illustration adapters before encode', async () => {
+    const runtime = createConverterRuntime({
+      decodeIllustrationSource: async () => ({
+        raster: createRasterFrame(1800, 1200, false),
+        warnings: ['AI/EPS сведен через PDF-compatible render path в единый raster-слой.'],
+      }),
+      encodePng: async () => ({
+        blob: new Blob(['png'], { type: 'image/png' }),
+        warnings: [],
+      }),
+    })
+
+    const prepared = runtime.inspect(new File(['ai'], 'poster.ai'))
+
+    if (!prepared) {
+      throw new Error('Expected a prepared source for AI.')
+    }
+
+    const result = await runtime.convert({
+      prepared,
+      targetExtension: 'png',
+    })
+
+    expect(result.fileName).toBe('poster.png')
+    expect(result.warnings).toContain('AI/EPS сведен через PDF-compatible render path в единый raster-слой.')
+  })
+
+  it('returns preview-safe blobs for avif and ico targets', async () => {
+    const runtime = createConverterRuntime({
+      decodeNativeRaster: async () => createDecodedSource(1024, 768, true),
+      encodeAvif: async () => ({
+        blob: new Blob(['avif'], { type: 'image/avif' }),
+        previewBlob: new Blob(['png-preview'], { type: 'image/png' }),
+        previewMimeType: 'image/png',
+        warnings: [],
+      }),
+      encodeIco: async () => ({
+        blob: new Blob(['ico'], { type: 'image/x-icon' }),
+        previewBlob: new Blob(['png-preview'], { type: 'image/png' }),
+        previewMimeType: 'image/png',
+        warnings: [],
+      }),
+    })
+
+    const prepared = runtime.inspect(new File(['png'], 'badge.png', { type: 'image/png' }))
+
+    if (!prepared) {
+      throw new Error('Expected a prepared source for PNG.')
+    }
+
+    const avifResult = await runtime.convert({
+      prepared,
+      targetExtension: 'avif',
+    })
+    const icoResult = await runtime.convert({
+      prepared,
+      targetExtension: 'ico',
+    })
+
+    expect(avifResult.blob.type).toBe('image/avif')
+    expect(avifResult.previewMimeType).toBe('image/png')
+    expect(icoResult.blob.type).toBe('image/x-icon')
+    expect(icoResult.previewMimeType).toBe('image/png')
   })
 })
