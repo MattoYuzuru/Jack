@@ -165,6 +165,10 @@ Viewer уже даёт browser-native preview для `jpg`, `jpeg`, `png`, `webp
 новые форматы добавлялись через расширение capability-слоя, а не через логику внутри UI.
 Следующий срез уже поднял и первый document-target: single-page PDF собирается поверх того же raster
 contract, без отдельной ветки UI и без дублирования source decode-логики.
+Текущий слой поверх этого добавляет preset-профили с централизованным resize/quality baseline, чтобы
+дальнейшие batch- и delivery-сценарии не размазывались по UI-настройкам.
+Следующим шагом target-слой был расширен до single-frame `TIFF`, чтобы browser-first runtime закрывал
+не только delivery-форматы, но и archive/edit-friendly raster output.
 
 #### 3.1 Частые Сценарии Для Изображений
 
@@ -180,7 +184,7 @@ contract, без отдельной ветки UI и без дублирован
 - [x] `SVG -> PNG`
 - [ ] `PNG -> SVG` через трассировку / векторизацию
 - [x] `RAW -> JPG`
-- [ ] `RAW -> TIFF`
+- [x] `RAW -> TIFF`
 - [ ] `PSD -> JPG/PNG/WebP`
 - [ ] `AI/EPS/SVG -> PNG/PDF`
 - [ ] `PNG -> ICO`
@@ -188,9 +192,13 @@ contract, без отдельной ветки UI и без дублирован
 
 Сейчас в converter-роуте реально работают `jpg`, `png`, `webp`, `bmp`, `svg`, `heic`, `tiff` и
 `raw`/camera-alias family (`dng`, `cr2`, `cr3`, `nef`, `arw`, `raf`, `rw2`, `orf`, `pef`, `srw`).
-Для них уже есть practical outputs в `JPG`, `PNG`, `WebP` и single-page `PDF`. PDF в этой итерации
-собирается как raster document без редактируемого текстового/векторного слоя, но при этом открывает
-`JPG/PNG -> PDF`, `TIFF -> PDF`, `SVG -> PDF`, `HEIC -> PDF` и `RAW -> PDF` на том же runtime.
+Для них уже есть practical outputs в `JPG`, `PNG`, `WebP`, single-frame `TIFF` и single-page `PDF`.
+PDF в этой итерации собирается как raster document без редактируемого текстового/векторного слоя, а
+TIFF идёт как single-frame RGBA image без multi-page контейнера и без переноса исходных metadata-блоков.
+На том же runtime это уже открывает `JPG/PNG/WebP/BMP/HEIC/SVG -> TIFF`, `RAW -> TIFF`,
+`TIFF -> TIFF refresh`, `JPG/PNG -> PDF`, `TIFF -> PDF`, `SVG -> PDF`, `HEIC -> PDF` и `RAW -> PDF`.
+Поверх target-слоя уже заведены пресеты `Original`, `Web Balanced`, `Email Attachment` и `Thumbnail`,
+которые централизованно управляют размерностью и базовым quality-profile до encode-шага.
 
 #### 3.2 Частые Сценарии Для Офисных Форматов
 

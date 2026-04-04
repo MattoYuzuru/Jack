@@ -7,9 +7,15 @@ import {
 import {
   encodeRasterFrame,
   rasterizeBlob,
+  resizeRasterFrame,
   type RasterImageFrame,
 } from '../../imaging/application/browser-raster'
 import { buildSinglePagePdfFromRaster } from '../../imaging/application/pdf-document'
+import {
+  buildTiffFromRaster,
+  buildTiffPreviewFromRaster,
+} from '../../imaging/application/tiff-image'
+import { resolveConverterPreset, type ConverterPresetDefinition } from '../domain/converter-presets'
 import {
   detectConverterExtension,
   listConverterScenariosByFamily,
@@ -36,10 +42,14 @@ export interface ConverterResult {
   kind: 'image' | 'document'
   fileName: string
   blob: Blob
+  previewBlob: Blob
   previewMimeType: string
+  preset: ConverterPresetDefinition
   source: ConverterSourceFormatDefinition
   target: ConverterTargetFormatDefinition
   scenario: ConverterScenarioDefinition
+  sourceWidth: number
+  sourceHeight: number
   width: number
   height: number
   warnings: string[]
@@ -50,6 +60,7 @@ export interface ConverterRuntime {
   convert(input: {
     prepared: ConverterPreparedSource
     targetExtension: string
+    presetId?: string
     quality?: number
     backgroundColor?: string
   }): Promise<ConverterResult>
@@ -70,6 +81,8 @@ interface ConverterTargetStrategy {
 
 interface ConverterEncodedArtifact {
   blob: Blob
+  previewBlob?: Blob
+  previewMimeType?: string
   warnings: string[]
 }
 
@@ -78,6 +91,10 @@ export interface ConverterRuntimeDependencies {
   decodeHeicSource?: (prepared: ConverterPreparedSource) => Promise<RasterImageFrame>
   decodeTiffSource?: (prepared: ConverterPreparedSource) => Promise<RasterImageFrame>
   decodeRawSource?: (prepared: ConverterPreparedSource) => Promise<RasterImageFrame>
+  resizeRaster?: (
+    raster: RasterImageFrame,
+    preset: ConverterPresetDefinition,
+  ) => Promise<RasterTransformArtifact>
   encodeJpeg?: (input: {
     raster: RasterImageFrame
     target: ConverterTargetFormatDefinition
@@ -102,6 +119,17 @@ export interface ConverterRuntimeDependencies {
     quality?: number
     backgroundColor?: string
   }) => Promise<ConverterEncodedArtifact>
+  encodeTiff?: (input: {
+    raster: RasterImageFrame
+    target: ConverterTargetFormatDefinition
+    quality?: number
+    backgroundColor?: string
+  }) => Promise<ConverterEncodedArtifact>
+}
+
+interface RasterTransformArtifact {
+  raster: RasterImageFrame
+  warnings: string[]
 }
 
 export function createConverterRuntime(
@@ -109,6 +137,7 @@ export function createConverterRuntime(
 ): ConverterRuntime {
   const sourceStrategies = createSourceStrategies(dependencies)
   const targetStrategies = createTargetStrategies(dependencies)
+  const applyPreset = dependencies.resizeRaster ?? defaultApplyPreset
 
   return {
     inspect(file) {
@@ -132,27 +161,29 @@ export function createConverterRuntime(
       }
     },
 
-    async convert({ prepared, targetExtension, quality, backgroundColor }) {
+    async convert({ prepared, targetExtension, presetId, quality, backgroundColor }) {
       const target = resolveConverterTargetFormat(targetExtension)
       const scenario = resolveConverterScenario(prepared.source.extension, targetExtension)
+      const preset = resolveConverterPreset(presetId)
 
       if (!target || !scenario) {
         throw new Error('Для выбранной пары source/target сценарий пока не зарегистрирован.')
       }
 
-      const raster = await sourceStrategies[prepared.source.sourceStrategyId].decode(prepared)
+      const sourceRaster = await sourceStrategies[prepared.source.sourceStrategyId].decode(prepared)
+      const transformed = await applyPreset(sourceRaster, preset)
       const encoded = await targetStrategies[target.targetStrategyId].encode({
-        raster,
+        raster: transformed.raster,
         target,
         quality: target.supportsQuality
-          ? (quality ?? target.defaultQuality ?? undefined)
+          ? (quality ?? preset.preferredQuality ?? target.defaultQuality ?? undefined)
           : undefined,
-        backgroundColor,
+        backgroundColor: backgroundColor ?? preset.defaultBackgroundColor ?? undefined,
       })
 
-      const warnings = [...encoded.warnings]
+      const warnings = [...transformed.warnings, ...encoded.warnings]
 
-      if (!target.supportsTransparency && raster.hasTransparency) {
+      if (!target.supportsTransparency && transformed.raster.hasTransparency) {
         warnings.unshift(
           target.family === 'document'
             ? `Прозрачные области переведены в сплошной фон перед сборкой ${target.label}.`
@@ -164,12 +195,16 @@ export function createConverterRuntime(
         kind: target.family === 'document' ? 'document' : 'image',
         fileName: replaceExtension(prepared.file.name, target.extension),
         blob: encoded.blob,
-        previewMimeType: target.mimeType,
+        previewBlob: encoded.previewBlob ?? encoded.blob,
+        previewMimeType: encoded.previewMimeType ?? target.mimeType,
+        preset,
         source: prepared.source,
         target,
         scenario,
-        width: raster.width,
-        height: raster.height,
+        sourceWidth: sourceRaster.width,
+        sourceHeight: sourceRaster.height,
+        width: transformed.raster.width,
+        height: transformed.raster.height,
         warnings,
       }
     },
@@ -211,6 +246,9 @@ function createTargetStrategies(
     'pdf-document': {
       encode: dependencies.encodePdf ?? defaultEncodePdf,
     },
+    'tiff-image': {
+      encode: dependencies.encodeTiff ?? defaultEncodeTiff,
+    },
   }
 }
 
@@ -238,6 +276,30 @@ async function defaultDecodeRawSource(
   return rasterizeBinaryPayload(await decodeBinaryFile(prepared.file, decodeRawRaster))
 }
 
+async function defaultApplyPreset(
+  raster: RasterImageFrame,
+  preset: ConverterPresetDefinition,
+): Promise<RasterTransformArtifact> {
+  const resized = resizeRasterFrame(raster, {
+    maxWidth: preset.maxWidth,
+    maxHeight: preset.maxHeight,
+  })
+
+  if (resized.width === raster.width && resized.height === raster.height) {
+    return {
+      raster: resized,
+      warnings: [],
+    }
+  }
+
+  return {
+    raster: resized,
+    warnings: [
+      `Preset ${preset.label} уменьшил размерность: ${raster.width}x${raster.height} -> ${resized.width}x${resized.height}.`,
+    ],
+  }
+}
+
 async function defaultEncodeJpeg(input: {
   raster: RasterImageFrame
   quality?: number
@@ -249,6 +311,7 @@ async function defaultEncodeJpeg(input: {
       quality: input.quality,
       backgroundColor: input.backgroundColor,
     }),
+    previewMimeType: 'image/jpeg',
     warnings: [],
   }
 }
@@ -260,6 +323,7 @@ async function defaultEncodePng(input: {
     blob: await encodeRasterFrame(input.raster, {
       mimeType: 'image/png',
     }),
+    previewMimeType: 'image/png',
     warnings: [],
   }
 }
@@ -273,6 +337,7 @@ async function defaultEncodeWebp(input: {
       mimeType: 'image/webp',
       quality: input.quality,
     }),
+    previewMimeType: 'image/webp',
     warnings: [],
   }
 }
@@ -287,8 +352,22 @@ async function defaultEncodePdf(input: {
       quality: input.quality,
       backgroundColor: input.backgroundColor,
     }),
+    previewMimeType: 'application/pdf',
     warnings: [
       'PDF собран как single-page raster document без отдельного текстового или векторного слоя.',
+    ],
+  }
+}
+
+async function defaultEncodeTiff(input: {
+  raster: RasterImageFrame
+}): Promise<ConverterEncodedArtifact> {
+  return {
+    blob: await buildTiffFromRaster(input.raster),
+    previewBlob: await buildTiffPreviewFromRaster(input.raster),
+    previewMimeType: 'image/png',
+    warnings: [
+      'TIFF собран как single-frame RGBA image без multi-page контейнера и без исходных metadata-блоков.',
     ],
   }
 }

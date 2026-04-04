@@ -16,12 +16,15 @@ const documentScenarios = listConverterScenariosByFamily('document')
 const {
   prepared,
   result,
+  availablePresets,
   availableTargets,
   activeTarget,
+  activePreset,
   isLoading,
   isConverting,
   errorMessage,
   selectedTargetExtension,
+  selectedPresetId,
   quality,
   backgroundColor,
   selectFile,
@@ -114,8 +117,8 @@ function onDrop(event: DragEvent) {
       <article class="panel-surface converter-hero-copy">
         <p class="eyebrow">Iteration 03 · Converter</p>
         <h1>
-          Первый проход конвертера уже умеет брать сложные image-source и собирать практичные
-          target-форматы.
+          Конвертер уже умеет брать сложные image-source и собирать delivery, archive и document
+          targets.
         </h1>
         <p class="lead">
           Модуль строится не как набор случайных кнопок, а как реестр сценариев поверх decode/encode
@@ -125,7 +128,8 @@ function onDrop(event: DragEvent) {
 
         <div class="converter-signal-row">
           <span class="chip-pill">HEIC / TIFF / RAW decode</span>
-          <span class="chip-pill">JPG / PNG / WebP / PDF targets</span>
+          <span class="chip-pill">JPG / PNG / WebP / TIFF / PDF targets</span>
+          <span class="chip-pill">Preset-driven resize</span>
           <span class="chip-pill">Scenario registry</span>
           <span class="chip-pill">Shared imaging layer</span>
         </div>
@@ -193,7 +197,7 @@ function onDrop(event: DragEvent) {
           <strong>Загрузи `jpg`, `png`, `webp`, `bmp`, `svg`, `heic`, `tiff` или `raw`.</strong>
           <span>
             Конвертер сам определит, какой decode-path нужен: нативный browser raster либо
-            heavy-format adapter, а затем соберёт image либо PDF target.
+            heavy-format adapter, а затем соберёт image, archive-friendly TIFF либо PDF target.
           </span>
         </button>
 
@@ -231,10 +235,33 @@ function onDrop(event: DragEvent) {
               </div>
             </div>
 
+            <div>
+              <p class="control-label">Preset profile</p>
+              <div class="preset-grid">
+                <button
+                  v-for="preset in availablePresets"
+                  :key="preset.id"
+                  type="button"
+                  class="target-chip target-chip--preset"
+                  :class="{ 'target-chip--active': selectedPresetId === preset.id }"
+                  @click="selectedPresetId = preset.id"
+                >
+                  <span>{{ preset.label }}</span>
+                  <small>{{ preset.statusLabel }}</small>
+                </button>
+              </div>
+            </div>
+
             <div v-if="currentScenario" class="scenario-callout">
               <p class="control-label">Активный сценарий</p>
               <h3>{{ currentScenario.label }}</h3>
               <p>{{ currentScenario.notes }}</p>
+            </div>
+
+            <div v-if="activePreset" class="scenario-callout">
+              <p class="control-label">Активный пресет</p>
+              <h3>{{ activePreset.label }}</h3>
+              <p>{{ activePreset.detail }}</p>
             </div>
 
             <label v-if="activeTarget?.supportsQuality" class="form-field">
@@ -311,8 +338,16 @@ function onDrop(event: DragEvent) {
               <strong>{{ result.kind === 'document' ? 'Document output' : 'Image output' }}</strong>
             </article>
             <article class="fact-card">
+              <span>Preset</span>
+              <strong>{{ result.preset.label }}</strong>
+            </article>
+            <article class="fact-card">
               <span>Размерность</span>
               <strong>{{ result.width }} x {{ result.height }}</strong>
+            </article>
+            <article class="fact-card">
+              <span>Источник</span>
+              <strong>{{ result.sourceWidth }} x {{ result.sourceHeight }}</strong>
             </article>
             <article class="fact-card">
               <span>Blob size</span>
@@ -405,6 +440,7 @@ h1 {
 
 .converter-signal-row,
 .target-grid,
+.preset-grid,
 .result-facts {
   display: flex;
   flex-wrap: wrap;
@@ -573,6 +609,10 @@ h1 {
     color 180ms ease;
 }
 
+.target-chip--preset {
+  min-width: 150px;
+}
+
 .target-chip:hover,
 .target-chip--active {
   transform: translateY(-2px);
@@ -692,6 +732,7 @@ h1 {
   }
 
   .target-grid,
+  .preset-grid,
   .result-facts,
   .converter-signal-row {
     flex-direction: column;

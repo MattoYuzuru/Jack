@@ -16,7 +16,9 @@ describe('pdf document builder', () => {
   })
 
   it('wraps a rasterized jpeg payload into a single-page pdf document', async () => {
-    encodeRasterFrame.mockResolvedValue(new Blob([new Uint8Array([255, 216, 255, 217])], { type: 'image/jpeg' }))
+    encodeRasterFrame.mockResolvedValue(
+      new Blob([new Uint8Array([255, 216, 255, 217])], { type: 'image/jpeg' }),
+    )
 
     const result = await buildSinglePagePdfFromRaster(
       {

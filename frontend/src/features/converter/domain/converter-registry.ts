@@ -11,6 +11,7 @@ export type ConverterTargetStrategyId =
   | 'png-encoder'
   | 'webp-encoder'
   | 'pdf-document'
+  | 'tiff-image'
 
 export interface ConverterSourceFormatDefinition {
   extension: string
@@ -194,28 +195,50 @@ const targetFormatDefinitions: ConverterTargetFormatDefinition[] = [
       'Документный target: текущая итерация собирает single-page PDF из подготовленного raster contract.',
     accents: ['Document', 'Single-page'],
   },
+  {
+    extension: 'tiff',
+    label: 'TIFF',
+    family: 'image',
+    mimeType: 'image/tiff',
+    targetStrategyId: 'tiff-image',
+    supportsQuality: false,
+    supportsTransparency: true,
+    defaultQuality: null,
+    statusLabel: 'RGBA TIFF encode',
+    notes:
+      'Archive-friendly raster target: текущая итерация собирает single-frame TIFF из unified raster contract.',
+    accents: ['Archive', 'Lossless-ish'],
+  },
 ]
 
 const scenarioDefinitions: ConverterScenarioDefinition[] = [
   buildScenario('heic', 'jpg', 'HEIC decode -> JPG'),
+  buildScenario('heic', 'tiff', 'HEIC -> TIFF'),
   buildScenario('png', 'jpg', 'PNG -> JPG'),
+  buildScenario('png', 'tiff', 'PNG -> TIFF'),
   buildScenario('jpg', 'png', 'JPG -> PNG'),
+  buildScenario('jpg', 'tiff', 'JPG -> TIFF'),
   buildScenario('jpg', 'webp', 'JPG -> WebP'),
   buildScenario('png', 'webp', 'PNG -> WebP'),
   buildScenario('webp', 'jpg', 'WebP -> JPG'),
   buildScenario('webp', 'png', 'WebP -> PNG'),
+  buildScenario('webp', 'tiff', 'WebP -> TIFF'),
   buildScenario('bmp', 'jpg', 'BMP -> JPG'),
   buildScenario('bmp', 'png', 'BMP -> PNG'),
+  buildScenario('bmp', 'tiff', 'BMP -> TIFF'),
   buildScenario('tiff', 'jpg', 'TIFF -> JPG'),
   buildScenario('tiff', 'pdf', 'TIFF -> PDF', 'document'),
+  buildScenario('tiff', 'tiff', 'TIFF -> TIFF refresh'),
   buildScenario('raw', 'jpg', 'RAW -> JPG'),
   buildScenario('raw', 'pdf', 'RAW -> PDF', 'document'),
+  buildScenario('raw', 'tiff', 'RAW -> TIFF'),
   buildScenario('jpg', 'pdf', 'JPG -> PDF', 'document'),
   buildScenario('png', 'pdf', 'PNG -> PDF', 'document'),
   buildScenario('webp', 'pdf', 'WebP -> PDF', 'document'),
   buildScenario('bmp', 'pdf', 'BMP -> PDF', 'document'),
   buildScenario('heic', 'pdf', 'HEIC -> PDF', 'document'),
   buildScenario('svg', 'png', 'SVG -> PNG'),
+  buildScenario('svg', 'tiff', 'SVG -> TIFF'),
   buildScenario('svg', 'pdf', 'SVG -> PDF', 'document'),
 ]
 
