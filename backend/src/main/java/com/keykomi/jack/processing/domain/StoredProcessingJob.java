@@ -111,4 +111,27 @@ public record StoredProcessingJob(
 		);
 	}
 
+	public StoredProcessingJob cancel(Instant completedAt, String message) {
+		return new StoredProcessingJob(
+			this.id,
+			this.uploadId,
+			this.type,
+			this.parameters,
+			ProcessingJobStatus.CANCELLED,
+			this.progressPercent,
+			message,
+			null,
+			this.createdAt,
+			this.startedAt,
+			completedAt,
+			this.artifacts
+		);
+	}
+
+	public boolean isTerminal() {
+		return this.status == ProcessingJobStatus.COMPLETED
+			|| this.status == ProcessingJobStatus.FAILED
+			|| this.status == ProcessingJobStatus.CANCELLED;
+	}
+
 }

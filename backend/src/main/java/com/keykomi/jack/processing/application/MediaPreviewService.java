@@ -396,6 +396,18 @@ public class MediaPreviewService {
 			throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Не удалось запустить внешний media processor.", exception);
 		}
 		catch (InterruptedException exception) {
+			if (process != null) {
+				process.destroy();
+				try {
+					if (!process.waitFor(5, TimeUnit.SECONDS)) {
+						process.destroyForcibly();
+						process.waitFor(5, TimeUnit.SECONDS);
+					}
+				}
+				catch (InterruptedException ignored) {
+					Thread.currentThread().interrupt();
+				}
+			}
 			Thread.currentThread().interrupt();
 			throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Media processing был прерван.", exception);
 		}

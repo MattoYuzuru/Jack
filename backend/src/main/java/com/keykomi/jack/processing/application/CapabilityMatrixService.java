@@ -56,11 +56,11 @@ public class CapabilityMatrixService {
 	);
 
 	private static final List<ConverterSourceSpec> CONVERTER_SOURCE_SPECS = List.of(
-		sourceFormat("jpg", List.of("jpeg"), "JPG", "image", List.of("image/jpeg"), "native-raster", "Browser raster", "Нативный raster source без промежуточного decode слоя.", List.of()),
-		sourceFormat("png", List.of(), "PNG", "image", List.of("image/png"), "native-raster", "Browser raster", "Lossless raster source с alpha-каналом.", List.of()),
-		sourceFormat("webp", List.of(), "WebP", "image", List.of("image/webp"), "native-raster", "Browser raster", "Современный browser-supported raster source.", List.of()),
-		sourceFormat("bmp", List.of(), "BMP", "image", List.of("image/bmp"), "native-raster", "Browser raster", "Большой bitmap source остаётся browser-native.", List.of()),
-		sourceFormat("svg", List.of(), "SVG", "image", List.of("image/svg+xml"), "native-raster", "Browser raster", "Вектор сначала rasterize в browser pipeline.", List.of()),
+		sourceFormat("jpg", List.of("jpeg"), "JPG", "image", List.of("image/jpeg"), "native-raster", "Backend intake", "Даже привычный raster source теперь идёт через единый backend IMAGE_CONVERT contract.", List.of(ProcessingJobType.IMAGE_CONVERT), "JPG source требует доступного backend IMAGE_CONVERT capability."),
+		sourceFormat("png", List.of(), "PNG", "image", List.of("image/png"), "native-raster", "Backend intake", "Lossless raster source теперь попадает в тот же backend-first conversion pipeline.", List.of(ProcessingJobType.IMAGE_CONVERT), "PNG source требует доступного backend IMAGE_CONVERT capability."),
+		sourceFormat("webp", List.of(), "WebP", "image", List.of("image/webp"), "native-raster", "Backend intake", "WebP source больше не замыкает быстрый browser-only encode path.", List.of(ProcessingJobType.IMAGE_CONVERT), "WebP source требует доступного backend IMAGE_CONVERT capability."),
+		sourceFormat("bmp", List.of(), "BMP", "image", List.of("image/bmp"), "native-raster", "Backend intake", "Большой bitmap source теперь проходит через backend-first pipeline ради единых retries/cache/artifacts.", List.of(ProcessingJobType.IMAGE_CONVERT), "BMP source требует доступного backend IMAGE_CONVERT capability."),
+		sourceFormat("svg", List.of(), "SVG", "image", List.of("image/svg+xml"), "native-raster", "Backend intake", "SVG source теперь тоже проходит через backend intake, а браузер остаётся только preview/UI слоем.", List.of(ProcessingJobType.IMAGE_CONVERT), "SVG source требует доступного backend IMAGE_CONVERT capability."),
 		sourceFormat("psd", List.of(), "PSD", "image", List.of("image/vnd.adobe.photoshop", "application/vnd.adobe.photoshop"), "psd-raster", "Server composite", "PSD source собирается через backend IMAGE_CONVERT composite path.", List.of(ProcessingJobType.IMAGE_CONVERT), "PSD source требует доступного backend IMAGE_CONVERT capability."),
 		sourceFormat("ai", List.of(), "AI", "image", List.of(), "illustration-raster", "Server illustration", "Illustrator source растеризуется через backend IMAGE_CONVERT.", List.of(ProcessingJobType.IMAGE_CONVERT), "AI source требует доступного backend IMAGE_CONVERT capability."),
 		sourceFormat("eps", List.of("ps"), "EPS", "image", List.of(), "illustration-raster", "Server illustration", "PostScript source растеризуется через backend IMAGE_CONVERT.", List.of(ProcessingJobType.IMAGE_CONVERT), "EPS source требует доступного backend IMAGE_CONVERT capability."),
@@ -70,9 +70,9 @@ public class CapabilityMatrixService {
 	);
 
 	private static final List<ConverterTargetSpec> CONVERTER_TARGET_SPECS = List.of(
-		targetFormat("jpg", "JPG", "image", "image/jpeg", "jpeg-encoder", true, false, 0.9, "Canvas encode", "Практичный совместимый raster target.", List.of()),
-		targetFormat("png", "PNG", "image", "image/png", "png-encoder", false, true, null, "Canvas encode", "Lossless target с transparency.", List.of()),
-		targetFormat("webp", "WebP", "image", "image/webp", "webp-encoder", true, true, 0.9, "Canvas encode", "Компактный modern raster target.", List.of()),
+		targetFormat("jpg", "JPG", "image", "image/jpeg", "jpeg-encoder", true, false, 0.9, "Backend encode", "Практичный совместимый raster target теперь собирается через backend-first contract.", List.of(ProcessingJobType.IMAGE_CONVERT), "JPG target требует доступного backend IMAGE_CONVERT capability."),
+		targetFormat("png", "PNG", "image", "image/png", "png-encoder", false, true, null, "Backend encode", "Lossless target с transparency теперь тоже собирается через backend jobs.", List.of(ProcessingJobType.IMAGE_CONVERT), "PNG target требует доступного backend IMAGE_CONVERT capability."),
+		targetFormat("webp", "WebP", "image", "image/webp", "webp-encoder", true, true, 0.9, "Backend encode", "Компактный modern raster target собирается через backend IMAGE_CONVERT.", List.of(ProcessingJobType.IMAGE_CONVERT), "WebP target требует доступного backend IMAGE_CONVERT capability."),
 		targetFormat("avif", "AVIF", "image", "image/avif", "avif-encoder", true, true, 0.78, "Backend encode", "AVIF target собирается через backend IMAGE_CONVERT.", List.of(ProcessingJobType.IMAGE_CONVERT), "AVIF target требует доступного backend IMAGE_CONVERT capability."),
 		targetFormat("svg", "SVG", "image", "image/svg+xml", "svg-vectorizer", false, true, null, "Backend trace", "SVG target собирается через backend trace path.", List.of(ProcessingJobType.IMAGE_CONVERT), "SVG target требует доступного backend IMAGE_CONVERT capability."),
 		targetFormat("ico", "ICO", "image", "image/x-icon", "ico-image", false, true, null, "Backend icon pack", "ICO target собирается через backend multi-size icon path.", List.of(ProcessingJobType.IMAGE_CONVERT), "ICO target требует доступного backend IMAGE_CONVERT capability."),
@@ -256,7 +256,7 @@ public class CapabilityMatrixService {
 			spec.targetExtension(),
 			available ? ("server-assisted".equals(spec.executionMode()) ? "Server-assisted" : "Browser-native") : "Capability unavailable",
 			"server-assisted".equals(spec.executionMode())
-				? "Сценарий идёт через backend IMAGE_CONVERT jobs: frontend остаётся orchestration/UI слоем и получает preview/result artifacts."
+				? "Сценарий идёт через backend IMAGE_CONVERT jobs: frontend держит progress/retry/cancel/reuse UX и получает preview/result artifacts."
 				: "Сценарий закрывается локально через browser-native raster pipeline без backend round-trip.",
 			List.of(spec.sourceExtension().toUpperCase(), spec.targetExtension().toUpperCase()),
 			spec.executionMode(),
@@ -356,8 +356,9 @@ public class CapabilityMatrixService {
 	}
 
 	private static boolean isServerScenario(String sourceExtension, String targetExtension) {
-		return List.of("heic", "tiff", "raw", "psd", "ai", "eps").contains(sourceExtension)
-			|| List.of("avif", "svg", "ico", "tiff", "pdf").contains(targetExtension);
+		// После converter route flip браузер больше не выбирает отдельные encode/decode ветки
+		// для "простых" форматов: любой supported сценарий идёт через единый job/artifact contract.
+		return true;
 	}
 
 	private String buildAcceptAttribute(List<ExtensionAliases> definitions) {
