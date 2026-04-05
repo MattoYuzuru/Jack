@@ -1,4 +1,4 @@
-export type ProcessingJobStatus = 'QUEUED' | 'RUNNING' | 'COMPLETED' | 'FAILED'
+export type ProcessingJobStatus = 'QUEUED' | 'RUNNING' | 'COMPLETED' | 'FAILED' | 'CANCELLED'
 export type ProcessingProgressReporter = (message: string) => void
 
 export interface ProcessingCapabilityJobType {
@@ -42,10 +42,15 @@ export interface ProcessingArtifact {
 
 export interface ProcessingJobResponse {
   id: string
+  uploadId: string
+  jobType: string
   status: ProcessingJobStatus
   progressPercent: number
   message: string
   errorMessage: string | null
+  createdAt: string
+  startedAt: string | null
+  completedAt: string | null
   artifacts: ProcessingArtifact[]
 }
 
@@ -60,12 +65,32 @@ interface RunProcessingJobOptions {
   uploadMessage?: string
   createMessage?: string
   timeoutMessage?: string
+  onJobCreated?: (job: ProcessingJobResponse) => void
+  onJobUpdate?: (job: ProcessingJobResponse) => void
+}
+
+interface AwaitProcessingJobOptions {
+  reportProgress?: ProcessingProgressReporter
+  maxAttempts?: number
+  pollIntervalMs?: number
+  timeoutMessage?: string
+  onUpdate?: (job: ProcessingJobResponse) => void
 }
 
 const DEFAULT_API_BASE_URL = 'http://localhost:8080'
 const DEFAULT_MAX_ATTEMPTS = 300
 const DEFAULT_POLL_INTERVAL_MS = 1_000
 const capabilityScopeCache = new Map<RunProcessingJobOptions['scope'], Promise<ProcessingCapabilityScope>>()
+
+export class ProcessingJobCancelledError extends Error {
+  readonly job: ProcessingJobResponse
+
+  constructor(job: ProcessingJobResponse) {
+    super(job.errorMessage || job.message || 'Backend processing job был отменён.')
+    this.name = 'ProcessingJobCancelledError'
+    this.job = job
+  }
+}
 
 export function resetProcessingCapabilityScopeCache(): void {
   capabilityScopeCache.clear()
@@ -132,25 +157,32 @@ export async function createProcessingJob(input: {
   })
 }
 
+export async function getProcessingJob(jobId: string): Promise<ProcessingJobResponse> {
+  return requestProcessingJson<ProcessingJobResponse>(`/api/jobs/${jobId}`)
+}
+
+export async function cancelProcessingJob(jobId: string): Promise<ProcessingJobResponse> {
+  return requestProcessingJson<ProcessingJobResponse>(`/api/jobs/${jobId}`, {
+    method: 'DELETE',
+  })
+}
+
 export async function awaitProcessingJob(
   jobId: string,
-  options: {
-    reportProgress?: ProcessingProgressReporter
-    maxAttempts?: number
-    pollIntervalMs?: number
-    timeoutMessage?: string
-  } = {},
+  options: AwaitProcessingJobOptions = {},
 ): Promise<ProcessingJobResponse> {
   const {
     reportProgress,
     maxAttempts = DEFAULT_MAX_ATTEMPTS,
     pollIntervalMs = DEFAULT_POLL_INTERVAL_MS,
     timeoutMessage = 'Backend processing job не завершился в ожидаемое время.',
+    onUpdate,
   } = options
   let lastMessage = ''
 
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-    const job = await requestProcessingJson<ProcessingJobResponse>(`/api/jobs/${jobId}`)
+    const job = await getProcessingJob(jobId)
+    onUpdate?.(job)
 
     if (job.message && job.message !== lastMessage) {
       reportProgress?.(job.message)
@@ -165,6 +197,10 @@ export async function awaitProcessingJob(
       throw new Error(
         job.errorMessage || job.message || 'Backend processing job завершился с ошибкой.',
       )
+    }
+
+    if (job.status === 'CANCELLED') {
+      throw new ProcessingJobCancelledError(job)
     }
 
     await sleep(pollIntervalMs)
@@ -187,6 +223,8 @@ export async function runProcessingJob(
     uploadMessage = 'Отправляю файл в backend processing pipeline...',
     createMessage = `Создаю backend ${jobType} job...`,
     timeoutMessage = `Backend ${jobType} job не завершился в ожидаемое время.`,
+    onJobCreated,
+    onJobUpdate,
   } = options
 
   reportProgress?.(`Проверяю, что backend ${jobType} capability доступна для ${scope}...`)
@@ -201,12 +239,14 @@ export async function runProcessingJob(
     jobType,
     parameters,
   })
+  onJobCreated?.(job)
 
   return awaitProcessingJob(job.id, {
     reportProgress,
     maxAttempts,
     pollIntervalMs,
     timeoutMessage,
+    onUpdate: onJobUpdate,
   })
 }
 
