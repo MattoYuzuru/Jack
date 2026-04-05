@@ -12,6 +12,9 @@ export type PreviewStrategyId =
   | 'csv-document'
   | 'html-document'
   | 'rtf-document'
+  | 'docx-document'
+  | 'xlsx-document'
+  | 'pptx-document'
   | 'planned-document'
 
 export interface ViewerFormatDefinition {
@@ -260,10 +263,11 @@ const documentFormatDefinitions: ViewerFormatDefinition[] = [
     label: 'DOCX',
     family: 'document',
     mimeTypes: ['application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
-    previewPipeline: 'planned',
-    previewStrategyId: 'planned-document',
-    statusLabel: 'Foundation only',
-    notes: 'Следующий слой пойдёт через OOXML-aware preview pipeline с извлечением текста и структуры.',
+    previewPipeline: 'client-decode',
+    previewStrategyId: 'docx-document',
+    statusLabel: 'OOXML adapter',
+    notes:
+      'DOCX проходит через OOXML container parser: viewer поднимает headings, tables, текстовый слой и упрощённый document HTML preview.',
     accents: ['Word', 'OOXML'],
   },
   {
@@ -296,11 +300,11 @@ const documentFormatDefinitions: ViewerFormatDefinition[] = [
     label: 'XLSX',
     family: 'document',
     mimeTypes: ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
-    previewPipeline: 'planned',
-    previewStrategyId: 'planned-document',
-    statusLabel: 'Foundation only',
+    previewPipeline: 'client-decode',
+    previewStrategyId: 'xlsx-document',
+    statusLabel: 'OOXML adapter',
     notes:
-      'XLSX будет подключаться как multi-sheet document preview поверх workbook-aware runtime, а не через ad-hoc UI.',
+      'XLSX поднимается как workbook preview: sheets, первая табличная проекция, search layer и summary по структуре книги.',
     accents: ['Spreadsheet', 'OOXML'],
   },
   {
@@ -309,10 +313,11 @@ const documentFormatDefinitions: ViewerFormatDefinition[] = [
     label: 'PPTX',
     family: 'document',
     mimeTypes: ['application/vnd.openxmlformats-officedocument.presentationml.presentation'],
-    previewPipeline: 'planned',
-    previewStrategyId: 'planned-document',
-    statusLabel: 'Foundation only',
-    notes: 'Для презентаций нужен slide-aware preview pipeline с thumbnails и notes layer.',
+    previewPipeline: 'client-decode',
+    previewStrategyId: 'pptx-document',
+    statusLabel: 'OOXML adapter',
+    notes:
+      'PPTX идёт через slide-aware text adapter: viewer строит deck summary, slide titles и searchable text layer.',
     accents: ['Slides', 'OOXML'],
   },
   {

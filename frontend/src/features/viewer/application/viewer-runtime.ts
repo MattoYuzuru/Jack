@@ -11,10 +11,13 @@ import type {
 } from './viewer-document'
 import {
   buildCsvDocumentPreview,
+  buildDocxDocumentPreview,
   buildHtmlDocumentPreview,
   buildPdfDocumentPreview,
+  buildPptxDocumentPreview,
   buildRtfDocumentPreview,
   buildTextDocumentPreview,
+  buildXlsxDocumentPreview,
 } from './viewer-document-preview'
 import type { ViewerMetadataPayload } from './viewer-metadata'
 import {
@@ -112,6 +115,15 @@ export interface ViewerRuntimeDependencies {
   buildRtfDocument?: (
     context: PreviewStrategyContext,
   ) => Promise<ViewerDocumentPreviewPayload>
+  buildDocxDocument?: (
+    context: PreviewStrategyContext,
+  ) => Promise<ViewerDocumentPreviewPayload>
+  buildXlsxDocument?: (
+    context: PreviewStrategyContext,
+  ) => Promise<ViewerDocumentPreviewPayload>
+  buildPptxDocument?: (
+    context: PreviewStrategyContext,
+  ) => Promise<ViewerDocumentPreviewPayload>
 }
 
 const previewStrategies = (
@@ -137,6 +149,9 @@ const previewStrategies = (
   buildCsvDocument: (context: PreviewStrategyContext) => Promise<ViewerDocumentPreviewPayload>,
   buildHtmlDocument: (context: PreviewStrategyContext) => Promise<ViewerDocumentPreviewPayload>,
   buildRtfDocument: (context: PreviewStrategyContext) => Promise<ViewerDocumentPreviewPayload>,
+  buildDocxDocument: (context: PreviewStrategyContext) => Promise<ViewerDocumentPreviewPayload>,
+  buildXlsxDocument: (context: PreviewStrategyContext) => Promise<ViewerDocumentPreviewPayload>,
+  buildPptxDocument: (context: PreviewStrategyContext) => Promise<ViewerDocumentPreviewPayload>,
 ): Record<PreviewStrategyId, PreviewStrategy<ViewerResolvedEntry>> => ({
   'native-image': {
     async resolve(context) {
@@ -209,6 +224,21 @@ const previewStrategies = (
       return buildDocumentSelection(await buildRtfDocument(context), context)
     },
   },
+  'docx-document': {
+    async resolve(context) {
+      return buildDocumentSelection(await buildDocxDocument(context), context)
+    },
+  },
+  'xlsx-document': {
+    async resolve(context) {
+      return buildDocumentSelection(await buildXlsxDocument(context), context)
+    },
+  },
+  'pptx-document': {
+    async resolve(context) {
+      return buildDocumentSelection(await buildPptxDocument(context), context)
+    },
+  },
   'planned-document': {
     async resolve(context) {
       return buildPlannedDocumentSelection(context)
@@ -230,6 +260,9 @@ export function createViewerRuntime(dependencies: ViewerRuntimeDependencies = {}
     dependencies.buildCsvDocument ?? defaultBuildCsvDocument,
     dependencies.buildHtmlDocument ?? defaultBuildHtmlDocument,
     dependencies.buildRtfDocument ?? defaultBuildRtfDocument,
+    dependencies.buildDocxDocument ?? defaultBuildDocxDocument,
+    dependencies.buildXlsxDocument ?? defaultBuildXlsxDocument,
+    dependencies.buildPptxDocument ?? defaultBuildPptxDocument,
   )
 
   return {
@@ -377,6 +410,24 @@ async function defaultBuildRtfDocument(
   context: PreviewStrategyContext,
 ): Promise<ViewerDocumentPreviewPayload> {
   return buildRtfDocumentPreview(context.file)
+}
+
+async function defaultBuildDocxDocument(
+  context: PreviewStrategyContext,
+): Promise<ViewerDocumentPreviewPayload> {
+  return buildDocxDocumentPreview(context.file)
+}
+
+async function defaultBuildXlsxDocument(
+  context: PreviewStrategyContext,
+): Promise<ViewerDocumentPreviewPayload> {
+  return buildXlsxDocumentPreview(context.file)
+}
+
+async function defaultBuildPptxDocument(
+  context: PreviewStrategyContext,
+): Promise<ViewerDocumentPreviewPayload> {
+  return buildPptxDocumentPreview(context.file)
 }
 
 function defaultInspectNativeImage(objectUrl: string): Promise<{ width: number; height: number }> {

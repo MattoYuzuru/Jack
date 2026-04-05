@@ -26,7 +26,7 @@ const signalPills = [
   'Viewer workspace',
   'Converter route',
   'Shared imaging layer',
-  'Document foundation',
+  'OOXML document adapters',
   'Decode + encode + vector trace',
   'AVIF / ICO targets',
   'Preset profiles',
@@ -55,12 +55,12 @@ const toolCards: ToolCard[] = [
     label: '01 · File Viewer',
     title: 'Viewer',
     description:
-      'Рабочий маршрут для preview и анализа: image tooling, document foundation, search layer и format-specific adapters внутри одного workspace.',
+      'Рабочий маршрут для preview и анализа: image tooling, document search layer и OOXML-aware adapters внутри одного workspace.',
     detail:
-      'Viewer уже закрывает весь стартовый image-format set, а теперь ещё поднимает PDF/TXT/CSV/HTML/RTF previews и document search.',
+      'Viewer уже закрывает весь стартовый image-format set, а теперь ещё поднимает PDF/TXT/CSV/HTML/RTF плюс DOCX/XLSX/PPTX previews и document search.',
     status: 'Active route',
     route: '/viewer',
-    accents: ['Images', 'Docs', 'Metadata', 'Search'],
+    accents: ['Images', 'Docs', 'OOXML', 'Search'],
     span: 'tool-card--wide',
   },
   {
@@ -148,10 +148,10 @@ const toolCards: ToolCard[] = [
         </h1>
         <p class="lead">
           Home сохраняет soft industrial foundation, но теперь работает как switchboard для двух
-          живых маршрутов: viewer отвечает за preview, analysis и document foundation, а converter
-          закрывает первую волну image-конвертаций, vector/icon targets, archive-friendly TIFF
-          target и document-target через scenario registry, shared imaging и отдельные decode/encode
-          стратегии.
+          живых маршрутов: viewer отвечает за preview, analysis, PDF/text workflows и OOXML
+          document adapters, а converter закрывает первую волну image-конвертаций, vector/icon
+          targets, archive-friendly TIFF target и document-target через scenario registry, shared
+          imaging и отдельные decode/encode стратегии.
         </p>
 
         <div class="signal-row">

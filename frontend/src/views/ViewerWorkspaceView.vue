@@ -24,6 +24,7 @@ const isDragActive = ref(false)
 const isFullscreen = ref(false)
 const metadataQuery = ref('')
 const documentQuery = ref('')
+const documentSheetIndex = ref(0)
 const metadataDraft = ref<ViewerEditableMetadata>(createEmptyEditableMetadata())
 const isSavingMetadata = ref(false)
 const metadataSaveMessage = ref('')
@@ -91,6 +92,7 @@ watch(
   () => selection.value?.file.name,
   () => {
     documentQuery.value = ''
+    documentSheetIndex.value = 0
   },
 )
 
@@ -192,12 +194,39 @@ const documentTable = computed(() => {
   return selection.value.layout.table
 })
 
+const documentWorkbook = computed(() => {
+  if (selection.value?.kind !== 'document' || selection.value.layout.mode !== 'workbook') {
+    return null
+  }
+
+  return selection.value.layout
+})
+
+const activeDocumentSheet = computed(() => {
+  if (!documentWorkbook.value) {
+    return null
+  }
+
+  const maxIndex = Math.max(documentWorkbook.value.sheets.length - 1, 0)
+  const safeIndex = Math.min(documentSheetIndex.value, maxIndex)
+
+  return documentWorkbook.value.sheets[safeIndex] ?? null
+})
+
 const documentParagraphs = computed(() => {
   if (selection.value?.kind !== 'document' || selection.value.layout.mode !== 'text') {
     return []
   }
 
   return selection.value.layout.paragraphs
+})
+
+const documentSlides = computed(() => {
+  if (selection.value?.kind !== 'document' || selection.value.layout.mode !== 'slides') {
+    return []
+  }
+
+  return selection.value.layout.slides
 })
 
 function openFilePicker() {
@@ -485,6 +514,66 @@ onBeforeUnmount(() => {
               </div>
             </div>
 
+            <div v-else-if="selection.layout.mode === 'workbook'" class="document-workbook">
+              <div class="document-workbook__tabs">
+                <button
+                  v-for="(sheet, sheetIndex) in selection.layout.sheets"
+                  :key="sheet.id"
+                  class="document-sheet-chip"
+                  :class="{ 'document-sheet-chip--active': documentSheetIndex === sheetIndex }"
+                  type="button"
+                  @click="documentSheetIndex = sheetIndex"
+                >
+                  {{ sheet.name }}
+                </button>
+              </div>
+
+              <div v-if="activeDocumentSheet" class="document-table">
+                <div class="document-table__summary">
+                  <strong>{{ activeDocumentSheet.table.totalRows }} rows</strong>
+                  <span>{{ activeDocumentSheet.table.totalColumns }} columns</span>
+                </div>
+                <div class="document-table__scroll">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th v-for="column in activeDocumentSheet.table.columns" :key="column">
+                          {{ column }}
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr
+                        v-for="(row, rowIndex) in activeDocumentSheet.table.rows"
+                        :key="`${activeDocumentSheet.id}-${rowIndex}`"
+                      >
+                        <td v-for="(cell, columnIndex) in row" :key="`${rowIndex}-${columnIndex}`">
+                          {{ cell || '—' }}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <div v-else-if="selection.layout.mode === 'slides'" class="document-slide-grid">
+              <article
+                v-for="(slide, slideIndex) in selection.layout.slides"
+                :key="slide.id"
+                class="document-slide-card"
+              >
+                <div class="document-slide-card__meta">
+                  <span class="chip-pill chip-pill--compact">Slide {{ slideIndex + 1 }}</span>
+                </div>
+                <h3>{{ slide.title }}</h3>
+                <ul v-if="slide.bullets.length" class="document-slide-card__list">
+                  <li v-for="bullet in slide.bullets" :key="bullet">{{ bullet }}</li>
+                </ul>
+                <p v-else class="viewer-panel__empty">На слайде не найден текстовый слой кроме заголовка.</p>
+              </article>
+            </div>
+
             <article v-else class="document-text">
               <p v-for="(paragraph, index) in selection.layout.paragraphs" :key="index">
                 {{ paragraph }}
@@ -504,8 +593,8 @@ onBeforeUnmount(() => {
           <div v-else class="viewer-empty-state">
             <strong>Viewer готов к первой загрузке</strong>
             <span>
-              Сейчас уже работают image formats и первый document foundation: `pdf`, `txt`, `csv`,
-              `html`, `rtf`.
+              Сейчас уже работают image formats и document preview paths: `pdf`, `txt`, `csv`,
+              `html`, `rtf`, `docx`, `xlsx`, `pptx`.
             </span>
           </div>
         </div>
@@ -801,7 +890,7 @@ onBeforeUnmount(() => {
           {{
             documentQuery
               ? 'Совпадения не найдены.'
-              : 'Search panel работает для PDF text layer, TXT, CSV, HTML и RTF extraction path.'
+              : 'Search panel работает для PDF text layer, TXT, CSV, HTML, RTF и OOXML document adapters.'
           }}
         </p>
       </article>
@@ -826,6 +915,25 @@ onBeforeUnmount(() => {
           <article v-for="column in documentTable.columns" :key="column" class="outline-card">
             <strong>Column</strong>
             <span>{{ column }}</span>
+          </article>
+        </div>
+
+        <div v-else-if="documentWorkbook" class="outline-stack">
+          <article
+            v-for="(sheet, sheetIndex) in documentWorkbook.sheets"
+            :key="sheet.id"
+            class="outline-card outline-card--interactive"
+            @click="documentSheetIndex = sheetIndex"
+          >
+            <strong>Sheet</strong>
+            <span>{{ sheet.name }} · {{ sheet.table.totalRows }} rows</span>
+          </article>
+        </div>
+
+        <div v-else-if="documentSlides.length" class="outline-stack">
+          <article v-for="(slide, slideIndex) in documentSlides" :key="slide.id" class="outline-card">
+            <strong>S{{ slideIndex + 1 }}</strong>
+            <span>{{ slide.title }}</span>
           </article>
         </div>
 
@@ -1085,6 +1193,8 @@ h2 {
 
 .document-text,
 .document-table,
+.document-workbook,
+.document-slide-grid,
 .warning-stack,
 .search-match-stack,
 .outline-stack,
@@ -1115,6 +1225,35 @@ h2 {
   width: 100%;
 }
 
+.document-workbook {
+  width: 100%;
+}
+
+.document-workbook__tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.document-sheet-chip {
+  min-height: 38px;
+  padding: 8px 14px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 250, 242, 0.84);
+  box-shadow: var(--shadow-pressed);
+  color: var(--text-soft);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.document-sheet-chip--active {
+  color: var(--accent-cool-strong);
+  background:
+    radial-gradient(circle at top left, rgba(255, 203, 148, 0.5), transparent 36%),
+    rgba(255, 250, 242, 0.92);
+}
+
 .document-table__scroll {
   overflow: auto;
   border-radius: var(--radius-xl);
@@ -1140,6 +1279,42 @@ h2 {
   top: 0;
   background: rgba(240, 230, 216, 0.96);
   color: var(--text-strong);
+}
+
+.document-slide-grid {
+  width: 100%;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.document-slide-card {
+  display: grid;
+  gap: 14px;
+  min-height: 240px;
+  padding: 22px;
+  border-radius: var(--radius-xl);
+  background:
+    radial-gradient(circle at top right, rgba(255, 203, 148, 0.24), transparent 32%),
+    var(--surface-muted);
+  box-shadow: var(--shadow-pressed);
+}
+
+.document-slide-card h3 {
+  margin: 0;
+  color: var(--text-strong);
+  font-family: var(--font-display);
+  font-size: 1.45rem;
+  line-height: 1.02;
+}
+
+.document-slide-card__meta {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.document-slide-card__list {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--text-main);
 }
 
 .viewer-empty-state {
@@ -1231,6 +1406,10 @@ h2 {
 .outline-card {
   grid-template-columns: auto 1fr;
   align-items: center;
+}
+
+.outline-card--interactive {
+  cursor: pointer;
 }
 
 .outline-card strong,

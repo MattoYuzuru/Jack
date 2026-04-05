@@ -52,6 +52,9 @@ describe('viewer registry', () => {
 
     expect(resolveViewerFormat('sheet.csv')?.previewStrategyId).toBe('csv-document')
     expect(resolveViewerFormat('index.htm')?.extension).toBe('html')
-    expect(resolveViewerFormat('proposal.docx')?.previewPipeline).toBe('planned')
+    expect(resolveViewerFormat('proposal.docx')?.previewStrategyId).toBe('docx-document')
+    expect(resolveViewerFormat('deck.pptx')?.previewStrategyId).toBe('pptx-document')
+    expect(resolveViewerFormat('model.xlsx')?.previewPipeline).toBe('client-decode')
+    expect(resolveViewerFormat('book.epub')?.previewPipeline).toBe('planned')
   })
 })

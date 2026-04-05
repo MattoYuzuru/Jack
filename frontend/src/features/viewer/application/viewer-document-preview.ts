@@ -3,8 +3,21 @@ import type {
   ViewerDocumentFact,
   ViewerDocumentOutlineItem,
   ViewerDocumentPreviewPayload,
+  ViewerDocumentSlidePreview,
   ViewerDocumentTablePreview,
 } from './viewer-document'
+import {
+  escapeHtml,
+  findFirstXmlChild,
+  findFirstXmlDescendant,
+  findXmlChildren,
+  findXmlDescendants,
+  loadViewerOoxmlPackage,
+  readOoxmlRelationships,
+  readXmlAttribute,
+  resolveOoxmlPath,
+  wrapViewerDocumentHtml,
+} from './viewer-ooxml'
 
 interface PdfJsTextItem {
   str?: string
@@ -28,8 +41,17 @@ interface PdfJsModule {
   }
 }
 
+interface ViewerDocxBlock {
+  kind: 'heading' | 'paragraph' | 'table'
+  level?: number
+  text?: string
+  rows?: string[][]
+}
+
 const pdfPageSearchLimit = 12
 const csvPreviewRowLimit = 24
+const workbookPreviewColumnLimit = 12
+const workbookPreviewRowLimit = 28
 
 let pdfJsPromise: Promise<PdfJsModule> | null = null
 
@@ -178,6 +200,190 @@ export async function buildRtfDocumentPreview(file: File): Promise<ViewerDocumen
   }
 }
 
+export async function buildDocxDocumentPreview(file: File): Promise<ViewerDocumentPreviewPayload> {
+  const ooxml = await loadViewerOoxmlPackage(file)
+  const documentRoot = await ooxml.readXml('word/document.xml')
+
+  if (!documentRoot) {
+    throw new Error('DOCX adapter не нашёл word/document.xml внутри контейнера.')
+  }
+
+  const body = findFirstXmlDescendant(documentRoot, 'body')
+  if (!body) {
+    throw new Error('DOCX adapter не нашёл body-узел документа.')
+  }
+
+  const blocks = parseDocxBlocks(body)
+  const paragraphs = blocks
+    .filter((block): block is ViewerDocxBlock & { text: string } => typeof block.text === 'string')
+    .map((block) => block.text)
+  const outline = blocks
+    .filter((block): block is ViewerDocxBlock & { text: string; level: number } =>
+      block.kind === 'heading' && typeof block.text === 'string' && typeof block.level === 'number',
+    )
+    .map((block, index) => ({
+      id: `docx-heading-${index + 1}`,
+      label: block.text,
+      level: block.level,
+    }))
+  const searchableText = paragraphs.join('\n\n')
+  const srcDoc = wrapViewerDocumentHtml(renderDocxBlocks(blocks))
+  const tableCount = blocks.filter((block) => block.kind === 'table').length
+
+  return {
+    summary: [
+      { label: 'Тип документа', value: 'DOCX' },
+      { label: 'Блоки', value: String(blocks.length) },
+      { label: 'Headings', value: String(outline.length) },
+      { label: 'Таблицы', value: String(tableCount) },
+    ],
+    searchableText,
+    warnings: [
+      'DOCX preview пока не воспроизводит точную вёрстку Word: сложные стили, изображения и колонтитулы сводятся к упрощённому document layer.',
+    ],
+    layout: {
+      mode: 'html',
+      text: searchableText,
+      srcDoc,
+      outline,
+    },
+    previewLabel: 'DOCX OOXML adapter',
+  }
+}
+
+export async function buildXlsxDocumentPreview(file: File): Promise<ViewerDocumentPreviewPayload> {
+  const ooxml = await loadViewerOoxmlPackage(file)
+  const workbookRoot = await ooxml.readXml('xl/workbook.xml')
+
+  if (!workbookRoot) {
+    throw new Error('XLSX adapter не нашёл xl/workbook.xml внутри контейнера.')
+  }
+
+  const workbookRelsRoot = await ooxml.readXml('xl/_rels/workbook.xml.rels')
+  const workbookRelations = workbookRelsRoot ? readOoxmlRelationships(workbookRelsRoot) : new Map()
+  const sharedStrings = await readSharedStrings(ooxml)
+  const sheetNodes = findXmlDescendants(workbookRoot, 'sheet')
+  const sheets = []
+
+  for (const [index, sheetNode] of sheetNodes.entries()) {
+    const relationId = readXmlAttribute(sheetNode, 'r:id')
+    const target = relationId ? workbookRelations.get(relationId) : null
+    const sheetName = readXmlAttribute(sheetNode, 'name') ?? `Sheet ${index + 1}`
+
+    if (!target) {
+      continue
+    }
+
+    const sheetRoot = await ooxml.readXml(resolveOoxmlPath('xl/workbook.xml', target))
+    if (!sheetRoot) {
+      continue
+    }
+
+    sheets.push({
+      id: `sheet-${index + 1}`,
+      name: sheetName,
+      table: parseWorksheetTable(sheetRoot, sharedStrings),
+    })
+  }
+
+  if (!sheets.length) {
+    throw new Error('XLSX adapter не нашёл ни одного sheet внутри workbook.')
+  }
+
+  const searchableText = sheets
+    .map((sheet) =>
+      [sheet.name, ...sheet.table.rows.map((row) => row.filter(Boolean).join(' '))].join('\n'),
+    )
+    .join('\n\n')
+
+  return {
+    summary: [
+      { label: 'Тип документа', value: 'XLSX' },
+      { label: 'Sheets', value: String(sheets.length) },
+      { label: 'Rows', value: String(sheets[0]?.table.totalRows ?? 0) },
+      { label: 'Columns', value: String(sheets[0]?.table.totalColumns ?? 0) },
+    ],
+    searchableText,
+    warnings: [
+      'XLSX preview показывает sheet data, но не воспроизводит formulas, styles, merged cells и charts как native spreadsheet layout.',
+    ],
+    layout: {
+      mode: 'workbook',
+      text: searchableText,
+      sheets,
+      activeSheetIndex: 0,
+    },
+    previewLabel: 'XLSX workbook adapter',
+  }
+}
+
+export async function buildPptxDocumentPreview(file: File): Promise<ViewerDocumentPreviewPayload> {
+  const ooxml = await loadViewerOoxmlPackage(file)
+  const presentationRoot = await ooxml.readXml('ppt/presentation.xml')
+
+  if (!presentationRoot) {
+    throw new Error('PPTX adapter не нашёл ppt/presentation.xml внутри контейнера.')
+  }
+
+  const presentationRelsRoot = await ooxml.readXml('ppt/_rels/presentation.xml.rels')
+  const presentationRelations = presentationRelsRoot
+    ? readOoxmlRelationships(presentationRelsRoot)
+    : new Map()
+  const slideNodes = findXmlDescendants(presentationRoot, 'sldId')
+  const slides: ViewerDocumentSlidePreview[] = []
+
+  for (const [index, slideNode] of slideNodes.entries()) {
+    const relationId = readXmlAttribute(slideNode, 'r:id')
+    const target = relationId ? presentationRelations.get(relationId) : null
+
+    if (!target) {
+      continue
+    }
+
+    const slideRoot = await ooxml.readXml(resolveOoxmlPath('ppt/presentation.xml', target))
+    if (!slideRoot) {
+      continue
+    }
+
+    const texts = findXmlDescendants(slideRoot, 't')
+      .map((element) => element.textContent?.trim() ?? '')
+      .filter(Boolean)
+
+    slides.push({
+      id: `slide-${index + 1}`,
+      title: texts[0] ?? `Slide ${index + 1}`,
+      bullets: texts.slice(1),
+    })
+  }
+
+  if (!slides.length) {
+    throw new Error('PPTX adapter не нашёл ни одного slide внутри presentation.')
+  }
+
+  const searchableText = slides
+    .map((slide) => [slide.title, ...slide.bullets].join('\n'))
+    .join('\n\n')
+
+  return {
+    summary: [
+      { label: 'Тип документа', value: 'PPTX' },
+      { label: 'Слайды', value: String(slides.length) },
+      { label: 'Text shapes', value: String(slides.reduce((total, slide) => total + slide.bullets.length + 1, 0)) },
+      { label: 'Preview mode', value: 'Slide text deck' },
+    ],
+    searchableText,
+    warnings: [
+      'PPTX preview сейчас показывает text deck без точной композиции, background assets, animations и speaker notes.',
+    ],
+    layout: {
+      mode: 'slides',
+      text: searchableText,
+      slides,
+    },
+    previewLabel: 'PPTX slide adapter',
+  }
+}
+
 export function parseDelimitedTextDocument(content: string): ViewerDocumentTablePreview {
   const delimiter = detectDelimiter(content)
   const parsedRows = parseDelimitedRows(content, delimiter).filter((row) =>
@@ -272,26 +478,9 @@ export function sanitizeHtmlDocument(content: string): {
   )
 
   const textContent = collectHtmlText(documentRoot.body).replace(/\s+/gu, ' ').trim()
-  const srcDoc = [
-    '<!doctype html>',
-    '<html lang="en">',
-    '<head>',
-    '<meta charset="utf-8" />',
-    '<style>',
-    'html,body{margin:0;padding:0;background:#fffaf1;color:#102426;font-family:Manrope,Segoe UI,sans-serif;line-height:1.6;}',
-    'body{padding:24px;}',
-    'img,svg,canvas,table{max-width:100%;}',
-    'table{border-collapse:collapse;}',
-    'td,th{border:1px solid rgba(16,36,38,.14);padding:8px 10px;}',
-    'pre,code{white-space:pre-wrap;}',
-    '</style>',
-    '</head>',
-    `<body>${documentRoot.body.innerHTML}</body>`,
-    '</html>',
-  ].join('')
 
   return {
-    srcDoc,
+    srcDoc: wrapViewerDocumentHtml(documentRoot.body.innerHTML),
     textContent,
     outline,
     warnings,
@@ -530,4 +719,251 @@ function collectHtmlText(node: Node): string {
   }
 
   return childText
+}
+
+function parseDocxBlocks(body: Element): ViewerDocxBlock[] {
+  const blocks: ViewerDocxBlock[] = []
+
+  for (const child of Array.from(body.children)) {
+    if (child.localName === 'p') {
+      const paragraph = parseDocxParagraph(child)
+      if (paragraph) {
+        blocks.push(paragraph)
+      }
+      continue
+    }
+
+    if (child.localName === 'tbl') {
+      const rows = parseDocxTable(child)
+      if (rows.length) {
+        blocks.push({
+          kind: 'table',
+          rows,
+        })
+      }
+    }
+  }
+
+  return blocks
+}
+
+function parseDocxParagraph(node: Element): ViewerDocxBlock | null {
+  const texts: string[] = []
+
+  for (const child of findXmlDescendants(node, 't')) {
+    const value = child.textContent ?? ''
+    if (value) {
+      texts.push(value)
+    }
+  }
+
+  for (const tabNode of findXmlDescendants(node, 'tab')) {
+    if (tabNode) {
+      texts.push('\t')
+    }
+  }
+
+  const rawText = texts.join('').replace(/\s+/gu, ' ').trim()
+  if (!rawText) {
+    return null
+  }
+
+  const styleNode = findFirstXmlDescendant(node, 'pStyle')
+  const styleValue = styleNode ? readXmlAttribute(styleNode, 'val') : null
+  const headingMatch = styleValue?.match(/Heading([1-6])/iu)
+
+  if (headingMatch) {
+    return {
+      kind: 'heading',
+      level: Number(headingMatch[1]),
+      text: rawText,
+    }
+  }
+
+  const hasNumbering = Boolean(findFirstXmlDescendant(node, 'numPr'))
+  return {
+    kind: 'paragraph',
+    text: hasNumbering ? `• ${rawText}` : rawText,
+  }
+}
+
+function parseDocxTable(node: Element): string[][] {
+  const rows = []
+
+  for (const rowNode of findXmlChildren(node, 'tr')) {
+    const cells = findXmlChildren(rowNode, 'tc')
+      .map((cellNode) =>
+        findXmlDescendants(cellNode, 't')
+          .map((textNode) => textNode.textContent?.trim() ?? '')
+          .filter(Boolean)
+          .join(' '),
+      )
+      .filter((cellValue, index, values) => cellValue.length > 0 || index < values.length)
+
+    if (cells.length) {
+      rows.push(cells)
+    }
+  }
+
+  return rows
+}
+
+function renderDocxBlocks(blocks: ViewerDocxBlock[]): string {
+  return blocks
+    .map((block) => {
+      if (block.kind === 'heading') {
+        return `<h${block.level}>${escapeHtml(block.text ?? '')}</h${block.level}>`
+      }
+
+      if (block.kind === 'table') {
+        const rows = block.rows ?? []
+        if (!rows.length) {
+          return ''
+        }
+
+        const [headerRow = [], ...bodyRows] = rows
+        const headerHtml = `<tr>${headerRow.map((cell) => `<th>${escapeHtml(cell)}</th>`).join('')}</tr>`
+        const bodyHtml = bodyRows
+          .map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join('')}</tr>`)
+          .join('')
+
+        return `<table><thead>${headerHtml}</thead><tbody>${bodyHtml}</tbody></table>`
+      }
+
+      const text = block.text ?? ''
+      if (text.startsWith('• ')) {
+        return `<ul class="docx-list"><li>${escapeHtml(text.slice(2))}</li></ul>`
+      }
+
+      return `<p>${escapeHtml(text)}</p>`
+    })
+    .join('')
+}
+
+async function readSharedStrings(
+  ooxml: Awaited<ReturnType<typeof loadViewerOoxmlPackage>>,
+): Promise<string[]> {
+  const sharedStringsRoot = await ooxml.readXml('xl/sharedStrings.xml')
+  if (!sharedStringsRoot) {
+    return []
+  }
+
+  return findXmlDescendants(sharedStringsRoot, 'si').map((sharedStringNode) =>
+    findXmlDescendants(sharedStringNode, 't')
+      .map((textNode) => textNode.textContent ?? '')
+      .join(''),
+  )
+}
+
+function parseWorksheetTable(sheetRoot: XMLDocument, sharedStrings: string[]): ViewerDocumentTablePreview {
+  const matrix = new Map<number, Map<number, string>>()
+  let maxRow = 0
+  let maxColumn = 0
+
+  for (const rowNode of findXmlDescendants(sheetRoot, 'row')) {
+    const rowIndex = Number(readXmlAttribute(rowNode, 'r') ?? '0')
+
+    for (const cellNode of findXmlChildren(rowNode, 'c')) {
+      const cellReference = readXmlAttribute(cellNode, 'r') ?? ''
+      const columnIndex = referenceToColumnIndex(cellReference)
+      const value = parseWorksheetCellValue(cellNode, sharedStrings)
+
+      if (columnIndex < 0 || !value.trim()) {
+        continue
+      }
+
+      const targetRow = rowIndex > 0 ? rowIndex - 1 : matrix.size
+      const rowMap = matrix.get(targetRow) ?? new Map<number, string>()
+      rowMap.set(columnIndex, value)
+      matrix.set(targetRow, rowMap)
+      maxRow = Math.max(maxRow, targetRow + 1)
+      maxColumn = Math.max(maxColumn, columnIndex + 1)
+    }
+  }
+
+  const totalColumns = maxColumn
+  const totalRows = Math.max(maxRow - 1, 0)
+  const columns = buildWorksheetColumns(matrix.get(0), totalColumns)
+  const rows = Array.from({ length: Math.min(totalRows, workbookPreviewRowLimit) }, (_, rowIndex) =>
+    buildWorksheetRow(matrix.get(rowIndex + 1), totalColumns),
+  ).map((row) => row.slice(0, workbookPreviewColumnLimit))
+
+  return {
+    columns: columns.slice(0, workbookPreviewColumnLimit),
+    rows,
+    totalRows,
+    totalColumns,
+    delimiter: '',
+  }
+}
+
+function buildWorksheetColumns(
+  headerRow: Map<number, string> | undefined,
+  totalColumns: number,
+): string[] {
+  return Array.from({ length: totalColumns }, (_, columnIndex) => {
+    const value = headerRow?.get(columnIndex)?.trim()
+    return value || toSpreadsheetColumnLabel(columnIndex)
+  })
+}
+
+function buildWorksheetRow(row: Map<number, string> | undefined, totalColumns: number): string[] {
+  return Array.from({ length: totalColumns }, (_, columnIndex) => row?.get(columnIndex) ?? '')
+}
+
+function parseWorksheetCellValue(cellNode: Element, sharedStrings: string[]): string {
+  const cellType = readXmlAttribute(cellNode, 't')
+
+  if (cellType === 'inlineStr') {
+    return findXmlDescendants(cellNode, 't')
+      .map((textNode) => textNode.textContent ?? '')
+      .join('')
+      .trim()
+  }
+
+  const valueNode = findFirstXmlChild(cellNode, 'v')
+  const rawValue = valueNode?.textContent?.trim() ?? ''
+
+  if (!rawValue) {
+    return ''
+  }
+
+  if (cellType === 's') {
+    const sharedStringIndex = Number.parseInt(rawValue, 10)
+    return sharedStrings[sharedStringIndex] ?? rawValue
+  }
+
+  if (cellType === 'b') {
+    return rawValue === '1' ? 'TRUE' : 'FALSE'
+  }
+
+  return rawValue
+}
+
+function referenceToColumnIndex(reference: string): number {
+  const columnLabel = reference.match(/^[A-Z]+/iu)?.[0]?.toUpperCase()
+  if (!columnLabel) {
+    return -1
+  }
+
+  let value = 0
+
+  for (const character of columnLabel) {
+    value = value * 26 + (character.charCodeAt(0) - 64)
+  }
+
+  return value - 1
+}
+
+function toSpreadsheetColumnLabel(index: number): string {
+  let value = index + 1
+  let label = ''
+
+  while (value > 0) {
+    const remainder = (value - 1) % 26
+    label = String.fromCharCode(65 + remainder) + label
+    value = Math.floor((value - 1) / 26)
+  }
+
+  return label
 }
