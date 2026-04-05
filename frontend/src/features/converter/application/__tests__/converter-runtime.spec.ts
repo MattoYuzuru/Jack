@@ -94,6 +94,7 @@ describe('converter runtime', () => {
 
   it('emits an alpha warning when transparent pixels go to jpeg', async () => {
     const runtime = createConverterRuntime({
+      isServerScenario: () => false,
       decodeNativeRaster: async (_prepared: ConverterPreparedSource) => createDecodedSource(1280, 720, true),
       encodeJpeg: async () => ({
         blob: new Blob(['jpg'], { type: 'image/jpeg' }),
@@ -154,6 +155,7 @@ describe('converter runtime', () => {
     let receivedPresetId = ''
 
     const runtime = createConverterRuntime({
+      isServerScenario: () => false,
       decodeNativeRaster: async (_prepared: ConverterPreparedSource) => createDecodedSource(4000, 3000, false),
       resizeRaster: async (raster, preset) => {
         receivedPresetId = preset.id
@@ -228,6 +230,90 @@ describe('converter runtime', () => {
     expect(result.blob.type).toBe('image/tiff')
     expect(result.previewBlob.type).toBe('image/png')
     expect(result.previewMimeType).toBe('image/png')
+  })
+
+  it('routes png to jpg through backend by default after converter route flip', async () => {
+    let serverCalls = 0
+
+    const runtime = createConverterRuntime({
+      convertServerScenario: async () => {
+        serverCalls += 1
+
+        return {
+          job: {
+            id: 'job-1',
+            uploadId: 'upload-1',
+            jobType: 'IMAGE_CONVERT',
+            status: 'COMPLETED',
+            progressPercent: 100,
+            message: 'done',
+            errorMessage: null,
+            createdAt: new Date().toISOString(),
+            startedAt: new Date().toISOString(),
+            completedAt: new Date().toISOString(),
+            artifacts: [],
+          },
+          manifestArtifact: {
+            id: 'manifest-1',
+            kind: 'image-convert-manifest',
+            fileName: 'poster-manifest.json',
+            mediaType: 'application/json',
+            sizeBytes: 64,
+            createdAt: new Date().toISOString(),
+            downloadPath: '/api/jobs/job-1/artifacts/manifest-1',
+          },
+          resultArtifact: {
+            id: 'result-1',
+            kind: 'image-convert-binary',
+            fileName: 'poster.jpg',
+            mediaType: 'image/jpeg',
+            sizeBytes: 128,
+            createdAt: new Date().toISOString(),
+            downloadPath: '/api/jobs/job-1/artifacts/result-1',
+          },
+          previewArtifact: {
+            id: 'preview-1',
+            kind: 'image-convert-preview',
+            fileName: 'poster.preview.jpg',
+            mediaType: 'image/jpeg',
+            sizeBytes: 128,
+            createdAt: new Date().toISOString(),
+            downloadPath: '/api/jobs/job-1/artifacts/preview-1',
+          },
+          manifest: {
+            operation: 'convert',
+            sourceWidth: 1280,
+            sourceHeight: 720,
+            width: 1280,
+            height: 720,
+            resultMediaType: 'image/jpeg',
+            previewMediaType: 'image/jpeg',
+            outputExtension: 'jpg',
+            sourceAdapterLabel: 'Backend intake',
+            targetAdapterLabel: 'Backend encode',
+            runtimeLabel: 'Server raster pipeline',
+            warnings: [],
+          },
+          resultBlob: new Blob(['jpg'], { type: 'image/jpeg' }),
+          previewBlob: new Blob(['jpg-preview'], { type: 'image/jpeg' }),
+        }
+      },
+    })
+
+    const prepared = await runtime.inspect(new File(['image'], 'poster.png', { type: 'image/png' }))
+
+    if (!prepared) {
+      throw new Error('Expected a prepared source for PNG.')
+    }
+
+    const result = await runtime.convert({
+      prepared,
+      targetExtension: 'jpg',
+    })
+
+    expect(serverCalls).toBe(1)
+    expect(result.backendJobId).toBe('job-1')
+    expect(result.backendRuntimeLabel).toBe('Server raster pipeline')
   })
 
   it('collects source warnings from illustration adapters before encode', async () => {
@@ -306,6 +392,46 @@ describe('converter runtime', () => {
         expect(preset.id).toBe('web-balanced')
 
         return {
+          job: {
+            id: 'job-heavy-1',
+            uploadId: 'upload-heavy-1',
+            jobType: 'IMAGE_CONVERT',
+            status: 'COMPLETED',
+            progressPercent: 100,
+            message: 'done',
+            errorMessage: null,
+            createdAt: new Date().toISOString(),
+            startedAt: new Date().toISOString(),
+            completedAt: new Date().toISOString(),
+            artifacts: [],
+          },
+          manifestArtifact: {
+            id: 'manifest-heavy-1',
+            kind: 'image-convert-manifest',
+            fileName: 'capture-manifest.json',
+            mediaType: 'application/json',
+            sizeBytes: 64,
+            createdAt: new Date().toISOString(),
+            downloadPath: '/api/jobs/job-heavy-1/artifacts/manifest-heavy-1',
+          },
+          resultArtifact: {
+            id: 'result-heavy-1',
+            kind: 'image-convert-binary',
+            fileName: 'capture.avif',
+            mediaType: 'image/avif',
+            sizeBytes: 128,
+            createdAt: new Date().toISOString(),
+            downloadPath: '/api/jobs/job-heavy-1/artifacts/result-heavy-1',
+          },
+          previewArtifact: {
+            id: 'preview-heavy-1',
+            kind: 'image-convert-preview',
+            fileName: 'capture.preview.png',
+            mediaType: 'image/png',
+            sizeBytes: 128,
+            createdAt: new Date().toISOString(),
+            downloadPath: '/api/jobs/job-heavy-1/artifacts/preview-heavy-1',
+          },
           manifest: {
             operation: 'convert',
             sourceWidth: 3024,

@@ -46,6 +46,9 @@ export interface ConverterResult {
   width: number
   height: number
   warnings: string[]
+  backendJobId: string | null
+  backendCompletedAt: string | null
+  backendRuntimeLabel: string | null
 }
 
 export interface ConverterRuntime {
@@ -57,6 +60,14 @@ export interface ConverterRuntime {
     quality?: number
     backgroundColor?: string
     onProgress?: (message: string) => void
+    onJobCreated?: (jobId: string) => void
+    onJobUpdate?: (job: {
+      id: string
+      status: string
+      progressPercent: number
+      message: string
+      errorMessage: string | null
+    }) => void
   }): Promise<ConverterResult>
 }
 
@@ -158,6 +169,14 @@ export interface ConverterRuntimeDependencies {
     quality?: number
     backgroundColor?: string
     onProgress?: (message: string) => void
+    onJobCreated?: (jobId: string) => void
+    onJobUpdate?: (job: {
+      id: string
+      status: string
+      progressPercent: number
+      message: string
+      errorMessage: string | null
+    }) => void
   }) => Promise<ServerImageConvertResult>
 }
 
@@ -206,7 +225,16 @@ export function createConverterRuntime(
       }
     },
 
-    async convert({ prepared, targetExtension, presetId, quality, backgroundColor, onProgress }) {
+    async convert({
+      prepared,
+      targetExtension,
+      presetId,
+      quality,
+      backgroundColor,
+      onProgress,
+      onJobCreated,
+      onJobUpdate,
+    }) {
       const target =
         prepared.targets.find((candidate) => candidate.extension === targetExtension) ??
         (await resolveConverterTargetFormat(targetExtension))
@@ -243,6 +271,8 @@ export function createConverterRuntime(
             : undefined,
           backgroundColor: backgroundColor ?? preset.defaultBackgroundColor ?? undefined,
           onProgress,
+          onJobCreated,
+          onJobUpdate,
         })
 
         return {
@@ -263,6 +293,9 @@ export function createConverterRuntime(
           width: serverResult.manifest.width,
           height: serverResult.manifest.height,
           warnings: serverResult.manifest.warnings,
+          backendJobId: serverResult.job.id,
+          backendCompletedAt: serverResult.job.completedAt,
+          backendRuntimeLabel: serverResult.manifest.runtimeLabel,
         }
       }
 
@@ -302,6 +335,9 @@ export function createConverterRuntime(
         width: transformed.raster.width,
         height: transformed.raster.height,
         warnings,
+        backendJobId: null,
+        backendCompletedAt: null,
+        backendRuntimeLabel: null,
       }
     },
   }
@@ -502,19 +538,11 @@ async function defaultEncodeIco(_input: {
 }
 
 function defaultIsServerScenario(
-  prepared: ConverterPreparedSource,
-  target: ConverterTargetFormatDefinition,
-  scenario: ConverterScenarioDefinition,
+  _prepared: ConverterPreparedSource,
+  _target: ConverterTargetFormatDefinition,
+  _scenario: ConverterScenarioDefinition,
 ): boolean {
-  return (
-    scenario.executionMode === 'server-assisted' ||
-    prepared.source.sourceStrategyId !== 'native-raster' ||
-    target.targetStrategyId === 'pdf-document' ||
-    target.targetStrategyId === 'tiff-image' ||
-    target.targetStrategyId === 'avif-encoder' ||
-    target.targetStrategyId === 'svg-vectorizer' ||
-    target.targetStrategyId === 'ico-image'
-  )
+  return true
 }
 
 async function defaultConvertServerScenario(input: {
@@ -524,6 +552,14 @@ async function defaultConvertServerScenario(input: {
   quality?: number
   backgroundColor?: string
   onProgress?: (message: string) => void
+  onJobCreated?: (jobId: string) => void
+  onJobUpdate?: (job: {
+    id: string
+    status: string
+    progressPercent: number
+    message: string
+    errorMessage: string | null
+  }) => void
 }): Promise<ServerImageConvertResult> {
   return runServerImageConvert({
     file: input.prepared.file,
@@ -534,6 +570,10 @@ async function defaultConvertServerScenario(input: {
     backgroundColor: input.backgroundColor,
     presetLabel: input.preset.label,
     reportProgress: input.onProgress,
+    onJobCreated(job) {
+      input.onJobCreated?.(job.id)
+    },
+    onJobUpdate: input.onJobUpdate,
   })
 }
 

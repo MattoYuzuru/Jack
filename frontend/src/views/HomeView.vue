@@ -72,9 +72,9 @@ const toolCards: ToolCard[] = [
     label: '02 · Conversion',
     title: 'Converter',
     description:
-      'Hybrid converter держит быстрые raster-сценарии в браузере, а тяжёлые image-, icon-, vector-, archive- и document-target ветки отправляет в backend processing pipeline.',
+      'Backend-first converter отправляет любой поддержанный сценарий в processing pipeline, а браузер держит orchestration, progress UX и preview готового результата.',
     detail:
-      'HEIC, TIFF, RAW, PSD, AI/EPS intake, AVIF/ICO/vector trace targets и single-page PDF output теперь закрываются через backend IMAGE_CONVERT jobs и preview/result artifacts.',
+      'HEIC, TIFF, RAW, PSD, AI/EPS intake, привычные JPG/PNG/WebP сценарии, AVIF/ICO/vector trace targets и single-page PDF output теперь живут поверх backend IMAGE_CONVERT jobs, retry/cancel и artifact reuse.',
     status: 'Active route',
     route: '/converter',
     accents: ['Image', 'AVIF', 'ICO', 'Presets'],
@@ -156,8 +156,8 @@ const toolCards: ToolCard[] = [
           живых маршрутов: viewer отвечает за preview, analysis, backend-powered document
           intelligence, backend-powered metadata service, video tooling, audio workbench и image tooling, а converter закрывает первую волну
           image-конвертаций, vector/icon targets, archive-friendly TIFF target и document-target
-          через scenario registry, processing API и разделение между browser-native и backend
-          job-сценариями.
+          через scenario registry, processing API и backend-first job contract, где browser больше
+          не вычисляет conversion result самостоятельно.
         </p>
 
         <div class="signal-row">

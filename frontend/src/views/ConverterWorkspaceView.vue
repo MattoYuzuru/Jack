@@ -9,12 +9,16 @@ const isDragActive = ref(false)
 const {
   prepared,
   result,
+  resultHistory,
   availablePresets,
   availableTargets,
   activeTarget,
   activePreset,
   isLoading,
   isConverting,
+  isCancelling,
+  canRetry,
+  hasResultHistory,
   errorMessage,
   processingMessage,
   selectedTargetExtension,
@@ -24,11 +28,26 @@ const {
   converterAcceptAttribute,
   imageScenarios,
   documentScenarios,
+  activeJobId,
+  activeJobStatus,
+  activeJobProgressPercent,
   selectFile,
   clearSelection,
   convert,
+  retryLastConversion,
+  cancelConversion,
+  selectResult,
   downloadResult,
+  downloadHistoryEntry,
 } = useConverterWorkspace()
+
+const statusLabels: Record<string, string> = {
+  QUEUED: 'Queued',
+  RUNNING: 'Running',
+  COMPLETED: 'Completed',
+  FAILED: 'Failed',
+  CANCELLED: 'Cancelled',
+}
 
 const sourceFacts = computed(() => {
   if (!prepared.value) {
@@ -51,6 +70,22 @@ const currentScenario = computed(() =>
     (scenario) => scenario.targetExtension === selectedTargetExtension.value,
   ),
 )
+const currentStatusLabel = computed(() =>
+  activeJobStatus.value ? statusLabels[activeJobStatus.value] ?? activeJobStatus.value : 'Idle',
+)
+const progressWidth = computed(() => `${Math.max(0, Math.min(activeJobProgressPercent.value, 100))}%`)
+const historyEntries = computed(() => resultHistory.value.slice(0, 6))
+
+function formatBytes(value: number): string {
+  return new Intl.NumberFormat('ru-RU').format(value) + ' bytes'
+}
+
+function formatDate(value: string): string {
+  return new Intl.DateTimeFormat('ru-RU', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(new Date(value))
+}
 
 function openFilePicker() {
   fileInput.value?.click()
@@ -106,7 +141,7 @@ function onDrop(event: DragEvent) {
       <div class="app-topbar__status">
         <RouterLink class="back-link" to="/">Back to Home</RouterLink>
         <span class="chip-pill">Image Conversion</span>
-        <span class="chip-pill chip-pill--accent">Hybrid pipeline</span>
+        <span class="chip-pill chip-pill--accent">Backend-first route</span>
       </div>
     </header>
 
@@ -114,21 +149,22 @@ function onDrop(event: DragEvent) {
       <article class="panel-surface converter-hero-copy">
         <p class="eyebrow">Iteration 03 · Converter</p>
         <h1>
-          Конвертер теперь держит быстрые browser-native ветки локально, а тяжелые imaging-сценарии
-          отправляет в backend processing pipeline.
+          Конвертер теперь живёт вокруг backend jobs: браузер оркестрирует, показывает прогресс и
+          рендерит готовый результат, а вычисление полностью уходит на сервер.
         </h1>
         <p class="lead">
-          Модуль строится не как набор случайных кнопок, а как реестр сценариев поверх capability
-          matrix: быстрые raster-конверсии остаются в браузере, а HEIC/TIFF/RAW/PSD/AI/EPS intake,
-          AVIF/TIFF/ICO/SVG/PDF targets и preset-driven resize теперь идут через backend
-          `IMAGE_CONVERT` jobs с preview/result artifacts.
+          Конвертер больше не делит route на "простые локальные" и "тяжёлые серверные" ветки.
+          Любой поддержанный сценарий идёт через backend `IMAGE_CONVERT` jobs, поэтому progress,
+          retry, cancel, artifact reuse и повторное скачивание строятся поверх одного server-owned
+          processing contract.
         </p>
 
         <div class="converter-signal-row">
-          <span class="chip-pill">Browser-native JPG / PNG / WebP</span>
+          <span class="chip-pill">Backend-first JPG / PNG / WebP</span>
           <span class="chip-pill">Server HEIC / TIFF / RAW / PSD / AI / EPS</span>
           <span class="chip-pill">Server AVIF / SVG / ICO / TIFF / PDF targets</span>
-          <span class="chip-pill">Preset-driven resize contract</span>
+          <span class="chip-pill">Job progress + cancel + retry</span>
+          <span class="chip-pill">Artifact reuse history</span>
           <span class="chip-pill">Scenario registry</span>
           <span class="chip-pill">Backend IMAGE_CONVERT jobs</span>
         </div>
@@ -136,7 +172,7 @@ function onDrop(event: DragEvent) {
 
       <article class="panel-surface converter-system-card">
         <p class="eyebrow">Current Matrix</p>
-        <h2>Текущая матрица уже закрывает delivery, traced-vector и illustration scenarios.</h2>
+        <h2>Матрица теперь целиком server-owned: UI лишь отражает backend route и его ограничения.</h2>
 
         <div class="scenario-list" aria-label="Доступные сценарии конвертации">
           <article v-for="scenario in imageScenarios" :key="scenario.id" class="scenario-item">
@@ -198,9 +234,8 @@ function onDrop(event: DragEvent) {
             `eps`.
           </strong>
           <span>
-            Конвертер сам определит, какой processing-path нужен: нативный browser raster либо
-            backend `IMAGE_CONVERT` job, а затем соберёт image, traced SVG, ICO,
-            archive-friendly TIFF либо PDF target.
+            После intake любой поддержанный сценарий уходит в backend `IMAGE_CONVERT` job. Браузер
+            держит только orchestration, progress UI и preview уже собранного артефакта.
           </span>
         </button>
 
@@ -208,7 +243,7 @@ function onDrop(event: DragEvent) {
         <p v-else-if="isLoading" class="status-message">
           {{ processingMessage }}
         </p>
-        <p v-else-if="isConverting" class="status-message">
+        <p v-else-if="isConverting || processingMessage" class="status-message">
           {{ processingMessage }}
         </p>
 
@@ -261,6 +296,25 @@ function onDrop(event: DragEvent) {
               <p>{{ currentScenario.notes }}</p>
             </div>
 
+            <div class="scenario-callout scenario-callout--job">
+              <p class="control-label">Job lifecycle</p>
+              <h3>{{ currentStatusLabel }}</h3>
+              <p>
+                {{
+                  activeJobId
+                    ? `Job ${activeJobId} идёт через backend processing platform.`
+                    : 'Новый backend job появится после запуска конвертации.'
+                }}
+              </p>
+              <div class="job-progress">
+                <div class="job-progress__bar" :style="{ width: progressWidth }"></div>
+              </div>
+              <div class="job-meta-row">
+                <span>{{ activeJobProgressPercent }}%</span>
+                <span>{{ activeJobStatus || 'IDLE' }}</span>
+              </div>
+            </div>
+
             <div v-if="activePreset" class="scenario-callout">
               <p class="control-label">Активный пресет</p>
               <h3>{{ activePreset.label }}</h3>
@@ -270,7 +324,7 @@ function onDrop(event: DragEvent) {
             <label v-if="activeTarget?.supportsQuality" class="form-field">
               <span class="control-label">Quality</span>
               <div class="range-row">
-                <input v-model="quality" type="range" min="0.55" max="1" step="0.01" />
+                <input v-model.number="quality" type="range" min="0.55" max="1" step="0.01" />
                 <strong>{{ Math.round(quality * 100) }}%</strong>
               </div>
             </label>
@@ -284,14 +338,34 @@ function onDrop(event: DragEvent) {
             </label>
           </div>
 
-          <button
-            type="button"
-            class="action-button action-button--accent action-button--wide"
-            :disabled="isConverting || !selectedTargetExtension"
-            @click="convert"
-          >
-            Convert to {{ activeTarget?.label ?? 'target' }}
-          </button>
+          <div class="action-row">
+            <button
+              type="button"
+              class="action-button action-button--accent action-button--wide"
+              :disabled="isConverting || !selectedTargetExtension"
+              @click="convert"
+            >
+              Convert to {{ activeTarget?.label ?? 'target' }}
+            </button>
+            <button
+              v-if="isConverting"
+              type="button"
+              class="action-button action-button--wide"
+              :disabled="isCancelling"
+              @click="cancelConversion"
+            >
+              {{ isCancelling ? 'Cancelling...' : 'Cancel backend job' }}
+            </button>
+            <button
+              v-else
+              type="button"
+              class="action-button action-button--wide"
+              :disabled="!canRetry"
+              @click="retryLastConversion"
+            >
+              Retry last request
+            </button>
+          </div>
         </div>
       </article>
 
@@ -354,7 +428,19 @@ function onDrop(event: DragEvent) {
             </article>
             <article class="fact-card">
               <span>Blob size</span>
-              <strong>{{ new Intl.NumberFormat('ru-RU').format(result.blob.size) }} bytes</strong>
+              <strong>{{ formatBytes(result.blob.size) }}</strong>
+            </article>
+            <article class="fact-card">
+              <span>Backend job</span>
+              <strong>{{ result.backendJobId ?? 'Local fallback' }}</strong>
+            </article>
+            <article class="fact-card">
+              <span>Runtime</span>
+              <strong>{{ result.backendRuntimeLabel ?? 'Local runtime' }}</strong>
+            </article>
+            <article class="fact-card">
+              <span>Собрано</span>
+              <strong>{{ formatDate(result.createdAt) }}</strong>
             </article>
           </div>
 
@@ -365,12 +451,50 @@ function onDrop(event: DragEvent) {
           >
             {{ warning }}
           </p>
+
+          <section v-if="hasResultHistory" class="history-stack" aria-label="История conversion jobs">
+            <div class="panel-header panel-header--compact">
+              <div>
+                <p class="eyebrow">Session History</p>
+                <h3>Готовые backend artifacts можно открыть снова или скачать без повторного job.</h3>
+              </div>
+            </div>
+
+            <article
+              v-for="entry in historyEntries"
+              :key="entry.id"
+              class="history-item"
+              :class="{ 'history-item--active': result?.id === entry.id }"
+            >
+              <div>
+                <strong>{{ entry.fileName }}</strong>
+                <p>{{ entry.sourceFileName }} · {{ entry.source.label }} -> {{ entry.target.label }}</p>
+                <span>{{ formatDate(entry.createdAt) }}</span>
+              </div>
+
+              <div class="history-actions">
+                <button type="button" class="action-button" @click="selectResult(entry.id)">
+                  Open
+                </button>
+                <button
+                  type="button"
+                  class="action-button action-button--accent"
+                  @click="downloadHistoryEntry(entry.id)"
+                >
+                  Download again
+                </button>
+              </div>
+            </article>
+          </section>
         </div>
 
         <div v-else class="result-placeholder">
           <p class="eyebrow">No output yet</p>
-          <h3>Сначала выбери source и запусти конвертацию.</h3>
-          <p>После первого успешного encode здесь появится итоговый preview и кнопка скачивания.</p>
+          <h3>Сначала выбери source и запусти backend-first конвертацию.</h3>
+          <p>
+            После первого успешного job здесь появятся итоговый preview, повторное скачивание и
+            история готовых backend artifacts.
+          </p>
         </div>
       </article>
     </section>
@@ -404,7 +528,8 @@ h1,
 .converter-system-card h2,
 .converter-panel h2,
 .result-placeholder h3,
-.scenario-callout h3 {
+.scenario-callout h3,
+.history-stack h3 {
   margin: 0;
   color: var(--text-strong);
   font-family: var(--font-display);
@@ -421,7 +546,8 @@ h1 {
 .converter-system-card h2,
 .converter-panel h2,
 .result-placeholder h3,
-.scenario-callout h3 {
+.scenario-callout h3,
+.history-stack h3 {
   font-size: clamp(1.7rem, 2.2vw, 2.45rem);
   line-height: 1;
 }
@@ -429,7 +555,9 @@ h1 {
 .lead,
 .scenario-item p,
 .scenario-callout p,
-.result-placeholder p {
+.result-placeholder p,
+.history-item p,
+.history-item span {
   margin: 0;
   color: var(--text-soft);
   font-size: 0.98rem;
@@ -444,7 +572,8 @@ h1 {
 .converter-signal-row,
 .target-grid,
 .preset-grid,
-.result-facts {
+.result-facts,
+.action-row {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
@@ -457,7 +586,8 @@ h1 {
 .scenario-list,
 .converter-stack,
 .result-stack,
-.control-cluster {
+.control-cluster,
+.history-stack {
   display: grid;
   gap: 16px;
 }
@@ -505,6 +635,10 @@ h1 {
   align-items: flex-start;
   justify-content: space-between;
   gap: 18px;
+}
+
+.panel-header--compact {
+  justify-content: flex-start;
 }
 
 .file-input {
@@ -633,11 +767,41 @@ h1 {
   padding: 18px;
 }
 
+.scenario-callout--job {
+  gap: 12px;
+}
+
 .form-field {
   display: grid;
   gap: 12px;
   border-radius: var(--radius-xl);
   background: rgba(255, 255, 255, 0.22);
+}
+
+.job-progress {
+  overflow: hidden;
+  height: 12px;
+  border-radius: 999px;
+  background: rgba(29, 92, 85, 0.12);
+}
+
+.job-progress__bar {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgba(29, 92, 85, 0.88), rgba(224, 125, 78, 0.9));
+  transition: width 180ms ease;
+}
+
+.job-meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--text-soft);
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .range-row,
@@ -663,6 +827,10 @@ h1 {
 
 .action-button--wide {
   width: 100%;
+}
+
+.action-row .action-button--wide {
+  flex: 1 1 220px;
 }
 
 .converter-panel--result {
@@ -711,6 +879,43 @@ h1 {
   padding: 28px;
 }
 
+.history-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 18px;
+  border-radius: var(--radius-xl);
+  background: rgba(255, 255, 255, 0.28);
+  box-shadow: var(--shadow-pressed);
+}
+
+.history-item--active {
+  box-shadow: var(--shadow-floating);
+}
+
+.history-item strong {
+  display: block;
+  color: var(--accent-cool-strong);
+  font-size: 1rem;
+}
+
+.history-item p {
+  margin-top: 6px;
+}
+
+.history-item span {
+  display: inline-block;
+  margin-top: 10px;
+  font-size: 0.85rem;
+}
+
+.history-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 @media (max-width: 1180px) {
   .converter-hero-grid,
   .converter-main-grid {
@@ -726,7 +931,8 @@ h1 {
   }
 
   .panel-header,
-  .scenario-item {
+  .scenario-item,
+  .history-item {
     flex-direction: column;
   }
 
@@ -737,7 +943,9 @@ h1 {
   .target-grid,
   .preset-grid,
   .result-facts,
-  .converter-signal-row {
+  .converter-signal-row,
+  .action-row,
+  .history-actions {
     flex-direction: column;
   }
 }

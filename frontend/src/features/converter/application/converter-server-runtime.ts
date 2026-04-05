@@ -1,7 +1,11 @@
 import {
+  awaitProcessingJob,
+  createProcessingJob,
+  ensureProcessingCapability,
   requestProcessingBlob,
   requestProcessingJson,
-  runProcessingJob,
+  uploadProcessingFile,
+  type ProcessingArtifact,
   type ProcessingJobResponse,
 } from '../../processing/application/processing-client'
 
@@ -21,6 +25,10 @@ export interface ServerImageConvertManifest {
 }
 
 export interface ServerImageConvertResult {
+  job: ProcessingJobResponse
+  manifestArtifact: ProcessingArtifact
+  resultArtifact: ProcessingArtifact
+  previewArtifact: ProcessingArtifact
   manifest: ServerImageConvertManifest
   resultBlob: Blob
   previewBlob: Blob
@@ -35,6 +43,8 @@ interface RunServerImageConvertInput {
   backgroundColor?: string
   presetLabel?: string
   reportProgress?: (message: string) => void
+  onJobCreated?: (job: ProcessingJobResponse) => void
+  onJobUpdate?: (job: ProcessingJobResponse) => void
 }
 
 const IMAGE_CONVERT_JOB_TYPE = 'IMAGE_CONVERT'
@@ -42,9 +52,15 @@ const IMAGE_CONVERT_JOB_TYPE = 'IMAGE_CONVERT'
 export async function runServerImageConvert(
   input: RunServerImageConvertInput,
 ): Promise<ServerImageConvertResult> {
-  const completedJob = await runProcessingJob({
-    scope: 'converter',
-    file: input.file,
+  input.reportProgress?.('Проверяю backend IMAGE_CONVERT capability для converter route...')
+  await ensureProcessingCapability('converter', IMAGE_CONVERT_JOB_TYPE)
+
+  input.reportProgress?.('Отправляю source в backend processing storage...')
+  const upload = await uploadProcessingFile(input.file)
+
+  input.reportProgress?.('Создаю backend IMAGE_CONVERT job для backend-first conversion...')
+  const createdJob = await createProcessingJob({
+    uploadId: upload.id,
     jobType: IMAGE_CONVERT_JOB_TYPE,
     parameters: {
       operation: 'convert',
@@ -55,16 +71,21 @@ export async function runServerImageConvert(
       backgroundColor: input.backgroundColor,
       presetLabel: input.presetLabel,
     },
+  })
+  input.onJobCreated?.(createdJob)
+
+  const completedJob = await awaitProcessingJob(createdJob.id, {
     reportProgress: input.reportProgress,
-    createMessage: 'Создаю backend IMAGE_CONVERT job для heavy conversion scenario...',
     timeoutMessage:
       'Backend IMAGE_CONVERT job не завершился в ожидаемое время. Попробуй более компактный пресет или проверь backend logs.',
+    onUpdate: input.onJobUpdate,
   })
 
+  input.reportProgress?.('Загружаю backend result/preview artifacts...')
   return downloadServerConvertArtifacts(completedJob)
 }
 
-async function downloadServerConvertArtifacts(
+export async function downloadServerConvertArtifacts(
   job: ProcessingJobResponse,
 ): Promise<ServerImageConvertResult> {
   const manifestArtifact = job.artifacts.find(
@@ -86,6 +107,10 @@ async function downloadServerConvertArtifacts(
   ])
 
   return {
+    job,
+    manifestArtifact,
+    resultArtifact,
+    previewArtifact,
     manifest,
     resultBlob,
     previewBlob,

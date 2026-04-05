@@ -89,14 +89,14 @@ public class CapabilityCatalogService {
 
 		return new CapabilityScope(
 			"converter",
-			"server-capability-matrix",
+			"converter-backend-first",
 			List.of(
-				new JobTypeCapability(ProcessingJobType.UPLOAD_INTAKE_ANALYSIS, true, "Можно использовать как preflight перед будущими heavy conversion jobs."),
+				new JobTypeCapability(ProcessingJobType.UPLOAD_INTAKE_ANALYSIS, true, "Можно использовать как preflight перед backend-first conversion jobs и диагностикой intake stage."),
 				new JobTypeCapability(
 					ProcessingJobType.IMAGE_CONVERT,
 					imageProcessingAvailable,
 					imageProcessingAvailable
-						? "Heavy imaging scenarios уже уходят в backend IMAGE_CONVERT jobs с preview/result artifacts."
+						? "Converter backend-first route уже гонит supported scenarios через IMAGE_CONVERT jobs с preview/result artifacts."
 						: "Image processing service требует доступных convert/ffmpeg/potrace/raw-preview binaries и пока не активна в текущем окружении."
 				),
 				new JobTypeCapability(
@@ -122,8 +122,8 @@ public class CapabilityCatalogService {
 				)
 			),
 			List.of(
-				"Converter route теперь hybrid: browser-native fast paths остаются локальными, heavy imaging идёт через backend job pipeline.",
-				"Backend теперь отдаёт source/target/scenario/preset matrix и убирает расхождение между UI и processing rules."
+				"Converter route теперь backend-first: любой supported сценарий идёт через backend job/artifact contract, а browser остаётся orchestration/preview слоем.",
+				"Workspace может строить progress, retry, cancel и artifact reuse поверх единых job status и capability rules от backend."
 			),
 			null,
 			this.capabilityMatrixService.converterMatrix(availabilityByJobType)

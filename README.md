@@ -233,16 +233,18 @@ groups, timeline/volume/rate controls, loop и keyboard flow для быстры
 - [ ] Конвертация изображений, документов, таблиц, презентаций, видео и аудио
 - [ ] Трансформации контейнеров, кодеков, размеров и параметров качества
 
-Конвертер теперь работает как hybrid processing route. Архитектура всё ещё построена через
-`scenario registry -> source strategy -> target strategy`, но быстрые browser-native raster-сценарии
-остаются локально, а тяжёлые image branches уходят в backend `IMAGE_CONVERT`.
+Конвертер теперь работает как backend-first processing route. Архитектура всё ещё построена через
+`scenario registry -> source strategy -> target strategy`, но сам route больше не выбирает
+между "простыми локальными" и "тяжёлыми серверными" ветками: любой поддержанный сценарий
+уходит в backend `IMAGE_CONVERT`, а браузер держит orchestration, progress UI, retry/cancel,
+artifact reuse и preview уже готового результата.
 Backend собирает preview/result artifacts и централизованно применяет resize/quality baseline,
 чтобы дальнейшие batch- и delivery-сценарии не размазывались по UI-настройкам.
 Дополнительно capability/source-target/preset matrix теперь тоже приходит с backend `GET /api/capabilities/converter`:
 frontend больше не держит локальный registry как единственный source of truth и только резолвит UI вокруг server-owned правил.
-Single-page `PDF`, single-frame `TIFF`, `AVIF`, `ICO`, traced `SVG`, `PSD` composite decode,
-`AI/EPS` raster intake, `HEIC`, `TIFF` и `RAW` теперь закрываются server-assisted pipeline без
-browser-heavy decode/encode runtime.
+`JPG`, `PNG`, `WebP`, single-page `PDF`, single-frame `TIFF`, `AVIF`, `ICO`, traced `SVG`,
+`PSD` composite decode, `AI/EPS` raster intake, `HEIC`, `TIFF` и `RAW` теперь закрываются через
+единый server-owned job lifecycle без browser-heavy decode/encode runtime.
 
 #### 3.1 Частые Сценарии Для Изображений
 

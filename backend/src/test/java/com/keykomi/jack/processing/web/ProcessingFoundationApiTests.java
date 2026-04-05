@@ -123,12 +123,13 @@ class ProcessingFoundationApiTests {
 		this.mockMvc.perform(get("/api/capabilities/converter"))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.scope").value("converter"))
-			.andExpect(jsonPath("$.phase").value("server-capability-matrix"))
+			.andExpect(jsonPath("$.phase").value("converter-backend-first"))
 			.andExpect(jsonPath("$.jobTypes[1].implemented").value(false))
 			.andExpect(jsonPath("$.jobTypes[2].implemented").value(false))
 			.andExpect(jsonPath("$.jobTypes[3].implemented").value(true))
 			.andExpect(jsonPath("$.jobTypes[4].implemented").value(true))
-			.andExpect(jsonPath("$.converterMatrix.acceptAttribute").value(org.hamcrest.Matchers.containsString(".png")))
+			.andExpect(jsonPath("$.converterMatrix.acceptAttribute").value(""))
+			.andExpect(jsonPath("$.converterMatrix.sourceFormats[0].available").value(false))
 			.andExpect(jsonPath("$.converterMatrix.presets[0].id").value("original"));
 	}
 

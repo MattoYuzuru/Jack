@@ -17,6 +17,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Future;
 import java.util.function.UnaryOperator;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -33,6 +34,7 @@ public class ProcessingJobService {
 	private final MetadataProcessingService metadataProcessingService;
 	private final ExecutorService processingExecutor;
 	private final Map<UUID, StoredProcessingJob> jobs = new ConcurrentHashMap<>();
+	private final Map<UUID, Future<?>> submittedJobs = new ConcurrentHashMap<>();
 
 	public ProcessingJobService(
 		UploadStorageService uploadStorageService,
@@ -62,7 +64,7 @@ public class ProcessingJobService {
 
 		// Даже foundation-срез сразу запускаем через async executor, чтобы следующие
 		// фазы с ffmpeg/document/imaging не ломали уже заведённый job lifecycle contract.
-		this.processingExecutor.submit(() -> process(job.id()));
+		this.submittedJobs.put(job.id(), this.processingExecutor.submit(() -> process(job.id())));
 		return job;
 	}
 
@@ -84,9 +86,25 @@ public class ProcessingJobService {
 			.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Artifact не найден у указанного job."));
 	}
 
+	public StoredProcessingJob cancel(UUID jobId) {
+		var job = getRequiredJob(jobId);
+		if (job.isTerminal()) {
+			return job;
+		}
+
+		updateJob(jobId, currentJob -> currentJob.cancel(Instant.now(), "Job отменён пользователем."));
+		Optional.ofNullable(this.submittedJobs.remove(jobId)).ifPresent(future -> future.cancel(true));
+		return getRequiredJob(jobId);
+	}
+
 	private void process(UUID jobId) {
 		try {
-			updateJob(jobId, job -> job.start(Instant.now(), startMessage(job.type())));
+			if (isCancellationRequested(jobId)) {
+				return;
+			}
+
+			updateJob(jobId, job -> job.status() == ProcessingJobStatus.CANCELLED ? job : job.start(Instant.now(), startMessage(job.type())));
+			throwIfCancellationRequested(jobId);
 
 			var job = getRequiredJob(jobId);
 			var upload = this.uploadStorageService.getRequiredUpload(job.uploadId());
@@ -99,18 +117,25 @@ public class ProcessingJobService {
 				case METADATA_EXPORT -> processMetadataExport(job.id(), upload, parseMetadataJobRequest(job.parameters()));
 				default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Для этого job type backend processor ещё не реализован.");
 			};
+			throwIfCancellationRequested(jobId);
 
-			updateJob(
-				jobId,
-				currentJob -> currentJob.complete(
-					Instant.now(),
-					result.message(),
-					result.artifacts()
-				)
-			);
+			completeJob(jobId, result);
 		}
 		catch (Exception exception) {
-			updateJob(jobId, job -> job.fail(Instant.now(), resolveErrorMessage(exception)));
+			if (isCancellationRequested(jobId) || Thread.currentThread().isInterrupted() || exception instanceof JobCancellationException) {
+				updateJob(
+					jobId,
+					job -> job.status() == ProcessingJobStatus.CANCELLED
+						? job
+						: job.cancel(Instant.now(), "Job отменён пользователем.")
+				);
+				return;
+			}
+
+			failJob(jobId, exception);
+		}
+		finally {
+			this.submittedJobs.remove(jobId);
 		}
 	}
 
@@ -255,6 +280,42 @@ public class ProcessingJobService {
 
 	private void updateJob(UUID jobId, UnaryOperator<StoredProcessingJob> mutation) {
 		this.jobs.compute(jobId, (ignored, currentJob) -> currentJob == null ? null : mutation.apply(currentJob));
+	}
+
+	private void completeJob(UUID jobId, JobProcessingResult result) {
+		this.jobs.compute(jobId, (ignored, currentJob) -> {
+			if (currentJob == null || currentJob.status() == ProcessingJobStatus.CANCELLED) {
+				return currentJob;
+			}
+
+			return currentJob.complete(
+				Instant.now(),
+				result.message(),
+				result.artifacts()
+			);
+		});
+	}
+
+	private void failJob(UUID jobId, Exception exception) {
+		this.jobs.compute(jobId, (ignored, currentJob) -> {
+			if (currentJob == null || currentJob.status() == ProcessingJobStatus.CANCELLED) {
+				return currentJob;
+			}
+
+			return currentJob.fail(Instant.now(), resolveErrorMessage(exception));
+		});
+	}
+
+	private void throwIfCancellationRequested(UUID jobId) {
+		if (Thread.currentThread().isInterrupted() || isCancellationRequested(jobId)) {
+			throw new JobCancellationException();
+		}
+	}
+
+	private boolean isCancellationRequested(UUID jobId) {
+		return findJob(jobId)
+			.map(job -> job.status() == ProcessingJobStatus.CANCELLED)
+			.orElse(false);
 	}
 
 	private String resolveErrorMessage(Exception exception) {
@@ -408,6 +469,9 @@ public class ProcessingJobService {
 		String message,
 		List<StoredArtifact> artifacts
 	) {
+	}
+
+	private static final class JobCancellationException extends RuntimeException {
 	}
 
 }
