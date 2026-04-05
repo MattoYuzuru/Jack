@@ -17,6 +17,18 @@ export interface ViewerDocumentTablePreview {
   delimiter: string
 }
 
+export interface ViewerDocumentSheetPreview {
+  id: string
+  name: string
+  table: ViewerDocumentTablePreview
+}
+
+export interface ViewerDocumentSlidePreview {
+  id: string
+  title: string
+  bullets: string[]
+}
+
 export interface ViewerDocumentSearchMatch {
   id: string
   excerpt: string
@@ -43,6 +55,17 @@ export type ViewerDocumentLayout =
       text: string
       srcDoc: string
       outline: ViewerDocumentOutlineItem[]
+    }
+  | {
+      mode: 'workbook'
+      text: string
+      sheets: ViewerDocumentSheetPreview[]
+      activeSheetIndex: number
+    }
+  | {
+      mode: 'slides'
+      text: string
+      slides: ViewerDocumentSlidePreview[]
     }
 
 export interface ViewerDocumentPreviewPayload {

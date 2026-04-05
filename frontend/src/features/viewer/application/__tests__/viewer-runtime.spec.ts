@@ -153,8 +153,8 @@ describe('viewer runtime', () => {
     const runtime = createViewerRuntime()
 
     const result = await runtime.resolve(
-      new File(['docx'], 'proposal.docx', {
-        type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      new File(['epub'], 'book.epub', {
+        type: 'application/epub+zip',
       }),
     )
 
@@ -164,7 +164,49 @@ describe('viewer runtime', () => {
       throw new Error('Expected a planned document placeholder.')
     }
 
-    expect(result.headline).toContain('DOCX')
+    expect(result.headline).toContain('EPUB')
     expect(result.detail).toContain('Foundation')
+  })
+
+  it('routes xlsx files through the workbook document adapter', async () => {
+    const runtime = createViewerRuntime({
+      buildXlsxDocument: async () => ({
+        summary: [{ label: 'Sheets', value: '2' }],
+        searchableText: 'Summary Viewer',
+        warnings: [],
+        layout: {
+          mode: 'workbook',
+          text: 'Summary Viewer',
+          activeSheetIndex: 0,
+          sheets: [
+            {
+              id: 'sheet-1',
+              name: 'Summary',
+              table: {
+                columns: ['Name'],
+                rows: [['Viewer']],
+                totalRows: 1,
+                totalColumns: 1,
+                delimiter: '',
+              },
+            },
+          ],
+        },
+        previewLabel: 'XLSX workbook adapter',
+      }),
+    })
+
+    const result = await runtime.resolve(
+      new File(['xlsx'], 'report.xlsx', {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      }),
+    )
+
+    if (result.kind !== 'document') {
+      throw new Error('Expected an XLSX document preview result.')
+    }
+
+    expect(result.previewLabel).toBe('XLSX workbook adapter')
+    expect(result.layout.mode).toBe('workbook')
   })
 })
