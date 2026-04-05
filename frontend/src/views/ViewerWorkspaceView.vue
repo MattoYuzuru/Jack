@@ -25,9 +25,12 @@ const isFullscreen = ref(false)
 const metadataQuery = ref('')
 const documentQuery = ref('')
 const documentSheetIndex = ref(0)
+const documentSlideIndex = ref(0)
+const activeDocumentMatchIndex = ref(0)
 const metadataDraft = ref<ViewerEditableMetadata>(createEmptyEditableMetadata())
 const isSavingMetadata = ref(false)
 const metadataSaveMessage = ref('')
+const documentActionMessage = ref('')
 
 const imageFormats = listViewerFormatsByFamily('image')
 const documentFormats = listViewerFormatsByFamily('document')
@@ -93,6 +96,9 @@ watch(
   () => {
     documentQuery.value = ''
     documentSheetIndex.value = 0
+    documentSlideIndex.value = 0
+    activeDocumentMatchIndex.value = 0
+    documentActionMessage.value = ''
   },
 )
 
@@ -174,6 +180,12 @@ const documentMatches = computed(() => {
   return findViewerDocumentMatches(selection.value.searchableText, documentQuery.value)
 })
 
+watch(documentMatches, (matches) => {
+  activeDocumentMatchIndex.value = matches.length
+    ? Math.min(activeDocumentMatchIndex.value, matches.length - 1)
+    : 0
+})
+
 const documentWarnings = computed(() =>
   selection.value?.kind === 'document' ? selection.value.warnings : [],
 )
@@ -228,6 +240,52 @@ const documentSlides = computed(() => {
 
   return selection.value.layout.slides
 })
+
+const activeDocumentSlide = computed(() => documentSlides.value[documentSlideIndex.value] ?? null)
+
+const documentModeLabel = computed(() => {
+  if (selection.value?.kind !== 'document') {
+    return ''
+  }
+
+  const labelMap: Record<string, string> = {
+    pdf: 'PDF Embed',
+    text: 'Text Reader',
+    table: 'Table Preview',
+    html: 'HTML Canvas',
+    workbook: 'Workbook Preview',
+    slides: 'Slide Deck',
+  }
+
+  return labelMap[selection.value.layout.mode] ?? 'Document Preview'
+})
+
+const documentStageMetrics = computed(() => {
+  if (selection.value?.kind !== 'document') {
+    return []
+  }
+
+  return selection.value.summary.slice(0, 4).map((item) => `${item.label}: ${item.value}`)
+})
+
+const documentSearchPlaceholder = computed(() => {
+  if (selection.value?.kind !== 'document') {
+    return 'Search document...'
+  }
+
+  const placeholderMap: Record<string, string> = {
+    pdf: 'invoice, total, section...',
+    text: 'paragraph, keyword, note...',
+    table: 'column, customer, value...',
+    html: 'heading, link text, paragraph...',
+    workbook: 'sheet name, cell value, total...',
+    slides: 'slide title, bullet, agenda...',
+  }
+
+  return placeholderMap[selection.value.layout.mode] ?? 'Search document...'
+})
+
+const activeDocumentMatch = computed(() => documentMatches.value[activeDocumentMatchIndex.value] ?? null)
 
 function openFilePicker() {
   fileInput.value?.click()
@@ -319,6 +377,53 @@ function downloadBlob(blob: Blob, fileName: string) {
   URL.revokeObjectURL(objectUrl)
 }
 
+async function copyDocumentText() {
+  if (selection.value?.kind !== 'document') {
+    return
+  }
+
+  if (!navigator.clipboard) {
+    documentActionMessage.value = 'Clipboard API недоступен в текущем окружении.'
+    return
+  }
+
+  await navigator.clipboard.writeText(selection.value.searchableText)
+  documentActionMessage.value = 'Извлечённый text layer скопирован в clipboard.'
+}
+
+function downloadDocumentText() {
+  if (selection.value?.kind !== 'document') {
+    return
+  }
+
+  const extensionIndex = selection.value.file.name.lastIndexOf('.')
+  const baseName =
+    extensionIndex > 0 ? selection.value.file.name.slice(0, extensionIndex) : selection.value.file.name
+
+  downloadBlob(
+    new Blob([selection.value.searchableText], { type: 'text/plain;charset=utf-8' }),
+    `${baseName}.jack-extracted.txt`,
+  )
+  documentActionMessage.value = 'Извлечённый text layer собран в отдельный `.txt` файл.'
+}
+
+function clearDocumentSearch() {
+  documentQuery.value = ''
+  activeDocumentMatchIndex.value = 0
+}
+
+function focusDocumentMatch(index: number) {
+  activeDocumentMatchIndex.value = index
+}
+
+function selectDocumentSheet(index: number) {
+  documentSheetIndex.value = index
+}
+
+function selectDocumentSlide(index: number) {
+  documentSlideIndex.value = index
+}
+
 onMounted(() => {
   document.addEventListener('fullscreenchange', syncFullscreenState)
 })
@@ -342,17 +447,18 @@ onBeforeUnmount(() => {
       <div class="app-topbar__status">
         <RouterLink class="back-link" to="/">Back to Home</RouterLink>
         <span class="chip-pill">Images + Docs</span>
-        <span class="chip-pill chip-pill--accent">Document Foundation</span>
+        <span class="chip-pill chip-pill--accent">Document UX Polish</span>
       </div>
     </header>
 
     <section class="viewer-hero-grid">
       <article class="panel-surface viewer-intro">
-        <p class="eyebrow">Iteration 02 · File Viewer</p>
-        <h1>Viewer теперь идёт дальше image-only слоя и получает document runtime.</h1>
+        <p class="eyebrow">Iteration 03 · File Viewer</p>
+        <h1>Viewer уже не просто поддерживает документы, а даёт рабочий UX для них.</h1>
         <p class="lead">
           Архитектура остаётся registry-driven: image и document форматы идут через общий workspace,
-          а конкретный preview выбирается по strategy contract без развала UI на отдельные экраны.
+          а поверх document runtime теперь есть search, быстрые actions, sheet/slide navigation и
+          более внятные preview states для каждого поддержанного режима.
         </p>
 
         <div
@@ -373,8 +479,8 @@ onBeforeUnmount(() => {
           <div class="viewer-dropzone__copy">
             <strong>Загрузить файл в viewer</strong>
             <span>
-              На этом проходе viewer уже умеет работать не только с изображениями, но и с первыми
-              document-сценариями: `pdf`, `txt`, `csv`, `html`, `rtf`.
+              На этом проходе viewer уже умеет работать не только с изображениями, но и с document
+              сценариями: `pdf`, `txt`, `csv`, `html`, `rtf`, `docx`, `xlsx`, `pptx`.
             </span>
           </div>
 
@@ -394,9 +500,9 @@ onBeforeUnmount(() => {
 
         <div class="signal-row">
           <span class="chip-pill">Image tooling live</span>
-          <span class="chip-pill">PDF + text foundation</span>
+          <span class="chip-pill">OOXML previews</span>
           <span class="chip-pill">Search layer</span>
-          <span class="chip-pill">Table + outline previews</span>
+          <span class="chip-pill">Sheets + slides + quick actions</span>
         </div>
       </article>
 
@@ -474,6 +580,45 @@ onBeforeUnmount(() => {
           </div>
 
           <div v-else-if="selection?.kind === 'document'" class="viewer-document-frame">
+            <div class="document-stage-hud">
+              <div class="document-stage-hud__meta">
+                <span class="chip-pill chip-pill--compact chip-pill--accent">
+                  {{ selection.format.label }}
+                </span>
+                <span class="chip-pill chip-pill--compact">
+                  {{ documentModeLabel }}
+                </span>
+                <span
+                  v-for="metric in documentStageMetrics"
+                  :key="metric"
+                  class="chip-pill chip-pill--compact"
+                >
+                  {{ metric }}
+                </span>
+              </div>
+
+              <div class="document-stage-hud__actions">
+                <button class="action-button" type="button" @click="copyDocumentText">
+                  Copy Text
+                </button>
+                <button class="action-button" type="button" @click="downloadDocumentText">
+                  Download Text
+                </button>
+                <button
+                  class="action-button"
+                  type="button"
+                  :disabled="!documentQuery"
+                  @click="clearDocumentSearch"
+                >
+                  Clear Search
+                </button>
+              </div>
+            </div>
+
+            <p v-if="documentActionMessage" class="document-action-message">
+              {{ documentActionMessage }}
+            </p>
+
             <iframe
               v-if="selection.layout.mode === 'pdf'"
               class="viewer-document-frame__embed"
@@ -522,7 +667,7 @@ onBeforeUnmount(() => {
                   class="document-sheet-chip"
                   :class="{ 'document-sheet-chip--active': documentSheetIndex === sheetIndex }"
                   type="button"
-                  @click="documentSheetIndex = sheetIndex"
+                  @click="selectDocumentSheet(sheetIndex)"
                 >
                   {{ sheet.name }}
                 </button>
@@ -558,10 +703,38 @@ onBeforeUnmount(() => {
             </div>
 
             <div v-else-if="selection.layout.mode === 'slides'" class="document-slide-grid">
+              <article v-if="activeDocumentSlide" class="document-slide-card document-slide-card--focus">
+                <div class="document-slide-card__meta">
+                  <span class="chip-pill chip-pill--compact chip-pill--accent">
+                    Focused Slide {{ documentSlideIndex + 1 }}
+                  </span>
+                </div>
+                <h3>{{ activeDocumentSlide.title }}</h3>
+                <ul v-if="activeDocumentSlide.bullets.length" class="document-slide-card__list">
+                  <li v-for="bullet in activeDocumentSlide.bullets" :key="bullet">{{ bullet }}</li>
+                </ul>
+                <p v-else class="viewer-panel__empty">На выбранном слайде нет bullet-пунктов.</p>
+              </article>
+
+              <div class="document-slide-rail">
+                <button
+                  v-for="(slide, slideIndex) in selection.layout.slides"
+                  :key="slide.id"
+                  class="document-slide-chip"
+                  :class="{ 'document-slide-chip--active': documentSlideIndex === slideIndex }"
+                  type="button"
+                  @click="selectDocumentSlide(slideIndex)"
+                >
+                  {{ slideIndex + 1 }} · {{ slide.title }}
+                </button>
+              </div>
+
               <article
                 v-for="(slide, slideIndex) in selection.layout.slides"
                 :key="slide.id"
                 class="document-slide-card"
+                :class="{ 'document-slide-card--selected': documentSlideIndex === slideIndex }"
+                @click="selectDocumentSlide(slideIndex)"
               >
                 <div class="document-slide-card__meta">
                   <span class="chip-pill chip-pill--compact">Slide {{ slideIndex + 1 }}</span>
@@ -861,6 +1034,11 @@ onBeforeUnmount(() => {
       <article class="panel-surface viewer-panel">
         <p class="eyebrow">Document Summary</p>
         <h2>Статистика, warnings и preview facts</h2>
+        <div class="document-summary-row">
+          <span class="chip-pill chip-pill--compact chip-pill--accent">{{ selection.format.label }}</span>
+          <span class="chip-pill chip-pill--compact">{{ documentModeLabel }}</span>
+          <span class="chip-pill chip-pill--compact">Matches: {{ documentMatches.length }}</span>
+        </div>
         <dl class="facts-grid">
           <template v-for="fact in selectionFacts" :key="fact.label">
             <dt>{{ fact.label }}</dt>
@@ -879,12 +1057,28 @@ onBeforeUnmount(() => {
         <h2>Search layer поверх нормализованного document text</h2>
         <label class="metadata-search">
           <span>Search document</span>
-          <input v-model="documentQuery" type="text" placeholder="contract, total, heading..." />
+          <input v-model="documentQuery" type="text" :placeholder="documentSearchPlaceholder" />
         </label>
+        <div class="document-search-toolbar">
+          <span class="chip-pill chip-pill--compact">
+            {{ documentQuery ? `${documentMatches.length} matches` : 'Search ready' }}
+          </span>
+          <span v-if="activeDocumentMatch" class="chip-pill chip-pill--compact chip-pill--accent">
+            Match {{ activeDocumentMatchIndex + 1 }}
+          </span>
+        </div>
         <div v-if="documentMatches.length" class="search-match-stack">
-          <article v-for="match in documentMatches" :key="match.id" class="search-match-card">
-            {{ match.excerpt }}
-          </article>
+          <button
+            v-for="(match, matchIndex) in documentMatches"
+            :key="match.id"
+            class="search-match-card"
+            :class="{ 'search-match-card--active': activeDocumentMatchIndex === matchIndex }"
+            type="button"
+            @click="focusDocumentMatch(matchIndex)"
+          >
+            <strong>Result {{ matchIndex + 1 }}</strong>
+            <span>{{ match.excerpt }}</span>
+          </button>
         </div>
         <p v-else class="viewer-panel__empty">
           {{
@@ -923,7 +1117,8 @@ onBeforeUnmount(() => {
             v-for="(sheet, sheetIndex) in documentWorkbook.sheets"
             :key="sheet.id"
             class="outline-card outline-card--interactive"
-            @click="documentSheetIndex = sheetIndex"
+            :class="{ 'outline-card--active': documentSheetIndex === sheetIndex }"
+            @click="selectDocumentSheet(sheetIndex)"
           >
             <strong>Sheet</strong>
             <span>{{ sheet.name }} · {{ sheet.table.totalRows }} rows</span>
@@ -931,7 +1126,13 @@ onBeforeUnmount(() => {
         </div>
 
         <div v-else-if="documentSlides.length" class="outline-stack">
-          <article v-for="(slide, slideIndex) in documentSlides" :key="slide.id" class="outline-card">
+          <article
+            v-for="(slide, slideIndex) in documentSlides"
+            :key="slide.id"
+            class="outline-card outline-card--interactive"
+            :class="{ 'outline-card--active': documentSlideIndex === slideIndex }"
+            @click="selectDocumentSlide(slideIndex)"
+          >
             <strong>S{{ slideIndex + 1 }}</strong>
             <span>{{ slide.title }}</span>
           </article>
@@ -1006,7 +1207,7 @@ onBeforeUnmount(() => {
           </article>
           <article class="architecture-card">
             <strong>Capability Honesty</strong>
-            <p>DOCX/XLSX/PPTX и другие сложные форматы уже заведены, но честно маркируются как foundation only.</p>
+            <p>DOCX/XLSX/PPTX уже живые, а `doc`, `odt`, `xls`, `epub`, `db`, `sqlite` всё ещё честно помечены как foundation only.</p>
           </article>
           <article class="architecture-card">
             <strong>Shared Workspace</strong>
@@ -1166,8 +1367,12 @@ h2 {
   display: grid;
   width: 100%;
   min-height: 480px;
-  place-items: center;
+  place-items: start center;
   overflow: auto;
+}
+
+.viewer-image-frame {
+  place-items: center;
 }
 
 .viewer-image-frame__image {
@@ -1189,6 +1394,42 @@ h2 {
   border-radius: 24px;
   background: rgba(255, 255, 255, 0.68);
   box-shadow: var(--shadow-pressed);
+}
+
+.document-stage-hud,
+.document-stage-hud__meta,
+.document-stage-hud__actions,
+.document-summary-row,
+.document-search-toolbar,
+.document-slide-rail {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.document-stage-hud {
+  width: 100%;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.document-stage-hud__meta {
+  align-items: center;
+}
+
+.document-stage-hud__actions {
+  justify-content: flex-end;
+}
+
+.document-action-message {
+  width: 100%;
+  margin: 0 0 14px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: linear-gradient(145deg, rgba(255, 246, 232, 0.9), rgba(229, 218, 201, 0.94));
+  box-shadow: var(--shadow-pressed);
+  color: var(--text-main);
 }
 
 .document-text,
@@ -1245,6 +1486,14 @@ h2 {
   color: var(--text-soft);
   font-weight: 700;
   cursor: pointer;
+  transition: transform 160ms ease;
+}
+
+.document-sheet-chip:hover,
+.document-slide-chip:hover,
+.outline-card--interactive:hover,
+.search-match-card:hover {
+  transform: translateY(-1px);
 }
 
 .document-sheet-chip--active {
@@ -1296,6 +1545,20 @@ h2 {
     radial-gradient(circle at top right, rgba(255, 203, 148, 0.24), transparent 32%),
     var(--surface-muted);
   box-shadow: var(--shadow-pressed);
+  cursor: pointer;
+}
+
+.document-slide-card--focus {
+  grid-column: 1 / -1;
+  min-height: 0;
+  cursor: default;
+}
+
+.document-slide-card--selected,
+.outline-card--active {
+  background:
+    radial-gradient(circle at top left, rgba(29, 92, 85, 0.12), transparent 30%),
+    var(--surface-muted);
 }
 
 .document-slide-card h3 {
@@ -1315,6 +1578,26 @@ h2 {
   margin: 0;
   padding-left: 18px;
   color: var(--text-main);
+}
+
+.document-slide-chip {
+  min-height: 36px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 250, 242, 0.84);
+  box-shadow: var(--shadow-pressed);
+  color: var(--text-soft);
+  cursor: pointer;
+  text-align: left;
+  transition: transform 160ms ease;
+}
+
+.document-slide-chip--active {
+  color: var(--accent-cool-strong);
+  background:
+    radial-gradient(circle at top left, rgba(255, 203, 148, 0.5), transparent 36%),
+    rgba(255, 250, 242, 0.92);
 }
 
 .viewer-empty-state {
@@ -1403,6 +1686,20 @@ h2 {
   color: var(--accent-cool-strong);
 }
 
+.search-match-card {
+  border: 0;
+  color: var(--text-main);
+  text-align: left;
+  cursor: pointer;
+  transition: transform 160ms ease;
+}
+
+.search-match-card--active {
+  background:
+    radial-gradient(circle at top left, rgba(29, 92, 85, 0.12), transparent 30%),
+    var(--surface-muted);
+}
+
 .outline-card {
   grid-template-columns: auto 1fr;
   align-items: center;
@@ -1410,6 +1707,7 @@ h2 {
 
 .outline-card--interactive {
   cursor: pointer;
+  transition: transform 160ms ease;
 }
 
 .outline-card strong,
@@ -1623,7 +1921,8 @@ h2 {
   .metadata-group__header,
   .format-card__meta,
   .metadata-editor__footer,
-  .document-table__summary {
+  .document-table__summary,
+  .document-stage-hud {
     flex-direction: column;
     align-items: flex-start;
   }

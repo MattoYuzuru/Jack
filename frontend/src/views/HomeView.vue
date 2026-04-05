@@ -27,6 +27,7 @@ const signalPills = [
   'Converter route',
   'Shared imaging layer',
   'OOXML document adapters',
+  'Document UX polish',
   'Decode + encode + vector trace',
   'AVIF / ICO targets',
   'Preset profiles',
@@ -55,9 +56,9 @@ const toolCards: ToolCard[] = [
     label: '01 · File Viewer',
     title: 'Viewer',
     description:
-      'Рабочий маршрут для preview и анализа: image tooling, document search layer и OOXML-aware adapters внутри одного workspace.',
+      'Рабочий маршрут для preview и анализа: image tooling, polished document search/navigation и OOXML-aware adapters внутри одного workspace.',
     detail:
-      'Viewer уже закрывает весь стартовый image-format set, а теперь ещё поднимает PDF/TXT/CSV/HTML/RTF плюс DOCX/XLSX/PPTX previews и document search.',
+      'Viewer уже закрывает весь стартовый image-format set, а теперь ещё даёт PDF/TXT/CSV/HTML/RTF плюс DOCX/XLSX/PPTX previews с search, sheet tabs и slide deck UX.',
     status: 'Active route',
     route: '/viewer',
     accents: ['Images', 'Docs', 'OOXML', 'Search'],
