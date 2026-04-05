@@ -35,6 +35,7 @@ import {
 } from './viewer-preview'
 import type { ViewerVideoFact, ViewerVideoLayout, ViewerVideoPreviewPayload } from './viewer-video'
 import { buildNativeVideoPreview } from './viewer-video-preview'
+import { buildLegacyVideoPreview } from './viewer-video-transcode'
 
 export interface ViewerResolvedImage {
   kind: 'image'
@@ -121,6 +122,7 @@ export interface ViewerRuntimeDependencies {
     context: PreviewStrategyContext,
   ) => Promise<ViewerBinaryPreview>
   buildNativeVideo?: (context: PreviewStrategyContext) => Promise<ViewerVideoPreviewPayload>
+  buildLegacyVideo?: (context: PreviewStrategyContext) => Promise<ViewerVideoPreviewPayload>
   buildPdfDocument?: (
     context: PreviewStrategyContext,
   ) => Promise<ViewerDocumentPreviewPayload>
@@ -181,6 +183,7 @@ const previewStrategies = (
     context: PreviewStrategyContext,
   ) => Promise<ViewerBinaryPreview>,
   buildNativeVideo: (context: PreviewStrategyContext) => Promise<ViewerVideoPreviewPayload>,
+  buildLegacyVideo: (context: PreviewStrategyContext) => Promise<ViewerVideoPreviewPayload>,
   buildPdfDocument: (context: PreviewStrategyContext) => Promise<ViewerDocumentPreviewPayload>,
   buildTextDocument: (context: PreviewStrategyContext) => Promise<ViewerDocumentPreviewPayload>,
   buildCsvDocument: (context: PreviewStrategyContext) => Promise<ViewerDocumentPreviewPayload>,
@@ -244,6 +247,11 @@ const previewStrategies = (
   'native-video': {
     async resolve(context) {
       return buildVideoSelection(await buildNativeVideo(context), context)
+    },
+  },
+  'legacy-video': {
+    async resolve(context) {
+      return buildVideoSelection(await buildLegacyVideo(context), context)
     },
   },
   'pdf-document': {
@@ -336,6 +344,7 @@ export function createViewerRuntime(dependencies: ViewerRuntimeDependencies = {}
     dependencies.decodeTiffImage ?? defaultDecodeTiffImage,
     dependencies.decodeRawImage ?? defaultDecodeRawImage,
     dependencies.buildNativeVideo ?? defaultBuildNativeVideo,
+    dependencies.buildLegacyVideo ?? defaultBuildLegacyVideo,
     dependencies.buildPdfDocument ?? defaultBuildPdfDocument,
     dependencies.buildTextDocument ?? defaultBuildTextDocument,
     dependencies.buildCsvDocument ?? defaultBuildCsvDocument,
@@ -508,6 +517,12 @@ async function defaultBuildNativeVideo(
   context: PreviewStrategyContext,
 ): Promise<ViewerVideoPreviewPayload> {
   return buildNativeVideoPreview(context.file, context.format)
+}
+
+async function defaultBuildLegacyVideo(
+  context: PreviewStrategyContext,
+): Promise<ViewerVideoPreviewPayload> {
+  return buildLegacyVideoPreview(context.file, context.format)
 }
 
 async function defaultBuildPdfDocument(

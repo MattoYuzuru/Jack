@@ -8,6 +8,7 @@ export type PreviewStrategyId =
   | 'tiff-image'
   | 'raw-image'
   | 'native-video'
+  | 'legacy-video'
   | 'pdf-document'
   | 'text-document'
   | 'csv-document'
@@ -416,11 +417,11 @@ const mediaFormatDefinitions: ViewerFormatDefinition[] = [
     label: 'AVI',
     family: 'media',
     mimeTypes: ['video/x-msvideo'],
-    previewPipeline: 'planned',
-    previewStrategyId: 'planned-media',
-    statusLabel: 'Foundation only',
+    previewPipeline: 'client-decode',
+    previewStrategyId: 'legacy-video',
+    statusLabel: 'Legacy decode bridge',
     notes:
-      'AVI распознан в capability map, но для стабильного preview ему позже понадобится decode/transcode bridge поверх browser player.',
+      'AVI идёт через client-side transcode bridge: viewer поднимает browser-friendly preview container и сохраняет тот же video workspace contract.',
     accents: ['Video', 'Legacy'],
   },
   {
@@ -429,11 +430,11 @@ const mediaFormatDefinitions: ViewerFormatDefinition[] = [
     label: 'MKV',
     family: 'media',
     mimeTypes: ['video/x-matroska'],
-    previewPipeline: 'planned',
-    previewStrategyId: 'planned-media',
-    statusLabel: 'Foundation only',
+    previewPipeline: 'client-decode',
+    previewStrategyId: 'legacy-video',
+    statusLabel: 'Legacy decode bridge',
     notes:
-      'Matroska-контейнер заведён в registry, но без отдельного playback adapter browser support остаётся слишком нестабильным.',
+      'Matroska идёт через legacy media adapter: контейнер декодируется или транскодируется в browser-playable preview path внутри viewer runtime.',
     accents: ['Video', 'Container'],
   },
   {
@@ -442,11 +443,11 @@ const mediaFormatDefinitions: ViewerFormatDefinition[] = [
     label: 'WMV',
     family: 'media',
     mimeTypes: ['video/x-ms-wmv'],
-    previewPipeline: 'planned',
-    previewStrategyId: 'planned-media',
-    statusLabel: 'Foundation only',
+    previewPipeline: 'client-decode',
+    previewStrategyId: 'legacy-video',
+    statusLabel: 'Legacy decode bridge',
     notes:
-      'WMV позже потребует отдельный compatibility/decode path, чтобы не зависеть от старого platform codec support.',
+      'WMV проходит через compatibility bridge и получает browser-oriented preview, чтобы workspace не зависел от platform codec support.',
     accents: ['Video', 'Windows'],
   },
   {
@@ -455,12 +456,12 @@ const mediaFormatDefinitions: ViewerFormatDefinition[] = [
     label: 'FLV',
     family: 'media',
     mimeTypes: ['video/x-flv'],
-    previewPipeline: 'planned',
-    previewStrategyId: 'planned-media',
-    statusLabel: 'Foundation only',
+    previewPipeline: 'client-decode',
+    previewStrategyId: 'legacy-video',
+    statusLabel: 'Legacy decode bridge',
     notes:
-      'FLV заведён как будущий legacy adapter scenario: foundation есть, но browser-native playback для него не обещается.',
-    accents: ['Video', 'Legacy'],
+      'FLV идёт через transcode bridge, потому что Flash-era контейнер сам по себе не подходит для современного browser playback path.',
+    accents: ['Video', 'Archive'],
   },
 ]
 

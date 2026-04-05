@@ -59,7 +59,7 @@ const toolCards: ToolCard[] = [
     description:
       'Рабочий маршрут для preview и анализа: image tooling, полный document stack и video workbench внутри одного workspace.',
     detail:
-      'Viewer уже закрывает весь стартовый image-format set, document layer и теперь усиливает video layer: browser-native playback для MP4/MOV/WebM, frame stepping, subtitle sidecars, poster capture, timeline/speed/volume/PiP controls и capability map для legacy контейнеров.',
+      'Viewer уже закрывает весь стартовый image-format set, document layer и теперь закрывает video slice целиком: MP4/MOV/WebM через native path, AVI/MKV/WMV/FLV через legacy decode bridge, плюс frame stepping, subtitle sidecars, poster capture и rich playback tooling.',
     status: 'Active route',
     route: '/viewer',
     accents: ['Images', 'Docs', 'Video', 'Search'],

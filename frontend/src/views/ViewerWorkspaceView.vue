@@ -84,6 +84,7 @@ const {
   selection,
   isLoading,
   errorMessage,
+  loadingMessage,
   zoom,
   rotation,
   viewportTransform,
@@ -685,7 +686,8 @@ onBeforeUnmount(() => {
             <strong>Загрузить файл в viewer</strong>
             <span>
               Viewer уже держит image и document roadmap, а этот проход усиливает video-layer:
-              browser-native playback для `mp4`, `mov`, `webm` теперь получает frame stepping,
+              `mp4`, `mov`, `webm`, `avi`, `mkv`, `wmv`, `flv` сходятся в один video workspace
+              через native path или legacy decode bridge, а поверх этого работают frame stepping,
               poster extraction, subtitle sidecars, keyboard flow и richer metadata inspector.
             </span>
           </div>
@@ -709,6 +711,7 @@ onBeforeUnmount(() => {
           <span class="chip-pill">Document stack complete</span>
           <span class="chip-pill">Video precision controls</span>
           <span class="chip-pill">Subtitle + poster tools</span>
+          <span class="chip-pill">Legacy containers covered</span>
         </div>
       </article>
 
@@ -761,10 +764,7 @@ onBeforeUnmount(() => {
         >
           <div v-if="isLoading" class="viewer-empty-state">
             <strong>Подготавливаю preview...</strong>
-            <span>
-              Runtime определяет family, preview strategy и поднимает единый selection contract для
-              image или document workspace.
-            </span>
+            <span>{{ loadingMessage }}</span>
           </div>
 
           <div v-else-if="errorMessage" class="viewer-empty-state viewer-empty-state--warning">
@@ -1199,7 +1199,7 @@ onBeforeUnmount(() => {
             <strong>Viewer готов к первой загрузке</strong>
             <span>
               Сейчас уже работают image formats, весь document roadmap и video workbench для
-              `mp4`, `mov`, `webm` с subtitle/poster tooling.
+              `mp4`, `mov`, `webm`, `avi`, `mkv`, `wmv`, `flv` с subtitle/poster tooling.
             </span>
           </div>
         </div>
@@ -1459,6 +1459,10 @@ onBeforeUnmount(() => {
             </article>
           </div>
         </div>
+        <p v-if="!plannedMediaFormats.length" class="viewer-panel__empty">
+          Для video roadmap в текущем срезе больше нет planned-only слотов: все заявленные форматы
+          уже сводятся к native path или legacy decode bridge внутри одного workspace.
+        </p>
       </article>
     </section>
 

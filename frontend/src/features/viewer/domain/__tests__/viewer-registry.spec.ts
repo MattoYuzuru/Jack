@@ -63,7 +63,7 @@ describe('viewer registry', () => {
     expect(resolveViewerFormat('storage.db')?.previewPipeline).toBe('client-decode')
   })
 
-  it('exposes media formats with native and planned playback paths', () => {
+  it('exposes media formats with native and legacy decode playback paths', () => {
     const mediaFormats = listViewerFormatsByFamily('media')
 
     expect(mediaFormats.map((definition) => definition.extension)).toEqual([
@@ -78,6 +78,8 @@ describe('viewer registry', () => {
 
     expect(resolveViewerFormat('clip.mp4')?.previewStrategyId).toBe('native-video')
     expect(resolveViewerFormat('clip.mov')?.previewPipeline).toBe('browser-native')
-    expect(resolveViewerFormat('clip.mkv')?.previewStrategyId).toBe('planned-media')
+    expect(resolveViewerFormat('clip.mkv')?.previewStrategyId).toBe('legacy-video')
+    expect(resolveViewerFormat('clip.avi')?.previewPipeline).toBe('client-decode')
+    expect(resolveViewerFormat('clip.wmv')?.previewPipeline).toBe('client-decode')
   })
 })
