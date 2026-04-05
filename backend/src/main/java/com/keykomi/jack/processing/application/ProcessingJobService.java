@@ -27,6 +27,7 @@ public class ProcessingJobService {
 	private final ArtifactStorageService artifactStorageService;
 	private final MediaPreviewService mediaPreviewService;
 	private final ImageProcessingService imageProcessingService;
+	private final DocumentPreviewService documentPreviewService;
 	private final ExecutorService processingExecutor;
 	private final Map<UUID, StoredProcessingJob> jobs = new ConcurrentHashMap<>();
 
@@ -35,12 +36,14 @@ public class ProcessingJobService {
 		ArtifactStorageService artifactStorageService,
 		MediaPreviewService mediaPreviewService,
 		ImageProcessingService imageProcessingService,
+		DocumentPreviewService documentPreviewService,
 		ExecutorService processingExecutor
 	) {
 		this.uploadStorageService = uploadStorageService;
 		this.artifactStorageService = artifactStorageService;
 		this.mediaPreviewService = mediaPreviewService;
 		this.imageProcessingService = imageProcessingService;
+		this.documentPreviewService = documentPreviewService;
 		this.processingExecutor = processingExecutor;
 	}
 
@@ -87,6 +90,7 @@ public class ProcessingJobService {
 				case UPLOAD_INTAKE_ANALYSIS -> processUploadIntakeAnalysis(job.id(), upload);
 				case MEDIA_PREVIEW -> processMediaPreview(job.id(), upload);
 				case IMAGE_CONVERT -> processImageConvert(job.id(), upload, parseImageJobRequest(job.parameters()));
+				case DOCUMENT_PREVIEW -> processDocumentPreview(job.id(), upload);
 				default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Для этого job type backend processor ещё не реализован.");
 			};
 
@@ -138,6 +142,19 @@ public class ProcessingJobService {
 		);
 	}
 
+	private JobProcessingResult processDocumentPreview(UUID jobId, StoredUpload upload) {
+		updateJob(jobId, currentJob -> currentJob.updateProgress(25, "Подготавливаю document intelligence payload и search layer."));
+		var result = this.documentPreviewService.process(jobId, upload);
+		updateJob(
+			jobId,
+			currentJob -> currentJob.updateProgress(85, "Document manifest и preview artifacts собраны, сохраняю результат.")
+		);
+		return new JobProcessingResult(
+			"Document preview готов через backend %s.".formatted(result.runtimeLabel()),
+			result.artifacts()
+		);
+	}
+
 	private StoredArtifact buildUploadIntakeArtifact(UUID jobId, StoredUpload upload) {
 		try {
 			// Первый artifact здесь намеренно простой: он доказывает, что upload уже
@@ -168,7 +185,8 @@ public class ProcessingJobService {
 		if (
 			jobType != ProcessingJobType.UPLOAD_INTAKE_ANALYSIS &&
 			jobType != ProcessingJobType.MEDIA_PREVIEW &&
-			jobType != ProcessingJobType.IMAGE_CONVERT
+			jobType != ProcessingJobType.IMAGE_CONVERT &&
+			jobType != ProcessingJobType.DOCUMENT_PREVIEW
 		) {
 			throw new ResponseStatusException(
 				HttpStatus.BAD_REQUEST,
@@ -192,6 +210,13 @@ public class ProcessingJobService {
 				);
 			}
 		}
+
+		if (jobType == ProcessingJobType.DOCUMENT_PREVIEW && !this.documentPreviewService.isAvailable()) {
+			throw new ResponseStatusException(
+				HttpStatus.SERVICE_UNAVAILABLE,
+				"DOCUMENT_PREVIEW job требует доступного backend document intelligence service."
+			);
+		}
 	}
 
 	private void updateJob(UUID jobId, UnaryOperator<StoredProcessingJob> mutation) {
@@ -211,6 +236,7 @@ public class ProcessingJobService {
 			case UPLOAD_INTAKE_ANALYSIS -> "Начинаю intake-analysis для backend processing foundation.";
 			case MEDIA_PREVIEW -> "Запускаю backend media preview pipeline через ffprobe/ffmpeg.";
 			case IMAGE_CONVERT -> "Запускаю backend imaging pipeline через convert/ffmpeg/potrace.";
+			case DOCUMENT_PREVIEW -> "Запускаю backend document intelligence pipeline.";
 			default -> "Запускаю backend processing job.";
 		};
 	}

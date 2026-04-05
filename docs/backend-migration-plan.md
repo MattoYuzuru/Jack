@@ -259,6 +259,13 @@ Frontend отвечает за:
 
 Приоритет: `P0`
 
+Статус:
+
+- выполнено: backend поднял `DOCUMENT_PREVIEW` service с единым payload contract для `summary`, `warnings`, `searchableText` и `layout`
+- выполнено: backend document adapters уже закрывают `pdf`, `txt`, `csv`, `html`, `rtf`, `doc`, `docx`, `odt`, `xls`, `xlsx`, `pptx`, `epub`, `db`, `sqlite`
+- выполнено: frontend viewer переведён на server-assisted `DOCUMENT_PREVIEW` flow и больше не тянет локальные `pdfjs`, `jszip`, `xlsx`, `cfb`, `sql.js`
+- фазу считаем закрытой: UI сохранил общий document workspace contract, а тяжёлый parsing/search/layout extraction переехал в backend platform
+
 ### Phase 4. Metadata Service
 
 Цель:

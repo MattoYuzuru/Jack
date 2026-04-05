@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createEmptyMetadataPayload } from '../viewer-metadata'
 import { createViewerRuntime, releaseViewerEntry } from '../viewer-runtime'
-import { ViewerDatabaseFormatError } from '../viewer-document-database'
 
 const originalCreateObjectUrl = URL.createObjectURL
 const originalRevokeObjectUrl = URL.revokeObjectURL
@@ -410,22 +409,15 @@ describe('viewer runtime', () => {
     expect(result.layout.mode).toBe('html')
   })
 
-  it('falls back to unknown when db extension does not confirm sqlite signature', async () => {
+  it('surfaces backend document preview errors for sqlite routes', async () => {
     const runtime = createViewerRuntime({
       buildSqliteDocument: async () => {
-        throw new ViewerDatabaseFormatError('DB file is not SQLite')
+        throw new Error('DB file is not SQLite')
       },
     })
 
-    const result = await runtime.resolve(new File(['db'], 'storage.db'))
-
-    expect(result.kind).toBe('unknown')
-
-    if (result.kind !== 'unknown') {
-      throw new Error('Expected a DB fallback result.')
-    }
-
-    expect(result.headline).toContain('DB')
-    expect(result.detail).toContain('not SQLite')
+    await expect(runtime.resolve(new File(['db'], 'storage.db'))).rejects.toThrow(
+      'DB file is not SQLite',
+    )
   })
 })

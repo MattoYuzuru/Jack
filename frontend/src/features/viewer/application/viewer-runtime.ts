@@ -24,7 +24,6 @@ import {
   buildXlsDocumentPreview,
   buildXlsxDocumentPreview,
 } from './viewer-document-preview'
-import { ViewerDatabaseFormatError } from './viewer-document-database'
 import type { ViewerMetadataPayload } from './viewer-metadata'
 import {
   loadStructuredMetadata,
@@ -328,15 +327,7 @@ const previewStrategies = (
   },
   'sqlite-document': {
     async resolve(context) {
-      try {
-        return buildDocumentSelection(await buildSqliteDocument(context), context)
-      } catch (error) {
-        if (error instanceof ViewerDatabaseFormatError) {
-          return buildDatabaseFallbackSelection(context, error)
-        }
-
-        throw error
-      }
+      return buildDocumentSelection(await buildSqliteDocument(context), context)
     },
   },
   'planned-media': {
@@ -508,21 +499,6 @@ function buildAudioSelection(
   }
 }
 
-function buildDatabaseFallbackSelection(
-  context: PreviewStrategyContext,
-  error: ViewerDatabaseFormatError,
-): ViewerResolvedUnknown {
-  return {
-    kind: 'unknown',
-    file: context.file,
-    extension: context.extension,
-    headline: `${context.format.label} не удалось подтвердить как SQLite container`,
-    detail: error.message,
-    nextStep:
-      'Если это другой DB-вариант, для него нужен отдельный adapter. Для SQLite-aware preview нужен файл с сигнатурой SQLite format 3.',
-  }
-}
-
 function buildPlannedMediaSelection(context: PreviewStrategyContext): ViewerResolvedUnknown {
   return {
     kind: 'unknown',
@@ -588,79 +564,79 @@ async function defaultBuildLegacyAudio(
 async function defaultBuildPdfDocument(
   context: PreviewStrategyContext,
 ): Promise<ViewerDocumentPreviewPayload> {
-  return buildPdfDocumentPreview(context.file)
+  return buildPdfDocumentPreview(context.file, context.reportProgress)
 }
 
 async function defaultBuildTextDocument(
   context: PreviewStrategyContext,
 ): Promise<ViewerDocumentPreviewPayload> {
-  return buildTextDocumentPreview(context.file)
+  return buildTextDocumentPreview(context.file, context.reportProgress)
 }
 
 async function defaultBuildCsvDocument(
   context: PreviewStrategyContext,
 ): Promise<ViewerDocumentPreviewPayload> {
-  return buildCsvDocumentPreview(context.file)
+  return buildCsvDocumentPreview(context.file, context.reportProgress)
 }
 
 async function defaultBuildHtmlDocument(
   context: PreviewStrategyContext,
 ): Promise<ViewerDocumentPreviewPayload> {
-  return buildHtmlDocumentPreview(context.file)
+  return buildHtmlDocumentPreview(context.file, context.reportProgress)
 }
 
 async function defaultBuildRtfDocument(
   context: PreviewStrategyContext,
 ): Promise<ViewerDocumentPreviewPayload> {
-  return buildRtfDocumentPreview(context.file)
+  return buildRtfDocumentPreview(context.file, context.reportProgress)
 }
 
 async function defaultBuildDocDocument(
   context: PreviewStrategyContext,
 ): Promise<ViewerDocumentPreviewPayload> {
-  return buildDocDocumentPreview(context.file)
+  return buildDocDocumentPreview(context.file, context.reportProgress)
 }
 
 async function defaultBuildDocxDocument(
   context: PreviewStrategyContext,
 ): Promise<ViewerDocumentPreviewPayload> {
-  return buildDocxDocumentPreview(context.file)
+  return buildDocxDocumentPreview(context.file, context.reportProgress)
 }
 
 async function defaultBuildOdtDocument(
   context: PreviewStrategyContext,
 ): Promise<ViewerDocumentPreviewPayload> {
-  return buildOdtDocumentPreview(context.file)
+  return buildOdtDocumentPreview(context.file, context.reportProgress)
 }
 
 async function defaultBuildXlsDocument(
   context: PreviewStrategyContext,
 ): Promise<ViewerDocumentPreviewPayload> {
-  return buildXlsDocumentPreview(context.file)
+  return buildXlsDocumentPreview(context.file, context.reportProgress)
 }
 
 async function defaultBuildXlsxDocument(
   context: PreviewStrategyContext,
 ): Promise<ViewerDocumentPreviewPayload> {
-  return buildXlsxDocumentPreview(context.file)
+  return buildXlsxDocumentPreview(context.file, context.reportProgress)
 }
 
 async function defaultBuildPptxDocument(
   context: PreviewStrategyContext,
 ): Promise<ViewerDocumentPreviewPayload> {
-  return buildPptxDocumentPreview(context.file)
+  return buildPptxDocumentPreview(context.file, context.reportProgress)
 }
 
 async function defaultBuildEpubDocument(
   context: PreviewStrategyContext,
 ): Promise<ViewerDocumentPreviewPayload> {
-  return buildEpubDocumentPreview(context.file)
+  return buildEpubDocumentPreview(context.file, context.reportProgress)
 }
 
 async function defaultBuildSqliteDocument(
   context: PreviewStrategyContext,
 ): Promise<ViewerDocumentPreviewPayload> {
-  return buildSqliteDocumentPreview(context.file)
+  return buildSqliteDocumentPreview(context.file, context.reportProgress)
 }
 
 function defaultInspectNativeImage(objectUrl: string): Promise<{ width: number; height: number }> {

@@ -140,7 +140,7 @@ function resolveLoadingMessage(file: File): string {
   }
 
   if (format?.family === 'document') {
-    return 'Подготавливаю document preview и searchable text layer...'
+    return 'Подготавливаю document preview через backend DOCUMENT_PREVIEW job. Для больших PDF, офисных документов, EPUB и SQLite upload и server parsing могут занять заметное время.'
   }
 
   if (format?.family === 'image') {

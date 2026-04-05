@@ -12,6 +12,10 @@ public final class ProcessingFileFamilyResolver {
 		"nef", "arw", "raf", "rw2", "orf", "pef", "srw", "psd",
 		"ai", "eps", "ps"
 	);
+	private static final Set<String> DOCUMENT_EXTENSIONS = Set.of(
+		"pdf", "txt", "text", "csv", "html", "htm", "rtf", "doc", "docx",
+		"odt", "xls", "xlsx", "pptx", "epub", "sqlite", "db"
+	);
 
 	private ProcessingFileFamilyResolver() {
 	}
@@ -31,7 +35,7 @@ public final class ProcessingFileFamilyResolver {
 		if (mediaType.startsWith("audio/")) {
 			return "audio";
 		}
-		if (mediaType.startsWith("text/") || List.of("pdf", "doc", "docx", "xls", "xlsx", "csv", "epub", "sqlite", "db").contains(upload.extension())) {
+		if (mediaType.startsWith("text/") || DOCUMENT_EXTENSIONS.contains(extension)) {
 			return "document";
 		}
 

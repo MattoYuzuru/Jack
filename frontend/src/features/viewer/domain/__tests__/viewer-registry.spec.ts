@@ -31,7 +31,7 @@ describe('viewer registry', () => {
     expect(resolveViewerFormat('capture.heic')?.previewPipeline).toBe('server-assisted')
   })
 
-  it('exposes document formats with active capability states across legacy, archive and database layers', () => {
+  it('exposes document formats as server-assisted document intelligence routes', () => {
     const documentFormats = listViewerFormatsByFamily('document')
 
     expect(documentFormats.map((definition) => definition.extension)).toEqual([
@@ -58,10 +58,11 @@ describe('viewer registry', () => {
     expect(resolveViewerFormat('proposal.docx')?.previewStrategyId).toBe('docx-document')
     expect(resolveViewerFormat('sheet.xls')?.previewStrategyId).toBe('xls-document')
     expect(resolveViewerFormat('deck.pptx')?.previewStrategyId).toBe('pptx-document')
-    expect(resolveViewerFormat('model.xlsx')?.previewPipeline).toBe('client-decode')
+    expect(resolveViewerFormat('report.pdf')?.previewPipeline).toBe('server-assisted')
+    expect(resolveViewerFormat('model.xlsx')?.previewPipeline).toBe('server-assisted')
     expect(resolveViewerFormat('book.epub')?.previewStrategyId).toBe('epub-document')
     expect(resolveViewerFormat('storage.sqlite')?.previewStrategyId).toBe('sqlite-document')
-    expect(resolveViewerFormat('storage.db')?.previewPipeline).toBe('client-decode')
+    expect(resolveViewerFormat('storage.db')?.previewPipeline).toBe('server-assisted')
   })
 
   it('exposes media formats with native and server-assisted playback paths', () => {
