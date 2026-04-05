@@ -204,7 +204,7 @@ Frontend отвечает за:
 
 - выполнено: backend поднял `IMAGE_CONVERT` service с unified raster contract и artifact flow
 - выполнено: frontend viewer переведён на server-assisted image preview для `heic`, `tiff`, `raw`
-- выполнено: frontend converter переведён на hybrid processing mode, где heavy imaging scenarios идут через backend jobs
+- выполнено: frontend converter сначала переведён на hybrid processing mode, а затем использован как промежуточный шаг перед backend-first route flip
 - выполнено: контейнерный backend сам ставит `ffmpeg`, `ffprobe`, `ImageMagick`, `Ghostscript`, `potrace`, `libraw`
 - фазу считаем закрытой: browser-heavy imaging adapters удалены из active runtime, а локально оставлены только быстрые native raster branches
 
@@ -300,6 +300,14 @@ Frontend отвечает за:
 - metadata operations больше не требуют frontend-only parsers и JPEG-only patch logic
 
 Приоритет: `P1`
+
+Статус:
+
+- выполнено: converter route больше не вычисляет supported conversions локально и запускает любой поддержанный сценарий через backend `IMAGE_CONVERT`
+- выполнено: `useConverterWorkspace` переведён на job workflow с progress UI, retry, cancel и server-owned status tracking
+- выполнено: session history переиспользует уже собранные result artifacts и даёт повторное скачивание без нового backend job
+- выполнено: converter capability matrix и route copy переведены в backend-first semantics
+- фазу считаем закрытой: browser runtime остался только для показа готового результата и локального UI-state, а не для вычисления conversion output
 
 Статус:
 

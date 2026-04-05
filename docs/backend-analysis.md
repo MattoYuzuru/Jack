@@ -26,7 +26,7 @@
 - backend уже умеет сохранять source upload, считать `sha256`, отдавать artifacts и репортить capability state
 - из production-grade частей всё ещё отсутствуют постоянное хранилище, cleanup policy, retries, queueing и специализированные processing domains
 
-Вывод: backend уже стал участником продукта и забрал media, heavy imaging, document intelligence, metadata и capability-matrix домены; следующая крупная миграция теперь смещается на backend-first converter route.
+Вывод: backend уже стал участником продукта и забрал media, heavy imaging, document intelligence, metadata, capability-matrix домены и backend-first converter route; следующая крупная миграция теперь смещается на viewer route flip и reuse platform для новых модулей.
 
 ### Frontend
 
@@ -118,7 +118,7 @@ Frontend уже выполняет роль orchestration/UI слоя, но plat
 
 - перенесено: backend `IMAGE_CONVERT` теперь собирает preview/result artifacts для HEIC, TIFF, RAW, PSD, AI/EPS, AVIF, TIFF, ICO, traced SVG и raster PDF
 - frontend viewer использует server-assisted preview для `heic`/`tiff`/`raw`
-- frontend converter переведён на hybrid mode: быстрые browser-native raster paths остаются локально, тяжёлые сценарии уходят в backend jobs
+- frontend converter переведён в backend-first route: любой supported conversion scenario идёт через `IMAGE_CONVERT` jobs, а browser держит orchestration, preview, retry/cancel и artifact reuse
 - контейнерный backend сам ставит `ffmpeg`, `ImageMagick`, `Ghostscript`, `potrace` и `libraw`, так что server imaging path работает и в `docker compose`
 
 Приоритет: `P0`
