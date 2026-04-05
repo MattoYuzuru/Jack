@@ -26,6 +26,7 @@ const signalPills = [
   'Viewer workspace',
   'Converter route',
   'Shared imaging layer',
+  'Document foundation',
   'Decode + encode + vector trace',
   'AVIF / ICO targets',
   'Preset profiles',
@@ -54,12 +55,12 @@ const toolCards: ToolCard[] = [
     label: '01 · File Viewer',
     title: 'Viewer',
     description:
-      'Рабочий маршрут для image-first preview и анализа: загрузка файла, viewport, color lab, metadata inspector/editor и decode adapters для HEIC, TIFF и RAW-family.',
+      'Рабочий маршрут для preview и анализа: image tooling, document foundation, search layer и format-specific adapters внутри одного workspace.',
     detail:
-      'Viewer уже закрывает весь стартовый image-format set и даёт EXIF/ICC, histogram, swatches и metadata export.',
+      'Viewer уже закрывает весь стартовый image-format set, а теперь ещё поднимает PDF/TXT/CSV/HTML/RTF previews и document search.',
     status: 'Active route',
     route: '/viewer',
-    accents: ['Images', 'Decode', 'Metadata', 'Color'],
+    accents: ['Images', 'Docs', 'Metadata', 'Search'],
     span: 'tool-card--wide',
   },
   {
@@ -135,7 +136,7 @@ const toolCards: ToolCard[] = [
 
       <div class="app-topbar__status">
         <span class="chip-pill">Iteration 03</span>
-        <span class="chip-pill chip-pill--accent">Converter started</span>
+        <span class="chip-pill chip-pill--accent">Viewer + Converter</span>
       </div>
     </header>
 
@@ -143,13 +144,14 @@ const toolCards: ToolCard[] = [
       <article class="panel-surface hero-copy">
         <p class="eyebrow">Iteration 03 · Viewer + Converter</p>
         <h1>
-          Главный экран Jack теперь ведёт сразу в viewer и converter с image, AVIF, ICO и PDF-output.
+          Главный экран Jack теперь ведёт сразу в viewer и converter с image-, document- и target-oriented runtime.
         </h1>
         <p class="lead">
           Home сохраняет soft industrial foundation, но теперь работает как switchboard для двух
-          живых маршрутов: viewer отвечает за preview и анализ, а converter закрывает первую волну
-          image-конвертаций, vector/icon targets, archive-friendly TIFF target и document-target
-          через scenario registry, shared imaging и отдельные decode/encode стратегии.
+          живых маршрутов: viewer отвечает за preview, analysis и document foundation, а converter
+          закрывает первую волну image-конвертаций, vector/icon targets, archive-friendly TIFF
+          target и document-target через scenario registry, shared imaging и отдельные decode/encode
+          стратегии.
         </p>
 
         <div class="signal-row">
@@ -172,7 +174,7 @@ const toolCards: ToolCard[] = [
             <strong>7</strong>
             <span
               >слоёв foundation: shared imaging, registry, adapters, metadata, workspace state,
-              color lab, export</span
+              color lab, document search</span
             >
           </article>
         </div>

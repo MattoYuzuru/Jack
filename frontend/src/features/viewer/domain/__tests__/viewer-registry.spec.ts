@@ -29,4 +29,29 @@ describe('viewer registry', () => {
     expect(resolveViewerFormat('shoot.NEF')?.extension).toBe('raw')
     expect(resolveViewerFormat('scan.tif')?.extension).toBe('tiff')
   })
+
+  it('exposes document formats with active and planned capability states', () => {
+    const documentFormats = listViewerFormatsByFamily('document')
+
+    expect(documentFormats.map((definition) => definition.extension)).toEqual([
+      'pdf',
+      'txt',
+      'csv',
+      'html',
+      'rtf',
+      'doc',
+      'docx',
+      'odt',
+      'xls',
+      'xlsx',
+      'pptx',
+      'epub',
+      'db',
+      'sqlite',
+    ])
+
+    expect(resolveViewerFormat('sheet.csv')?.previewStrategyId).toBe('csv-document')
+    expect(resolveViewerFormat('index.htm')?.extension).toBe('html')
+    expect(resolveViewerFormat('proposal.docx')?.previewPipeline).toBe('planned')
+  })
 })

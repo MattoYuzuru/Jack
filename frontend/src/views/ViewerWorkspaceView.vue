@@ -7,6 +7,7 @@ import {
 } from '../features/viewer/domain/viewer-registry'
 import { useViewerWorkspace } from '../features/viewer/composables/useViewerWorkspace'
 import { useViewerImageTools } from '../features/viewer/composables/useViewerImageTools'
+import { findViewerDocumentMatches } from '../features/viewer/application/viewer-document'
 import {
   createEmptyEditableMetadata,
   type ViewerEditableMetadata,
@@ -22,11 +23,13 @@ const previewImage = ref<HTMLImageElement | null>(null)
 const isDragActive = ref(false)
 const isFullscreen = ref(false)
 const metadataQuery = ref('')
+const documentQuery = ref('')
 const metadataDraft = ref<ViewerEditableMetadata>(createEmptyEditableMetadata())
 const isSavingMetadata = ref(false)
 const metadataSaveMessage = ref('')
 
 const imageFormats = listViewerFormatsByFamily('image')
+const documentFormats = listViewerFormatsByFamily('document')
 
 const browserNativeFormats = computed(() =>
   imageFormats.filter((definition) => definition.previewPipeline === 'browser-native'),
@@ -34,6 +37,14 @@ const browserNativeFormats = computed(() =>
 
 const decodeFormats = computed(() =>
   imageFormats.filter((definition) => definition.previewPipeline === 'client-decode'),
+)
+
+const activeDocumentFormats = computed(() =>
+  documentFormats.filter((definition) => definition.previewPipeline !== 'planned'),
+)
+
+const plannedDocumentFormats = computed(() =>
+  documentFormats.filter((definition) => definition.previewPipeline === 'planned'),
 )
 
 const {
@@ -76,6 +87,13 @@ watch(
   { immediate: true },
 )
 
+watch(
+  () => selection.value?.file.name,
+  () => {
+    documentQuery.value = ''
+  },
+)
+
 const selectionFacts = computed(() => {
   if (!selection.value) {
     return []
@@ -101,6 +119,14 @@ const selectionFacts = computed(() => {
       value: selection.value.previewLabel,
     })
     items.push(...selection.value.metadata.summary)
+  }
+
+  if (selection.value.kind === 'document') {
+    items.push({
+      label: 'Preview path',
+      value: selection.value.previewLabel,
+    })
+    items.push(...selection.value.summary)
   }
 
   return items
@@ -137,6 +163,42 @@ const metadataThumbnail = computed(() =>
 const metadataEmbeddingAvailable = computed(() =>
   selection.value?.kind === 'image' ? canEmbedMetadata(selection.value.file.name) : false,
 )
+
+const documentMatches = computed(() => {
+  if (selection.value?.kind !== 'document') {
+    return []
+  }
+
+  return findViewerDocumentMatches(selection.value.searchableText, documentQuery.value)
+})
+
+const documentWarnings = computed(() =>
+  selection.value?.kind === 'document' ? selection.value.warnings : [],
+)
+
+const documentOutline = computed(() => {
+  if (selection.value?.kind !== 'document' || selection.value.layout.mode !== 'html') {
+    return []
+  }
+
+  return selection.value.layout.outline
+})
+
+const documentTable = computed(() => {
+  if (selection.value?.kind !== 'document' || selection.value.layout.mode !== 'table') {
+    return null
+  }
+
+  return selection.value.layout.table
+})
+
+const documentParagraphs = computed(() => {
+  if (selection.value?.kind !== 'document' || selection.value.layout.mode !== 'text') {
+    return []
+  }
+
+  return selection.value.layout.paragraphs
+})
 
 function openFilePicker() {
   fileInput.value?.click()
@@ -250,18 +312,18 @@ onBeforeUnmount(() => {
 
       <div class="app-topbar__status">
         <RouterLink class="back-link" to="/">Back to Home</RouterLink>
-        <span class="chip-pill">Image Tools</span>
-        <span class="chip-pill chip-pill--accent">Metadata Live</span>
+        <span class="chip-pill">Images + Docs</span>
+        <span class="chip-pill chip-pill--accent">Document Foundation</span>
       </div>
     </header>
 
     <section class="viewer-hero-grid">
       <article class="panel-surface viewer-intro">
-        <p class="eyebrow">Iteration 02 · Image Viewer</p>
-        <h1>Viewer уже не только показывает файл, но и даёт нормальный image workbench.</h1>
+        <p class="eyebrow">Iteration 02 · File Viewer</p>
+        <h1>Viewer теперь идёт дальше image-only слоя и получает document runtime.</h1>
         <p class="lead">
-          Поверх registry и decode-стратегий теперь сидят color lab, EXIF/ICC inspector, metadata
-          export и быстрые инструменты для анализа прямо внутри viewer-потока.
+          Архитектура остаётся registry-driven: image и document форматы идут через общий workspace,
+          а конкретный preview выбирается по strategy contract без развала UI на отдельные экраны.
         </p>
 
         <div
@@ -281,9 +343,10 @@ onBeforeUnmount(() => {
 
           <div class="viewer-dropzone__copy">
             <strong>Загрузить файл в viewer</strong>
-            <span
-              >Drag and drop или ручной выбор. Фокус этого прохода на image analysis tooling.</span
-            >
+            <span>
+              На этом проходе viewer уже умеет работать не только с изображениями, но и с первыми
+              document-сценариями: `pdf`, `txt`, `csv`, `html`, `rtf`.
+            </span>
           </div>
 
           <div class="viewer-dropzone__actions">
@@ -294,23 +357,17 @@ onBeforeUnmount(() => {
             >
               Pick File
             </button>
-            <button
-              class="action-button"
-              type="button"
-              :disabled="!selection"
-              @click="clearSelection"
-            >
+            <button class="action-button" type="button" :disabled="!selection" @click="clearSelection">
               Clear
             </button>
           </div>
         </div>
 
         <div class="signal-row">
-          <span class="chip-pill">Zoom + rotate</span>
-          <span class="chip-pill">Fullscreen</span>
-          <span class="chip-pill">Color picker + loupe</span>
-          <span class="chip-pill">Histogram + swatches</span>
-          <span class="chip-pill">EXIF + ICC inspector</span>
+          <span class="chip-pill">Image tooling live</span>
+          <span class="chip-pill">PDF + text foundation</span>
+          <span class="chip-pill">Search layer</span>
+          <span class="chip-pill">Table + outline previews</span>
         </div>
       </article>
 
@@ -318,40 +375,20 @@ onBeforeUnmount(() => {
         <div class="viewer-stage-card__header">
           <div>
             <p class="eyebrow">Preview Stage</p>
-            <h2>{{ selection?.file.name ?? 'Выбери изображение для просмотра' }}</h2>
+            <h2>{{ selection?.file.name ?? 'Выбери файл для просмотра' }}</h2>
           </div>
 
           <div class="viewer-toolbar">
-            <button
-              class="icon-button"
-              type="button"
-              :disabled="selection?.kind !== 'image'"
-              @click="zoomOut"
-            >
+            <button class="icon-button" type="button" :disabled="selection?.kind !== 'image'" @click="zoomOut">
               -
             </button>
-            <button
-              class="icon-button"
-              type="button"
-              :disabled="selection?.kind !== 'image'"
-              @click="zoomIn"
-            >
+            <button class="icon-button" type="button" :disabled="selection?.kind !== 'image'" @click="zoomIn">
               +
             </button>
-            <button
-              class="icon-button"
-              type="button"
-              :disabled="selection?.kind !== 'image'"
-              @click="rotateLeft"
-            >
+            <button class="icon-button" type="button" :disabled="selection?.kind !== 'image'" @click="rotateLeft">
               Left
             </button>
-            <button
-              class="icon-button"
-              type="button"
-              :disabled="selection?.kind !== 'image'"
-              @click="rotateRight"
-            >
+            <button class="icon-button" type="button" :disabled="selection?.kind !== 'image'" @click="rotateRight">
               Right
             </button>
             <button
@@ -362,12 +399,7 @@ onBeforeUnmount(() => {
             >
               Reset
             </button>
-            <button
-              class="icon-button"
-              type="button"
-              :disabled="selection?.kind !== 'image'"
-              @click="toggleFullscreen"
-            >
+            <button class="icon-button" type="button" :disabled="!selection" @click="toggleFullscreen">
               {{ isFullscreen ? 'Exit FS' : 'Fullscreen' }}
             </button>
             <button
@@ -384,13 +416,13 @@ onBeforeUnmount(() => {
         <div
           ref="previewStage"
           class="viewer-stage"
-          :class="{ 'viewer-stage--checker': isTransparencyGridVisible }"
+          :class="{ 'viewer-stage--checker': selection?.kind === 'image' && isTransparencyGridVisible }"
         >
           <div v-if="isLoading" class="viewer-empty-state">
             <strong>Подготавливаю preview...</strong>
             <span>
-              Runtime определяет формат, decode-стратегию, metadata payload и размерность
-              изображения.
+              Runtime определяет family, preview strategy и поднимает единый selection contract для
+              image или document workspace.
             </span>
           </div>
 
@@ -412,6 +444,54 @@ onBeforeUnmount(() => {
             />
           </div>
 
+          <div v-else-if="selection?.kind === 'document'" class="viewer-document-frame">
+            <iframe
+              v-if="selection.layout.mode === 'pdf'"
+              class="viewer-document-frame__embed"
+              :src="selection.layout.objectUrl"
+              :title="selection.file.name"
+            ></iframe>
+
+            <iframe
+              v-else-if="selection.layout.mode === 'html'"
+              class="viewer-document-frame__embed"
+              sandbox=""
+              :srcdoc="selection.layout.srcDoc"
+              :title="selection.file.name"
+            ></iframe>
+
+            <div v-else-if="selection.layout.mode === 'table'" class="document-table">
+              <div class="document-table__summary">
+                <strong>{{ selection.layout.table.totalRows }} rows</strong>
+                <span>{{ selection.layout.table.totalColumns }} columns</span>
+              </div>
+              <div class="document-table__scroll">
+                <table>
+                  <thead>
+                    <tr>
+                      <th v-for="column in selection.layout.table.columns" :key="column">
+                        {{ column }}
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="(row, rowIndex) in selection.layout.table.rows" :key="rowIndex">
+                      <td v-for="(cell, columnIndex) in row" :key="`${rowIndex}-${columnIndex}`">
+                        {{ cell || '—' }}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <article v-else class="document-text">
+              <p v-for="(paragraph, index) in selection.layout.paragraphs" :key="index">
+                {{ paragraph }}
+              </p>
+            </article>
+          </div>
+
           <div
             v-else-if="selection?.kind === 'unknown'"
             class="viewer-empty-state viewer-empty-state--warning"
@@ -424,17 +504,21 @@ onBeforeUnmount(() => {
           <div v-else class="viewer-empty-state">
             <strong>Viewer готов к первой загрузке</strong>
             <span>
-              Сейчас закрыт весь image-format set из roadmap: `jpg`, `jpeg`, `png`, `webp`, `avif`,
-              `heic`, `gif`, `bmp`, `tiff`, `svg`, `raw`, `ico`.
+              Сейчас уже работают image formats и первый document foundation: `pdf`, `txt`, `csv`,
+              `html`, `rtf`.
             </span>
           </div>
         </div>
 
         <div class="viewer-stage-card__footer">
-          <span class="chip-pill chip-pill--compact">Zoom: {{ zoom.toFixed(1) }}x</span>
-          <span class="chip-pill chip-pill--compact">Rotation: {{ rotation }}deg</span>
+          <span v-if="selection?.kind === 'image'" class="chip-pill chip-pill--compact">
+            Zoom: {{ zoom.toFixed(1) }}x
+          </span>
+          <span v-if="selection?.kind === 'image'" class="chip-pill chip-pill--compact">
+            Rotation: {{ rotation }}deg
+          </span>
           <span
-            v-if="selection?.kind === 'image'"
+            v-if="selection?.kind === 'image' || selection?.kind === 'document'"
             class="chip-pill chip-pill--compact chip-pill--accent"
           >
             {{ selection.previewLabel }}
@@ -443,7 +527,7 @@ onBeforeUnmount(() => {
       </article>
     </section>
 
-    <section class="viewer-detail-grid">
+    <section v-if="selection?.kind === 'image'" class="viewer-detail-grid">
       <article class="panel-surface viewer-panel">
         <p class="eyebrow">Color Lab</p>
         <h2>Color picker, loupe и palette capture</h2>
@@ -586,10 +670,7 @@ onBeforeUnmount(() => {
           </article>
         </div>
 
-        <p
-          v-if="selection?.kind === 'image' && !filteredMetadataGroups.length"
-          class="viewer-panel__empty"
-        >
+        <p v-if="!filteredMetadataGroups.length" class="viewer-panel__empty">
           По этому фильтру ничего не найдено.
         </p>
       </article>
@@ -605,7 +686,6 @@ onBeforeUnmount(() => {
               v-model="metadataDraft.description"
               rows="4"
               placeholder="Image description / title"
-              :disabled="selection?.kind !== 'image'"
             ></textarea>
           </label>
 
@@ -615,7 +695,6 @@ onBeforeUnmount(() => {
               v-model="metadataDraft.artist"
               type="text"
               placeholder="Author / photographer"
-              :disabled="selection?.kind !== 'image'"
             />
           </label>
 
@@ -625,17 +704,12 @@ onBeforeUnmount(() => {
               v-model="metadataDraft.copyright"
               type="text"
               placeholder="Copyright notice"
-              :disabled="selection?.kind !== 'image'"
             />
           </label>
 
           <label>
             <span>Captured at</span>
-            <input
-              v-model="metadataDraft.capturedAt"
-              type="datetime-local"
-              :disabled="selection?.kind !== 'image'"
-            />
+            <input v-model="metadataDraft.capturedAt" type="datetime-local" />
           </label>
 
           <div class="metadata-editor__footer">
@@ -646,11 +720,7 @@ onBeforeUnmount(() => {
                   : 'Для этого формата viewer соберёт sidecar JSON с metadata patch.'
               }}
             </p>
-            <button
-              class="action-button action-button--accent"
-              type="submit"
-              :disabled="selection?.kind !== 'image' || isSavingMetadata"
-            >
+            <button class="action-button action-button--accent" type="submit" :disabled="isSavingMetadata">
               {{ isSavingMetadata ? 'Building...' : 'Export Metadata' }}
             </button>
           </div>
@@ -676,9 +746,6 @@ onBeforeUnmount(() => {
                 <span class="chip-pill chip-pill--compact">{{ format.statusLabel }}</span>
               </div>
               <p>{{ format.notes }}</p>
-              <p v-if="format.aliases.length" class="format-card__extensions">
-                Extensions: .{{ format.extension }}, .{{ format.aliases.join(',.') }}
-              </p>
             </article>
           </div>
 
@@ -695,9 +762,115 @@ onBeforeUnmount(() => {
                 </span>
               </div>
               <p>{{ format.notes }}</p>
-              <p v-if="format.aliases.length" class="format-card__extensions">
-                Extensions: .{{ format.extension }}, .{{ format.aliases.join(',.') }}
-              </p>
+            </article>
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <section v-else-if="selection?.kind === 'document'" class="viewer-detail-grid">
+      <article class="panel-surface viewer-panel">
+        <p class="eyebrow">Document Summary</p>
+        <h2>Статистика, warnings и preview facts</h2>
+        <dl class="facts-grid">
+          <template v-for="fact in selectionFacts" :key="fact.label">
+            <dt>{{ fact.label }}</dt>
+            <dd>{{ fact.value }}</dd>
+          </template>
+        </dl>
+        <div v-if="documentWarnings.length" class="warning-stack">
+          <article v-for="warning in documentWarnings" :key="warning" class="warning-card">
+            {{ warning }}
+          </article>
+        </div>
+      </article>
+
+      <article class="panel-surface viewer-panel">
+        <p class="eyebrow">Quick Find</p>
+        <h2>Search layer поверх нормализованного document text</h2>
+        <label class="metadata-search">
+          <span>Search document</span>
+          <input v-model="documentQuery" type="text" placeholder="contract, total, heading..." />
+        </label>
+        <div v-if="documentMatches.length" class="search-match-stack">
+          <article v-for="match in documentMatches" :key="match.id" class="search-match-card">
+            {{ match.excerpt }}
+          </article>
+        </div>
+        <p v-else class="viewer-panel__empty">
+          {{
+            documentQuery
+              ? 'Совпадения не найдены.'
+              : 'Search panel работает для PDF text layer, TXT, CSV, HTML и RTF extraction path.'
+          }}
+        </p>
+      </article>
+
+      <article class="panel-surface viewer-panel">
+        <p class="eyebrow">Structure</p>
+        <h2>Outline, table hints и content slices</h2>
+
+        <div v-if="documentOutline.length" class="outline-stack">
+          <article
+            v-for="heading in documentOutline"
+            :key="heading.id"
+            class="outline-card"
+            :style="{ paddingLeft: `${16 + (heading.level - 1) * 12}px` }"
+          >
+            <strong>H{{ heading.level }}</strong>
+            <span>{{ heading.label }}</span>
+          </article>
+        </div>
+
+        <div v-else-if="documentTable" class="outline-stack">
+          <article v-for="column in documentTable.columns" :key="column" class="outline-card">
+            <strong>Column</strong>
+            <span>{{ column }}</span>
+          </article>
+        </div>
+
+        <div v-else-if="documentParagraphs.length" class="excerpt-stack">
+          <article v-for="(paragraph, index) in documentParagraphs" :key="index" class="excerpt-card">
+            {{ paragraph }}
+          </article>
+        </div>
+
+        <p v-else class="viewer-panel__empty">
+          Для этого document mode структурная панель пока ограничена summary и search layer.
+        </p>
+      </article>
+
+      <article class="panel-surface viewer-panel viewer-panel--wide">
+        <p class="eyebrow">Capability Map</p>
+        <h2>Document foundation и текущие preview paths</h2>
+        <div class="capability-columns">
+          <div class="format-grid">
+            <article
+              v-for="format in activeDocumentFormats"
+              :key="format.extension"
+              class="format-card format-card--pipeline"
+            >
+              <div class="format-card__meta">
+                <strong>{{ format.label }}</strong>
+                <span class="chip-pill chip-pill--compact chip-pill--accent">
+                  {{ format.statusLabel }}
+                </span>
+              </div>
+              <p>{{ format.notes }}</p>
+            </article>
+          </div>
+
+          <div class="format-grid">
+            <article
+              v-for="format in plannedDocumentFormats"
+              :key="format.extension"
+              class="format-card format-card--planned"
+            >
+              <div class="format-card__meta">
+                <strong>{{ format.label }}</strong>
+                <span class="chip-pill chip-pill--compact">{{ format.statusLabel }}</span>
+              </div>
+              <p>{{ format.notes }}</p>
             </article>
           </div>
         </div>
@@ -705,42 +878,31 @@ onBeforeUnmount(() => {
 
       <article class="panel-surface viewer-panel viewer-panel--wide">
         <p class="eyebrow">Architecture</p>
-        <h2>Viewer теперь объединяет preview, metadata и image-tools в один runtime.</h2>
+        <h2>Document viewer строится поверх того же workspace, а не рядом с ним.</h2>
         <div class="architecture-grid">
           <article class="architecture-card">
             <strong>Format Registry</strong>
-            <p>Описывает extension, MIME, preview pipeline и capability-статус в одном месте.</p>
+            <p>Теперь знает не только image family, но и document capability map с честными planned слотами.</p>
           </article>
           <article class="architecture-card">
-            <strong>Strategy Resolver</strong>
-            <p>
-              Назначает формату конкретный runtime-path: browser-native preview или client-side
-              decode adapter.
-            </p>
+            <strong>Strategy Runtime</strong>
+            <p>Каждый документ идёт через свой adapter, но результат сводится к одному document selection contract.</p>
           </article>
           <article class="architecture-card">
-            <strong>Metadata Payload</strong>
-            <p>
-              Держит summary, grouped inspector, editable draft и embedded thumbnail в одном
-              контракте.
-            </p>
+            <strong>Layout Modes</strong>
+            <p>PDF embed, plain text, tabular preview и sandbox HTML живут как mode-подтипы одной модели.</p>
           </article>
           <article class="architecture-card">
-            <strong>Workspace State</strong>
-            <p>Управляет transform-состоянием viewport и жизненным циклом object URL без утечек.</p>
+            <strong>Search Layer</strong>
+            <p>Quick find работает по нормализованному text layer, а не зависит от конкретного renderer или DOM.</p>
           </article>
           <article class="architecture-card">
-            <strong>Color Lab</strong>
-            <p>
-              Поверх image model строит pixel picker, loupe, swatches и histogram через offscreen
-              canvas.
-            </p>
+            <strong>Capability Honesty</strong>
+            <p>DOCX/XLSX/PPTX и другие сложные форматы уже заведены, но честно маркируются как foundation only.</p>
           </article>
           <article class="architecture-card">
-            <strong>Metadata Export</strong>
-            <p>
-              JPEG пишет common EXIF в новый файл, а остальные форматы отдают sidecar JSON patch.
-            </p>
+            <strong>Shared Workspace</strong>
+            <p>Маршрут остаётся один: stage, fullscreen, drag-and-drop и summary-панели переиспользуются между семьями.</p>
           </article>
         </div>
       </article>
@@ -824,7 +986,6 @@ h2 {
 
 .viewer-dropzone__copy span,
 .viewer-panel__empty,
-.format-card__extensions,
 .format-card p,
 .architecture-card p,
 .metadata-editor__mode {
@@ -847,11 +1008,17 @@ h2 {
   gap: 20px;
 }
 
-.viewer-stage-card__header {
+.viewer-stage-card__header,
+.color-lab__hero,
+.color-lab__loupe-row,
+.metadata-group__header,
+.format-card__meta,
+.metadata-editor__footer,
+.document-table__summary {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: 14px;
 }
 
 .viewer-stage-card__header h2 {
@@ -877,12 +1044,7 @@ h2 {
     linear-gradient(45deg, transparent 75%, rgba(255, 203, 148, 0.16) 75%),
     linear-gradient(-45deg, transparent 75%, rgba(255, 203, 148, 0.16) 75%),
     linear-gradient(155deg, rgba(255, 251, 245, 0.8), rgba(227, 216, 201, 0.86));
-  background-size:
-    24px 24px,
-    24px 24px,
-    24px 24px,
-    24px 24px,
-    auto;
+  background-size: 24px 24px, 24px 24px, 24px 24px, 24px 24px, auto;
   background-position:
     0 0,
     0 12px,
@@ -891,7 +1053,8 @@ h2 {
     0 0;
 }
 
-.viewer-image-frame {
+.viewer-image-frame,
+.viewer-document-frame {
   display: grid;
   width: 100%;
   min-height: 480px;
@@ -909,6 +1072,74 @@ h2 {
     0 2px 0 rgba(255, 255, 255, 0.6);
   transform-origin: center center;
   transition: transform 180ms ease;
+}
+
+.viewer-document-frame__embed {
+  width: 100%;
+  min-height: 70vh;
+  border: 0;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.68);
+  box-shadow: var(--shadow-pressed);
+}
+
+.document-text,
+.document-table,
+.warning-stack,
+.search-match-stack,
+.outline-stack,
+.excerpt-stack,
+.color-lab,
+.metadata-group-stack,
+.metadata-editor,
+.format-grid,
+.architecture-grid {
+  display: grid;
+  gap: 14px;
+}
+
+.document-text {
+  width: 100%;
+}
+
+.document-text p {
+  margin: 0;
+  padding: 18px;
+  border-radius: var(--radius-xl);
+  background: rgba(255, 250, 242, 0.84);
+  box-shadow: var(--shadow-pressed);
+  color: var(--text-main);
+}
+
+.document-table {
+  width: 100%;
+}
+
+.document-table__scroll {
+  overflow: auto;
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-pressed);
+}
+
+.document-table table {
+  width: 100%;
+  border-collapse: collapse;
+  background: rgba(255, 250, 242, 0.84);
+}
+
+.document-table th,
+.document-table td {
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(16, 36, 38, 0.08);
+  text-align: left;
+  vertical-align: top;
+}
+
+.document-table th {
+  position: sticky;
+  top: 0;
+  background: rgba(240, 230, 216, 0.96);
+  color: var(--text-strong);
 }
 
 .viewer-empty-state {
@@ -975,27 +1206,40 @@ h2 {
   font-weight: 700;
 }
 
-.color-lab,
-.metadata-group-stack,
-.metadata-editor,
-.format-grid,
-.architecture-grid {
+.warning-card,
+.search-match-card,
+.outline-card,
+.excerpt-card,
+.swatch-card,
+.format-card,
+.architecture-card,
+.metadata-group,
+.histogram-panel,
+.metadata-editor {
   display: grid;
   gap: 14px;
+  padding: 18px;
+  border-radius: var(--radius-xl);
+  background: var(--surface-muted);
+  box-shadow: var(--shadow-pressed);
 }
 
-.color-lab__hero,
-.color-lab__loupe-row,
-.metadata-group__header,
-.format-card__meta {
-  display: flex;
+.warning-card {
+  color: var(--accent-cool-strong);
+}
+
+.outline-card {
+  grid-template-columns: auto 1fr;
   align-items: center;
-  justify-content: space-between;
-  gap: 14px;
 }
 
-.color-lab__hero {
-  align-items: stretch;
+.outline-card strong,
+.format-card__meta strong,
+.architecture-card strong,
+.metadata-group__header strong,
+.color-lab__values strong {
+  color: var(--text-strong);
+  font-size: 1.02rem;
 }
 
 .color-lab__swatch {
@@ -1021,14 +1265,6 @@ h2 {
   box-shadow: var(--shadow-pressed);
 }
 
-.color-lab__values strong,
-.format-card__meta strong,
-.architecture-card strong,
-.metadata-group__header strong {
-  color: var(--text-strong);
-  font-size: 1.02rem;
-}
-
 .color-lab__loupe {
   width: 132px;
   height: 132px;
@@ -1043,20 +1279,6 @@ h2 {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(124px, 1fr));
   gap: 12px;
-}
-
-.swatch-card,
-.format-card,
-.architecture-card,
-.metadata-group,
-.histogram-panel,
-.metadata-editor {
-  display: grid;
-  gap: 14px;
-  padding: 18px;
-  border-radius: var(--radius-xl);
-  background: var(--surface-muted);
-  box-shadow: var(--shadow-pressed);
 }
 
 .swatch-card__preview {
@@ -1163,13 +1385,6 @@ h2 {
   resize: vertical;
 }
 
-.metadata-editor__footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-}
-
 .metadata-editor__message {
   margin: 0;
   padding: 14px 16px;
@@ -1194,6 +1409,12 @@ h2 {
 .format-card--pipeline {
   background:
     radial-gradient(circle at top left, rgba(29, 92, 85, 0.14), transparent 28%),
+    var(--surface-muted);
+}
+
+.format-card--planned {
+  background:
+    radial-gradient(circle at bottom right, rgba(255, 203, 148, 0.18), transparent 30%),
     var(--surface-muted);
 }
 
@@ -1222,7 +1443,8 @@ h2 {
   .color-lab__loupe-row,
   .metadata-group__header,
   .format-card__meta,
-  .metadata-editor__footer {
+  .metadata-editor__footer,
+  .document-table__summary {
     flex-direction: column;
     align-items: flex-start;
   }
@@ -1248,18 +1470,19 @@ h2 {
     min-height: 420px;
   }
 
-  .viewer-image-frame {
+  .viewer-image-frame,
+  .viewer-document-frame {
     min-height: 340px;
+  }
+
+  .viewer-document-frame__embed {
+    min-height: 56vh;
   }
 
   .color-lab__swatch,
   .color-lab__loupe {
     width: 100%;
     min-width: 0;
-  }
-
-  .histogram-panel__chart {
-    gap: 4px;
   }
 }
 </style>

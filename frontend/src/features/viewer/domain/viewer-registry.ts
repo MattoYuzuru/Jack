@@ -2,7 +2,17 @@ export type ViewerFormatFamily = 'image' | 'document' | 'media' | 'data'
 
 export type ViewerPreviewPipeline = 'browser-native' | 'client-decode' | 'planned'
 
-export type PreviewStrategyId = 'native-image' | 'heic-image' | 'tiff-image' | 'raw-image'
+export type PreviewStrategyId =
+  | 'native-image'
+  | 'heic-image'
+  | 'tiff-image'
+  | 'raw-image'
+  | 'pdf-document'
+  | 'text-document'
+  | 'csv-document'
+  | 'html-document'
+  | 'rtf-document'
+  | 'planned-document'
 
 export interface ViewerFormatDefinition {
   extension: string
@@ -167,7 +177,183 @@ const imageFormatDefinitions: ViewerFormatDefinition[] = [
   },
 ]
 
-const registry = [...imageFormatDefinitions]
+const documentFormatDefinitions: ViewerFormatDefinition[] = [
+  {
+    extension: 'pdf',
+    aliases: [],
+    label: 'PDF',
+    family: 'document',
+    mimeTypes: ['application/pdf'],
+    previewPipeline: 'browser-native',
+    previewStrategyId: 'pdf-document',
+    statusLabel: 'Browser document',
+    notes:
+      'PDF остаётся в browser embed preview, но viewer дополнительно поднимает page stats и search layer через document runtime.',
+    accents: ['Pages', 'Search layer'],
+  },
+  {
+    extension: 'txt',
+    aliases: [],
+    label: 'TXT',
+    family: 'document',
+    mimeTypes: ['text/plain'],
+    previewPipeline: 'client-decode',
+    previewStrategyId: 'text-document',
+    statusLabel: 'Text decode',
+    notes: 'Plain text читается прямо в клиенте и получает search-панель без отдельного viewer-слоя.',
+    accents: ['Text', 'Search'],
+  },
+  {
+    extension: 'csv',
+    aliases: [],
+    label: 'CSV',
+    family: 'document',
+    mimeTypes: ['text/csv', 'application/csv'],
+    previewPipeline: 'client-decode',
+    previewStrategyId: 'csv-document',
+    statusLabel: 'Table decode',
+    notes:
+      'CSV поднимается как tabular preview со строками, колонками, delimiter summary и quick find.',
+    accents: ['Table', 'Search'],
+  },
+  {
+    extension: 'html',
+    aliases: ['htm'],
+    label: 'HTML',
+    family: 'document',
+    mimeTypes: ['text/html'],
+    previewPipeline: 'client-decode',
+    previewStrategyId: 'html-document',
+    statusLabel: 'Sandbox preview',
+    notes:
+      'HTML рендерится внутри sandbox iframe после безопасной очистки активного контента и сбора outline.',
+    accents: ['Sandbox', 'Outline'],
+  },
+  {
+    extension: 'rtf',
+    aliases: [],
+    label: 'RTF',
+    family: 'document',
+    mimeTypes: ['application/rtf', 'text/rtf'],
+    previewPipeline: 'client-decode',
+    previewStrategyId: 'rtf-document',
+    statusLabel: 'Text extraction',
+    notes:
+      'RTF пока сводится в текстовый слой с поиском и статистикой, без faithful layout render.',
+    accents: ['Legacy', 'Search'],
+  },
+  {
+    extension: 'doc',
+    aliases: [],
+    label: 'DOC',
+    family: 'document',
+    mimeTypes: ['application/msword'],
+    previewPipeline: 'planned',
+    previewStrategyId: 'planned-document',
+    statusLabel: 'Foundation only',
+    notes: 'Слот формата уже есть в registry, но для бинарного Word нужен отдельный parser/render pipeline.',
+    accents: ['Word', 'Planned'],
+  },
+  {
+    extension: 'docx',
+    aliases: [],
+    label: 'DOCX',
+    family: 'document',
+    mimeTypes: ['application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+    previewPipeline: 'planned',
+    previewStrategyId: 'planned-document',
+    statusLabel: 'Foundation only',
+    notes: 'Следующий слой пойдёт через OOXML-aware preview pipeline с извлечением текста и структуры.',
+    accents: ['Word', 'OOXML'],
+  },
+  {
+    extension: 'odt',
+    aliases: [],
+    label: 'ODT',
+    family: 'document',
+    mimeTypes: ['application/vnd.oasis.opendocument.text'],
+    previewPipeline: 'planned',
+    previewStrategyId: 'planned-document',
+    statusLabel: 'Foundation only',
+    notes: 'ODT будет добавлен поверх того же document contract, но требует отдельного archive parser.',
+    accents: ['OpenDocument', 'Planned'],
+  },
+  {
+    extension: 'xls',
+    aliases: [],
+    label: 'XLS',
+    family: 'document',
+    mimeTypes: ['application/vnd.ms-excel'],
+    previewPipeline: 'planned',
+    previewStrategyId: 'planned-document',
+    statusLabel: 'Foundation only',
+    notes: 'Legacy Excel пока только описан в capability map; для него нужен свой workbook decode path.',
+    accents: ['Spreadsheet', 'Legacy'],
+  },
+  {
+    extension: 'xlsx',
+    aliases: [],
+    label: 'XLSX',
+    family: 'document',
+    mimeTypes: ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
+    previewPipeline: 'planned',
+    previewStrategyId: 'planned-document',
+    statusLabel: 'Foundation only',
+    notes:
+      'XLSX будет подключаться как multi-sheet document preview поверх workbook-aware runtime, а не через ad-hoc UI.',
+    accents: ['Spreadsheet', 'OOXML'],
+  },
+  {
+    extension: 'pptx',
+    aliases: [],
+    label: 'PPTX',
+    family: 'document',
+    mimeTypes: ['application/vnd.openxmlformats-officedocument.presentationml.presentation'],
+    previewPipeline: 'planned',
+    previewStrategyId: 'planned-document',
+    statusLabel: 'Foundation only',
+    notes: 'Для презентаций нужен slide-aware preview pipeline с thumbnails и notes layer.',
+    accents: ['Slides', 'OOXML'],
+  },
+  {
+    extension: 'epub',
+    aliases: [],
+    label: 'EPUB',
+    family: 'document',
+    mimeTypes: ['application/epub+zip'],
+    previewPipeline: 'planned',
+    previewStrategyId: 'planned-document',
+    statusLabel: 'Foundation only',
+    notes: 'EPUB заведён в capability map как будущий reflowable-document сценарий.',
+    accents: ['Book', 'Planned'],
+  },
+  {
+    extension: 'db',
+    aliases: [],
+    label: 'DB',
+    family: 'document',
+    mimeTypes: [],
+    previewPipeline: 'planned',
+    previewStrategyId: 'planned-document',
+    statusLabel: 'Foundation only',
+    notes: 'Database container распознан в registry, но отдельный data-viewer будет подключён позже.',
+    accents: ['Data', 'Planned'],
+  },
+  {
+    extension: 'sqlite',
+    aliases: [],
+    label: 'SQLite',
+    family: 'document',
+    mimeTypes: ['application/vnd.sqlite3'],
+    previewPipeline: 'planned',
+    previewStrategyId: 'planned-document',
+    statusLabel: 'Foundation only',
+    notes: 'SQLite позже пойдёт в table-aware viewer с introspection схемы и query-safe preview.',
+    accents: ['Data', 'Database'],
+  },
+]
+
+const registry = [...imageFormatDefinitions, ...documentFormatDefinitions]
 
 const formatByExtension = new Map<string, ViewerFormatDefinition>()
 const formatByMime = new Map<string, ViewerFormatDefinition>()
