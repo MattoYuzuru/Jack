@@ -368,7 +368,7 @@ export function createViewerRuntime(dependencies: ViewerRuntimeDependencies = {}
   return {
     async resolve(file, options = {}) {
       const extension = detectFileExtension(file.name)
-      const format = resolveViewerFormat(file.name, file.type)
+      const format = await resolveViewerFormat(file.name, file.type)
 
       if (!format) {
         return {
@@ -380,6 +380,20 @@ export function createViewerRuntime(dependencies: ViewerRuntimeDependencies = {}
             'Файл загружен, но для него ещё не описаны capability, маршрут preview и fallback-поведение.',
           nextStep:
             'Нужно добавить definition в registry и назначить ему browser-native либо server-assisted стратегию.',
+        }
+      }
+
+      if (!format.available) {
+        return {
+          kind: 'unknown',
+          file,
+          extension,
+          headline: `${format.label} временно недоступен в текущем backend capability matrix`,
+          detail:
+            format.availabilityDetail ||
+            'Backend отключил этот preview route в текущем окружении, поэтому frontend не будет притворяться, что local registry всё ещё поддерживает формат.',
+          nextStep:
+            'Нужно восстановить соответствующую backend capability или обновить server-owned matrix для этого формата.',
         }
       }
 

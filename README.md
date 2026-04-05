@@ -238,6 +238,8 @@ groups, timeline/volume/rate controls, loop и keyboard flow для быстры
 остаются локально, а тяжёлые image branches уходят в backend `IMAGE_CONVERT`.
 Backend собирает preview/result artifacts и централизованно применяет resize/quality baseline,
 чтобы дальнейшие batch- и delivery-сценарии не размазывались по UI-настройкам.
+Дополнительно capability/source-target/preset matrix теперь тоже приходит с backend `GET /api/capabilities/converter`:
+frontend больше не держит локальный registry как единственный source of truth и только резолвит UI вокруг server-owned правил.
 Single-page `PDF`, single-frame `TIFF`, `AVIF`, `ICO`, traced `SVG`, `PSD` composite decode,
 `AI/EPS` raster intake, `HEIC`, `TIFF` и `RAW` теперь закрываются server-assisted pipeline без
 browser-heavy decode/encode runtime.

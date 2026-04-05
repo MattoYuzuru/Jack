@@ -1,26 +1,49 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createConverterCapabilityScopeFixture } from '../../../processing/application/__tests__/capability-matrix.fixtures'
+import { resetProcessingCapabilityScopeCache } from '../../../processing/application/processing-client'
 import {
   listConverterTargetsForSource,
   resolveConverterScenario,
   resolveConverterSourceFormat,
 } from '../converter-registry'
 
+const originalFetch = globalThis.fetch
+
 describe('converter registry', () => {
-  it('resolves aliased heavy formats to their canonical source definition', () => {
-    const source = resolveConverterSourceFormat('capture.nef')
+  beforeEach(() => {
+    resetProcessingCapabilityScopeCache()
+    globalThis.fetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(createConverterCapabilityScopeFixture()), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    ) as typeof fetch
+  })
+
+  afterEach(() => {
+    resetProcessingCapabilityScopeCache()
+    globalThis.fetch = originalFetch
+  })
+
+  it('resolves aliased heavy formats to their canonical source definition', async () => {
+    const source = await resolveConverterSourceFormat('capture.nef')
 
     expect(source?.extension).toBe('raw')
     expect(source?.sourceStrategyId).toBe('raw-raster')
   })
 
-  it('resolves new illustration and design sources to dedicated adapters', () => {
-    expect(resolveConverterSourceFormat('layout.psd')?.sourceStrategyId).toBe('psd-raster')
-    expect(resolveConverterSourceFormat('poster.ai')?.sourceStrategyId).toBe('illustration-raster')
-    expect(resolveConverterSourceFormat('cover.eps')?.sourceStrategyId).toBe('illustration-raster')
+  it('resolves new illustration and design sources to dedicated adapters', async () => {
+    expect((await resolveConverterSourceFormat('layout.psd'))?.sourceStrategyId).toBe('psd-raster')
+    expect((await resolveConverterSourceFormat('poster.ai'))?.sourceStrategyId).toBe(
+      'illustration-raster',
+    )
+    expect((await resolveConverterSourceFormat('cover.eps'))?.sourceStrategyId).toBe(
+      'illustration-raster',
+    )
   })
 
-  it('lists registered targets for supported sources', () => {
-    const targets = listConverterTargetsForSource('poster.png')
+  it('lists registered targets for supported sources', async () => {
+    const targets = await listConverterTargetsForSource('poster.png')
 
     expect(targets.map((target) => target.extension)).toEqual([
       'jpg',
@@ -33,15 +56,15 @@ describe('converter registry', () => {
     ])
   })
 
-  it('resolves registered scenario pairs', () => {
-    expect(resolveConverterScenario('heic', 'jpg')?.id).toBe('heic->jpg')
-    expect(resolveConverterScenario('svg', 'png')?.id).toBe('svg->png')
-    expect(resolveConverterScenario('tiff', 'pdf')?.id).toBe('tiff->pdf')
-    expect(resolveConverterScenario('raw', 'tiff')?.id).toBe('raw->tiff')
-    expect(resolveConverterScenario('png', 'svg')?.id).toBe('png->svg')
-    expect(resolveConverterScenario('psd', 'webp')?.id).toBe('psd->webp')
-    expect(resolveConverterScenario('ai', 'pdf')?.id).toBe('ai->pdf')
-    expect(resolveConverterScenario('eps', 'png')?.id).toBe('eps->png')
-    expect(resolveConverterScenario('png', 'png')).toBeNull()
+  it('resolves registered scenario pairs', async () => {
+    expect((await resolveConverterScenario('heic', 'jpg'))?.id).toBe('heic->jpg')
+    expect((await resolveConverterScenario('svg', 'png'))?.id).toBe('svg->png')
+    expect((await resolveConverterScenario('tiff', 'pdf'))?.id).toBe('tiff->pdf')
+    expect((await resolveConverterScenario('raw', 'tiff'))?.id).toBe('raw->tiff')
+    expect((await resolveConverterScenario('png', 'svg'))?.id).toBe('png->svg')
+    expect((await resolveConverterScenario('psd', 'webp'))?.id).toBe('psd->webp')
+    expect((await resolveConverterScenario('ai', 'pdf'))?.id).toBe('ai->pdf')
+    expect((await resolveConverterScenario('eps', 'png'))?.id).toBe('eps->png')
+    expect(await resolveConverterScenario('png', 'png')).toBeNull()
   })
 })

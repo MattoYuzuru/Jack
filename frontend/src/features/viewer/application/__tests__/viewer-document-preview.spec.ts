@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { resetProcessingCapabilityScopeCache } from '../../../processing/application/processing-client'
 import { findViewerDocumentMatches } from '../viewer-document'
 import {
   buildPdfDocumentPreview,
@@ -10,10 +11,12 @@ const originalCreateObjectUrl = URL.createObjectURL
 const originalRevokeObjectUrl = URL.revokeObjectURL
 
 beforeEach(() => {
+  resetProcessingCapabilityScopeCache()
   globalThis.fetch = vi.fn() as typeof fetch
 })
 
 afterEach(() => {
+  resetProcessingCapabilityScopeCache()
   globalThis.fetch = originalFetch
   Object.defineProperty(URL, 'createObjectURL', {
     configurable: true,

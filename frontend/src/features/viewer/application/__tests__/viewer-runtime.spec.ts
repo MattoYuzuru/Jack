@@ -1,11 +1,26 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createViewerCapabilityScopeFixture } from '../../../processing/application/__tests__/capability-matrix.fixtures'
+import { resetProcessingCapabilityScopeCache } from '../../../processing/application/processing-client'
 import { createEmptyMetadataPayload } from '../viewer-metadata'
 import { createViewerRuntime, releaseViewerEntry } from '../viewer-runtime'
 
+const originalFetch = globalThis.fetch
 const originalCreateObjectUrl = URL.createObjectURL
 const originalRevokeObjectUrl = URL.revokeObjectURL
 
+beforeEach(() => {
+  resetProcessingCapabilityScopeCache()
+  globalThis.fetch = vi.fn().mockResolvedValue(
+    new Response(JSON.stringify(createViewerCapabilityScopeFixture()), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    }),
+  ) as typeof fetch
+})
+
 afterEach(() => {
+  resetProcessingCapabilityScopeCache()
+  globalThis.fetch = originalFetch
   Object.defineProperty(URL, 'createObjectURL', {
     configurable: true,
     value: originalCreateObjectUrl,

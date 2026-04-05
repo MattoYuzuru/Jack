@@ -5,18 +5,20 @@ import {
   type ConverterResult,
 } from '../application/converter-runtime'
 import {
-  listConverterPresets,
-  resolveConverterPreset,
+  getConverterCapabilityMatrix,
+  type ConverterScenarioDefinition,
+  type ConverterTargetFormatDefinition,
+} from '../domain/converter-registry'
+import {
+  resolveConverterPresetFromDefinitions,
   type ConverterPresetDefinition,
 } from '../domain/converter-presets'
-import { type ConverterTargetFormatDefinition } from '../domain/converter-registry'
 
 interface ConverterResultViewModel extends ConverterResult {
   objectUrl: string
 }
 
 const converterRuntime = createConverterRuntime()
-const converterPresets = listConverterPresets()
 
 export function useConverterWorkspace() {
   const prepared = shallowRef<ConverterPreparedSource | null>(null)
@@ -25,19 +27,52 @@ export function useConverterWorkspace() {
   const isConverting = ref(false)
   const errorMessage = ref('')
   const processingMessage = ref('')
+  const converterAcceptAttribute = ref('')
+  const availablePresets = ref<ConverterPresetDefinition[]>([])
+  const imageScenarios = ref<ConverterScenarioDefinition[]>([])
+  const documentScenarios = ref<ConverterScenarioDefinition[]>([])
   const selectedTargetExtension = ref('')
   const selectedPresetId = ref<ConverterPresetDefinition['id']>('original')
   const quality = ref(0.9)
   const backgroundColor = ref('#fffaf0')
+  let capabilityMatrixRequest: Promise<void> | null = null
 
-  const availablePresets = converterPresets
   const availableTargets = computed(() => prepared.value?.targets ?? [])
   const activeTarget = computed<ConverterTargetFormatDefinition | null>(
     () =>
       availableTargets.value.find((target) => target.extension === selectedTargetExtension.value) ??
       null,
   )
-  const activePreset = computed(() => resolveConverterPreset(selectedPresetId.value))
+  const activePreset = computed(() =>
+    resolveConverterPresetFromDefinitions(availablePresets.value, selectedPresetId.value),
+  )
+
+  async function ensureCapabilityMatrix(): Promise<void> {
+    if (!capabilityMatrixRequest) {
+      capabilityMatrixRequest = loadCapabilityMatrix().catch((error) => {
+        capabilityMatrixRequest = null
+        throw error
+      })
+    }
+
+    return capabilityMatrixRequest
+  }
+
+  async function loadCapabilityMatrix(): Promise<void> {
+    const matrix = await getConverterCapabilityMatrix()
+    converterAcceptAttribute.value = matrix.acceptAttribute
+    availablePresets.value = (matrix.presets as ConverterPresetDefinition[]).filter(
+      (preset) => preset.available,
+    )
+    imageScenarios.value = matrix.scenarios.filter(
+      (scenario) => scenario.family === 'image' && scenario.available,
+    )
+    documentScenarios.value = matrix.scenarios.filter(
+      (scenario) => scenario.family === 'document' && scenario.available,
+    )
+  }
+
+  void ensureCapabilityMatrix().catch(() => undefined)
 
   watch([activeTarget, activePreset], ([target, preset]) => {
     if (!target || !preset) {
@@ -63,7 +98,8 @@ export function useConverterWorkspace() {
     isLoading.value = true
 
     try {
-      const inspected = converterRuntime.inspect(file)
+      await ensureCapabilityMatrix()
+      const inspected = await converterRuntime.inspect(file)
 
       if (!inspected || !inspected.targets.length) {
         throw new Error('Для выбранного файла пока нет зарегистрированного сценария конвертации.')
@@ -167,6 +203,9 @@ export function useConverterWorkspace() {
     selectedPresetId,
     quality,
     backgroundColor,
+    converterAcceptAttribute,
+    imageScenarios,
+    documentScenarios,
     selectFile,
     clearSelection,
     convert,

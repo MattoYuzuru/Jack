@@ -49,7 +49,7 @@ export interface ConverterResult {
 }
 
 export interface ConverterRuntime {
-  inspect(file: File): ConverterPreparedSource | null
+  inspect(file: File): Promise<ConverterPreparedSource | null>
   convert(input: {
     prepared: ConverterPreparedSource
     targetExtension: string
@@ -149,6 +149,7 @@ export interface ConverterRuntimeDependencies {
   isServerScenario?: (
     prepared: ConverterPreparedSource,
     target: ConverterTargetFormatDefinition,
+    scenario: ConverterScenarioDefinition,
   ) => boolean
   convertServerScenario?: (input: {
     prepared: ConverterPreparedSource
@@ -175,17 +176,26 @@ export function createConverterRuntime(
   const convertServerScenario = dependencies.convertServerScenario ?? defaultConvertServerScenario
 
   return {
-    inspect(file) {
-      const source = resolveConverterSourceFormat(file.name, file.type)
+    async inspect(file) {
+      const source = await resolveConverterSourceFormat(file.name, file.type)
       if (!source) {
         return null
       }
 
-      const targets = listConverterTargetsForSource(file.name, file.type)
-      const scenarios = [
-        ...listConverterScenariosByFamily('image'),
-        ...listConverterScenariosByFamily('document'),
-      ].filter((scenario) => scenario.sourceExtension === source.extension)
+      if (!source.available) {
+        throw new Error(
+          source.availabilityDetail ||
+            `Источник ${source.label} сейчас отключён в backend capability matrix.`,
+        )
+      }
+
+      const targets = await listConverterTargetsForSource(file.name, file.type)
+      const scenarios = (await Promise.all([
+        listConverterScenariosByFamily('image'),
+        listConverterScenariosByFamily('document'),
+      ]))
+        .flat()
+        .filter((scenario) => scenario.sourceExtension === source.extension && scenario.available)
 
       return {
         file,
@@ -197,15 +207,33 @@ export function createConverterRuntime(
     },
 
     async convert({ prepared, targetExtension, presetId, quality, backgroundColor, onProgress }) {
-      const target = resolveConverterTargetFormat(targetExtension)
-      const scenario = resolveConverterScenario(prepared.source.extension, targetExtension)
-      const preset = resolveConverterPreset(presetId)
+      const target =
+        prepared.targets.find((candidate) => candidate.extension === targetExtension) ??
+        (await resolveConverterTargetFormat(targetExtension))
+      const scenario =
+        prepared.scenarios.find((candidate) => candidate.targetExtension === targetExtension) ??
+        (await resolveConverterScenario(prepared.source.extension, targetExtension))
+      const preset = await resolveConverterPreset(presetId)
 
       if (!target || !scenario) {
         throw new Error('Для выбранной пары source/target сценарий пока не зарегистрирован.')
       }
 
-      if (isServerScenario(prepared, target)) {
+      if (!target.available) {
+        throw new Error(
+          target.availabilityDetail ||
+            `Target ${target.label} сейчас отключён в backend capability matrix.`,
+        )
+      }
+
+      if (!scenario.available) {
+        throw new Error(
+          scenario.availabilityDetail ||
+            `Сценарий ${scenario.label} сейчас отключён в backend capability matrix.`,
+        )
+      }
+
+      if (isServerScenario(prepared, target, scenario)) {
         const serverResult = await convertServerScenario({
           prepared,
           target,
@@ -476,8 +504,10 @@ async function defaultEncodeIco(_input: {
 function defaultIsServerScenario(
   prepared: ConverterPreparedSource,
   target: ConverterTargetFormatDefinition,
+  scenario: ConverterScenarioDefinition,
 ): boolean {
   return (
+    scenario.executionMode === 'server-assisted' ||
     prepared.source.sourceStrategyId !== 'native-raster' ||
     target.targetStrategyId === 'pdf-document' ||
     target.targetStrategyId === 'tiff-image' ||

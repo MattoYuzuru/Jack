@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { resetProcessingCapabilityScopeCache } from '../../../processing/application/processing-client'
 import type { ViewerFormatDefinition } from '../../domain/viewer-registry'
 
 const previewBuilders = vi.hoisted(() => ({
@@ -27,6 +28,9 @@ const videoFormat: ViewerFormatDefinition = {
   statusLabel: 'Server media preview',
   notes: 'Video goes through backend MEDIA_PREVIEW.',
   accents: ['Video', 'Legacy'],
+  available: true,
+  availabilityDetail: null,
+  requiredJobTypes: ['MEDIA_PREVIEW'],
 }
 
 const audioFormat: ViewerFormatDefinition = {
@@ -40,15 +44,20 @@ const audioFormat: ViewerFormatDefinition = {
   statusLabel: 'Server audio preview',
   notes: 'Audio goes through backend MEDIA_PREVIEW.',
   accents: ['Audio', 'Lossless'],
+  available: true,
+  availabilityDetail: null,
+  requiredJobTypes: ['MEDIA_PREVIEW'],
 }
 
 const originalFetch = globalThis.fetch
 
 beforeEach(() => {
+  resetProcessingCapabilityScopeCache()
   globalThis.fetch = vi.fn() as typeof fetch
 })
 
 afterEach(() => {
+  resetProcessingCapabilityScopeCache()
   globalThis.fetch = originalFetch
   vi.clearAllMocks()
 })

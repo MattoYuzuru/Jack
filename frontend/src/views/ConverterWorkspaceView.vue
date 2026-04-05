@@ -1,17 +1,10 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { RouterLink } from 'vue-router'
-import {
-  converterAcceptAttribute,
-  listConverterScenariosByFamily,
-} from '../features/converter/domain/converter-registry'
 import { useConverterWorkspace } from '../features/converter/composables/useConverterWorkspace'
 
 const fileInput = ref<HTMLInputElement | null>(null)
 const isDragActive = ref(false)
-
-const imageScenarios = listConverterScenariosByFamily('image')
-const documentScenarios = listConverterScenariosByFamily('document')
 
 const {
   prepared,
@@ -28,6 +21,9 @@ const {
   selectedPresetId,
   quality,
   backgroundColor,
+  converterAcceptAttribute,
+  imageScenarios,
+  documentScenarios,
   selectFile,
   clearSelection,
   convert,
