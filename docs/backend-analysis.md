@@ -1,5 +1,7 @@
 # Backend Analysis
 
+См. также: `docs/backend-migration-plan.md`
+
 ## Цель
 
 Свести Jack от `browser-first everywhere` к модели, где backend не просто дублирует код на Java, а:
