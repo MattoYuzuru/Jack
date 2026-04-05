@@ -200,6 +200,14 @@ Frontend отвечает за:
 
 Приоритет: `P0`
 
+Статус:
+
+- выполнено: backend поднял `IMAGE_CONVERT` service с unified raster contract и artifact flow
+- выполнено: frontend viewer переведён на server-assisted image preview для `heic`, `tiff`, `raw`
+- выполнено: frontend converter переведён на hybrid processing mode, где heavy imaging scenarios идут через backend jobs
+- выполнено: контейнерный backend сам ставит `ffmpeg`, `ffprobe`, `ImageMagick`, `Ghostscript`, `potrace`, `libraw`
+- фазу считаем закрытой: browser-heavy imaging adapters удалены из active runtime, а локально оставлены только быстрые native raster branches
+
 ### Phase 3. Document Intelligence Service
 
 Цель:
@@ -437,7 +445,7 @@ Frontend отвечает за:
 
 1. `Phase 0`
 2. `Phase 1`
-3. первая часть `Phase 2`
+3. `Phase 2`
 4. первая часть `Phase 3`
 5. `Phase 5`
 6. `Phase 6`
@@ -457,7 +465,7 @@ Frontend отвечает за:
 
 Переход можно считать удачным, если:
 
-- frontend bundle заметно худеет за счёт ухода `ffmpeg.wasm` и части heavy format adapters
+- frontend bundle заметно худеет за счёт ухода `ffmpeg.wasm` и heavy imaging adapters
 - legacy media preview больше не зависит от мощности устройства пользователя
 - converter и viewer умеют работать через jobs и progress
 - backend становится общей базой для `converter`, `viewer`, `compression`, `pdf toolkit`

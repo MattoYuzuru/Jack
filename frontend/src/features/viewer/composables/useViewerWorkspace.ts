@@ -123,6 +123,14 @@ export function useViewerWorkspace() {
 function resolveLoadingMessage(file: File): string {
   const format = resolveViewerFormat(file.name, file.type)
 
+  if (
+    format?.previewStrategyId === 'heic-image' ||
+    format?.previewStrategyId === 'tiff-image' ||
+    format?.previewStrategyId === 'raw-image'
+  ) {
+    return 'Подготавливаю image preview через backend IMAGE_CONVERT job. Для больших HEIC/TIFF/RAW файлов upload и server rasterization могут занять заметное время.'
+  }
+
   if (format?.previewStrategyId === 'legacy-video') {
     return 'Подготавливаю video preview через backend MEDIA_PREVIEW job. Для больших контейнеров upload и server transcode могут занять заметное время.'
   }

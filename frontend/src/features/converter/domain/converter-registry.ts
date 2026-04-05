@@ -118,8 +118,9 @@ const sourceFormatDefinitions: ConverterSourceFormatDefinition[] = [
     family: 'image',
     mimeTypes: ['image/vnd.adobe.photoshop', 'application/vnd.adobe.photoshop'],
     sourceStrategyId: 'psd-raster',
-    statusLabel: 'Composite adapter',
-    notes: 'Photoshop document читается по composite image и дальше живёт как единый raster contract.',
+    statusLabel: 'Server composite',
+    notes:
+      'Photoshop document уходит в backend IMAGE_CONVERT pipeline, где сводится к composite raster без browser-side PSD runtime.',
     accents: ['Adobe', 'Composite'],
   },
   {
@@ -129,9 +130,9 @@ const sourceFormatDefinitions: ConverterSourceFormatDefinition[] = [
     family: 'image',
     mimeTypes: [],
     sourceStrategyId: 'illustration-raster',
-    statusLabel: 'Illustration adapter',
+    statusLabel: 'Server illustration',
     notes:
-      'Illustrator source проходит через PDF-compatible render path либо embedded preview extraction.',
+      'Illustrator source растеризуется в backend processing service через Ghostscript/ImageMagick path.',
     accents: ['Adobe', 'Illustration'],
   },
   {
@@ -141,9 +142,9 @@ const sourceFormatDefinitions: ConverterSourceFormatDefinition[] = [
     family: 'image',
     mimeTypes: [],
     sourceStrategyId: 'illustration-raster',
-    statusLabel: 'Preview-backed adapter',
+    statusLabel: 'Server illustration',
     notes:
-      'Encapsulated PostScript читается через PDF-compatible слой или встроенный preview, если он есть в файле.',
+      'Encapsulated PostScript растеризуется в backend processing service вместо browser-side preview extraction.',
     accents: ['PostScript', 'Preview'],
   },
   {
@@ -153,8 +154,9 @@ const sourceFormatDefinitions: ConverterSourceFormatDefinition[] = [
     family: 'image',
     mimeTypes: ['image/heic', 'image/heif'],
     sourceStrategyId: 'heic-raster',
-    statusLabel: 'Decode adapter',
-    notes: 'Apple image container проходит через отдельный decode-layer перед encode.',
+    statusLabel: 'Server rasterization',
+    notes:
+      'Apple image container больше не декодируется в браузере и проходит через backend IMAGE_CONVERT pipeline.',
     accents: ['Apple', 'Decode'],
   },
   {
@@ -164,8 +166,9 @@ const sourceFormatDefinitions: ConverterSourceFormatDefinition[] = [
     family: 'image',
     mimeTypes: ['image/tiff'],
     sourceStrategyId: 'tiff-raster',
-    statusLabel: 'Decode adapter',
-    notes: 'TIFF-family распаковывается в renderable raster через UTIF pipeline.',
+    statusLabel: 'Server rasterization',
+    notes:
+      'TIFF-family уходит в backend IMAGE_CONVERT pipeline и получает preview/result artifacts вместо browser decode-layer.',
     accents: ['Archive', 'Decode'],
   },
   {
@@ -175,8 +178,9 @@ const sourceFormatDefinitions: ConverterSourceFormatDefinition[] = [
     family: 'image',
     mimeTypes: [],
     sourceStrategyId: 'raw-raster',
-    statusLabel: 'Preview extraction',
-    notes: 'RAW-family забирает embedded preview и передаёт его дальше как единый raster contract.',
+    statusLabel: 'Server rasterization',
+    notes:
+      'RAW-family забирает embedded preview на backend через libraw и больше не тянет браузерный TIFF-ish runtime.',
     accents: ['Camera', 'Preview'],
   },
 ]
@@ -230,8 +234,9 @@ const targetFormatDefinitions: ConverterTargetFormatDefinition[] = [
     supportsQuality: true,
     supportsTransparency: true,
     defaultQuality: 0.78,
-    statusLabel: 'WASM encode',
-    notes: 'Современный high-efficiency target через lazy AVIF encoder с PNG preview-слоем для UI.',
+    statusLabel: 'Backend encode',
+    notes:
+      'Современный high-efficiency target теперь собирается через backend IMAGE_CONVERT и даёт PNG preview artifact для UI.',
     accents: ['Modern', 'WASM'],
   },
   {
@@ -243,9 +248,9 @@ const targetFormatDefinitions: ConverterTargetFormatDefinition[] = [
     supportsQuality: false,
     supportsTransparency: true,
     defaultQuality: null,
-    statusLabel: 'Vector trace',
+    statusLabel: 'Backend trace',
     notes:
-      'Векторный target собирается через трассировку raster-кадра и подходит для простых flat-график, а не для pixel-perfect roundtrip.',
+      'Векторный target собирается на backend через bitmap tracing и подходит для простых flat-график, а не для pixel-perfect roundtrip.',
     accents: ['Vector', 'Trace'],
   },
   {
@@ -257,9 +262,9 @@ const targetFormatDefinitions: ConverterTargetFormatDefinition[] = [
     supportsQuality: false,
     supportsTransparency: true,
     defaultQuality: null,
-    statusLabel: 'Icon pack',
+    statusLabel: 'Backend icon pack',
     notes:
-      'Icon target собирает multi-size ICO container из square PNG layers и держит PNG preview для workspace.',
+      'Icon target собирается на backend в multi-size ICO container и держит PNG preview artifact для workspace.',
     accents: ['Icon', 'Multi-size'],
   },
   {
@@ -271,9 +276,9 @@ const targetFormatDefinitions: ConverterTargetFormatDefinition[] = [
     supportsQuality: true,
     supportsTransparency: false,
     defaultQuality: 0.92,
-    statusLabel: 'Single-page document',
+    statusLabel: 'Backend document',
     notes:
-      'Документный target: текущая итерация собирает single-page PDF из подготовленного raster contract.',
+      'Документный target: текущая итерация собирает single-page PDF на backend из подготовленного raster contract.',
     accents: ['Document', 'Single-page'],
   },
   {
@@ -285,12 +290,15 @@ const targetFormatDefinitions: ConverterTargetFormatDefinition[] = [
     supportsQuality: false,
     supportsTransparency: true,
     defaultQuality: null,
-    statusLabel: 'RGBA TIFF encode',
+    statusLabel: 'Backend archive encode',
     notes:
-      'Archive-friendly raster target: текущая итерация собирает single-frame TIFF из unified raster contract.',
+      'Archive-friendly raster target теперь собирается на backend из unified raster contract.',
     accents: ['Archive', 'Lossless-ish'],
   },
 ]
+
+const serverSourceExtensions = new Set(['heic', 'tiff', 'raw', 'psd', 'ai', 'eps'])
+const serverTargetExtensions = new Set(['avif', 'svg', 'ico', 'tiff', 'pdf'])
 
 const scenarioDefinitions: ConverterScenarioDefinition[] = [
   buildScenario('heic', 'jpg', 'HEIC decode -> JPG'),
@@ -437,15 +445,19 @@ function buildScenario(
   label: string,
   family: ConverterFormatFamily = 'image',
 ): ConverterScenarioDefinition {
+  const isServerScenario =
+    serverSourceExtensions.has(sourceExtension) || serverTargetExtensions.has(targetExtension)
+
   return {
     id: buildScenarioKey(sourceExtension, targetExtension),
     family,
     label,
     sourceExtension,
     targetExtension,
-    statusLabel: 'Browser-first',
-    notes:
-      'Сценарий закрывается в клиенте через decode/encode pipeline и готов к расширению новыми source/target стратегиями.',
+    statusLabel: isServerScenario ? 'Server-assisted' : 'Browser-native',
+    notes: isServerScenario
+      ? 'Тяжёлый сценарий идёт через backend IMAGE_CONVERT jobs: frontend остаётся orchestration/UI слоем и получает preview/result artifacts.'
+      : 'Быстрый сценарий закрывается прямо в клиенте через browser-native raster pipeline без backend round-trip.',
     accents: [sourceExtension.toUpperCase(), targetExtension.toUpperCase()],
   }
 }

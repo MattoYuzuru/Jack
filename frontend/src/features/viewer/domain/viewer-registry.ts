@@ -158,11 +158,11 @@ const imageFormatDefinitions: ViewerFormatDefinition[] = [
     label: 'HEIC',
     family: 'image',
     mimeTypes: ['image/heic', 'image/heif'],
-    previewPipeline: 'client-decode',
+    previewPipeline: 'server-assisted',
     previewStrategyId: 'heic-image',
-    statusLabel: 'Decode adapter',
+    statusLabel: 'Server image preview',
     notes:
-      'Файл декодируется в web-friendly raster прямо в клиенте через отдельную decode-стратегию.',
+      'HEIC preview больше не декодируется в браузере и идёт через backend IMAGE_CONVERT preview artifact.',
     accents: ['Apple', 'Decode'],
   },
   {
@@ -171,11 +171,11 @@ const imageFormatDefinitions: ViewerFormatDefinition[] = [
     label: 'TIFF',
     family: 'image',
     mimeTypes: ['image/tiff'],
-    previewPipeline: 'client-decode',
+    previewPipeline: 'server-assisted',
     previewStrategyId: 'tiff-image',
-    statusLabel: 'Decode adapter',
+    statusLabel: 'Server image preview',
     notes:
-      'Многостраничные и сжатые TIFF рендерятся через отдельный decode-layer с переводом в PNG preview.',
+      'Многостраничные и сжатые TIFF теперь собирают browser-friendly preview через backend IMAGE_CONVERT.',
     accents: ['Archive', 'Decode'],
   },
   {
@@ -184,11 +184,11 @@ const imageFormatDefinitions: ViewerFormatDefinition[] = [
     label: 'RAW',
     family: 'image',
     mimeTypes: [],
-    previewPipeline: 'client-decode',
+    previewPipeline: 'server-assisted',
     previewStrategyId: 'raw-image',
-    statusLabel: 'Decode adapter',
+    statusLabel: 'Server image preview',
     notes:
-      'RAW family идёт через TIFF-ish adapter: viewer ищет renderable preview/IFD и поднимает metadata без деградации остальных форматов.',
+      'RAW family забирает embedded preview на backend и даёт тот же image workspace без browser-heavy decode.',
     accents: ['Camera', 'Preview extraction'],
   },
 ]

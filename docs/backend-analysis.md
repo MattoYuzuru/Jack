@@ -19,10 +19,11 @@
 
 - есть processing foundation с upload/job/artifact/capability API
 - есть первый async media job `MEDIA_PREVIEW` поверх `ffprobe`/`ffmpeg`
+- есть image-processing service и async job `IMAGE_CONVERT` для heavy image preview/conversion
 - backend уже умеет сохранять source upload, считать `sha256`, отдавать artifacts и репортить capability state
 - из production-grade частей всё ещё отсутствуют постоянное хранилище, cleanup policy, retries, queueing и специализированные processing domains
 
-Вывод: backend уже стал участником продукта, но пока покрывает только foundation и первый media-срез, а основная доменная глубина всё ещё находится на frontend runtime.
+Вывод: backend уже стал участником продукта и забрал первые тяжёлые media/imaging домены, но document и metadata глубина всё ещё находится на frontend runtime.
 
 ### Frontend
 
@@ -30,15 +31,15 @@ Frontend уже выполняет роль mini-backend:
 
 - сам определяет capability map и стратегии форматов через registry/runtime
 - сам парсит документы, архивы, изображения, аудио и видео
-- сам делает heavy decode/encode в браузере для image/document-heavy веток
+- сам всё ещё делает document-heavy parsing и metadata branches в браузере
 - сам редактирует metadata и собирает export-артефакты
-- для legacy media уже общается с backend processing API, но остальные тяжёлые домены всё ещё живут локально
+- для legacy media и heavy imaging уже общается с backend processing API, но document/metadata домены всё ещё живут локально
 
 Это видно по зависимостям и runtime-слою:
 
 - `pdfjs-dist` для PDF/illustration parsing
 - `sql.js` для SQLite introspection
-- `heic2any`, `utif2`, `ag-psd`, `imagetracerjs`, `@jsquash/avif`
+- `utif2` для RAW fallback metadata
 - `jszip`, `xlsx`, `cfb`, `music-metadata-browser`, `exifreader`, `piexifjs`
 
 ## Что Уже Нельзя Считать Только UI-Логикой
@@ -72,7 +73,9 @@ Frontend уже выполняет роль mini-backend:
 
 ### 2. Heavy Image Decode/Encode Pipeline
 
-Конвертер и viewer уже тащат тяжёлые image pipelines в браузер:
+Статус: закрыто в `Phase 2`.
+
+До миграции конвертер и viewer тащили тяжёлые image pipelines в браузер:
 
 - HEIC decode
 - TIFF/RAW preview extraction
@@ -84,7 +87,7 @@ Frontend уже выполняет роль mini-backend:
 - bitmap tracing в SVG
 - raster PDF generation
 
-Файлы:
+Ключевые файлы до миграции:
 
 - `frontend/src/features/imaging/application/image-raster-codecs.ts`
 - `frontend/src/features/imaging/application/illustration-raster.ts`
@@ -96,6 +99,13 @@ Frontend уже выполняет роль mini-backend:
 - `frontend/src/features/imaging/application/pdf-document.ts`
 - `frontend/src/features/converter/application/converter-runtime.ts`
 
+Ключевые файлы после миграции:
+
+- `backend/src/main/java/com/keykomi/jack/processing/application/ImageProcessingService.java`
+- `frontend/src/features/converter/application/converter-server-runtime.ts`
+- `frontend/src/features/viewer/application/viewer-image-preview.ts`
+- `frontend/src/features/processing/application/processing-client.ts`
+
 Почему это кандидат на backend:
 
 - часть форматов декодируется эвристически и не даёт гарантированно одинаковый результат
@@ -106,8 +116,10 @@ Frontend уже выполняет роль mini-backend:
 
 Решение:
 
-- перевести converter в `server-assisted` режим с async job/result API
-- оставить на фронте только быстрые browser-native операции и preview state
+- перенесено: backend `IMAGE_CONVERT` теперь собирает preview/result artifacts для HEIC, TIFF, RAW, PSD, AI/EPS, AVIF, TIFF, ICO, traced SVG и raster PDF
+- frontend viewer использует server-assisted preview для `heic`/`tiff`/`raw`
+- frontend converter переведён на hybrid mode: быстрые browser-native raster paths остаются локально, тяжёлые сценарии уходят в backend jobs
+- контейнерный backend сам ставит `ffmpeg`, `ImageMagick`, `Ghostscript`, `potrace` и `libraw`, так что server imaging path работает и в `docker compose`
 
 Приоритет: `P0`
 
@@ -219,12 +231,11 @@ Frontend уже выполняет роль mini-backend:
 
 ### Performance
 
-После закрытия `Phase 1` frontend уже перестал тащить `ffmpeg-core` wasm, но в браузере всё ещё
+После закрытия `Phase 1` и `Phase 2` frontend уже перестал тащить `ffmpeg-core` wasm и heavy
+image adapters вроде `heic2any`, `ag-psd`, `imagetracerjs`, `@jsquash/avif`, но в браузере всё ещё
 остаются тяжёлые артефакты:
 
-- `heic2any` bundle больше `1.3 MB`
 - `pdf.worker` больше `2.1 MB`
-- `avif` wasm-ассеты по нескольку мегабайт
 - `sql.js`, `xlsx`, `cpexcel`, `ViewerWorkspaceView` тоже заметно раздувают клиент
 
 Следствие:
