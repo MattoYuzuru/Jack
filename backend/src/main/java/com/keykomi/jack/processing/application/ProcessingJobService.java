@@ -3,6 +3,7 @@ package com.keykomi.jack.processing.application;
 import com.keykomi.jack.processing.domain.ProcessingJobStatus;
 import com.keykomi.jack.processing.domain.ProcessingJobType;
 import com.keykomi.jack.processing.domain.StoredArtifact;
+import com.keykomi.jack.processing.domain.ImageProcessingRequest;
 import com.keykomi.jack.processing.domain.StoredProcessingJob;
 import com.keykomi.jack.processing.domain.StoredUpload;
 import java.io.IOException;
@@ -25,6 +26,7 @@ public class ProcessingJobService {
 	private final UploadStorageService uploadStorageService;
 	private final ArtifactStorageService artifactStorageService;
 	private final MediaPreviewService mediaPreviewService;
+	private final ImageProcessingService imageProcessingService;
 	private final ExecutorService processingExecutor;
 	private final Map<UUID, StoredProcessingJob> jobs = new ConcurrentHashMap<>();
 
@@ -32,19 +34,22 @@ public class ProcessingJobService {
 		UploadStorageService uploadStorageService,
 		ArtifactStorageService artifactStorageService,
 		MediaPreviewService mediaPreviewService,
+		ImageProcessingService imageProcessingService,
 		ExecutorService processingExecutor
 	) {
 		this.uploadStorageService = uploadStorageService;
 		this.artifactStorageService = artifactStorageService;
 		this.mediaPreviewService = mediaPreviewService;
+		this.imageProcessingService = imageProcessingService;
 		this.processingExecutor = processingExecutor;
 	}
 
-	public StoredProcessingJob enqueue(UUID uploadId, ProcessingJobType jobType) {
+	public StoredProcessingJob enqueue(UUID uploadId, ProcessingJobType jobType, Map<String, Object> parameters) {
 		var upload = this.uploadStorageService.getRequiredUpload(uploadId);
-		ensureJobTypeSupported(jobType);
+		var normalizedParameters = parameters == null ? Map.<String, Object>of() : Map.copyOf(parameters);
+		ensureJobTypeSupported(jobType, normalizedParameters);
 
-		var job = StoredProcessingJob.queued(UUID.randomUUID(), upload.id(), jobType, Instant.now());
+		var job = StoredProcessingJob.queued(UUID.randomUUID(), upload.id(), jobType, normalizedParameters, Instant.now());
 		this.jobs.put(job.id(), job);
 
 		// Даже foundation-срез сразу запускаем через async executor, чтобы следующие
@@ -81,6 +86,7 @@ public class ProcessingJobService {
 			var result = switch (job.type()) {
 				case UPLOAD_INTAKE_ANALYSIS -> processUploadIntakeAnalysis(job.id(), upload);
 				case MEDIA_PREVIEW -> processMediaPreview(job.id(), upload);
+				case IMAGE_CONVERT -> processImageConvert(job.id(), upload, parseImageJobRequest(job.parameters()));
 				default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Для этого job type backend processor ещё не реализован.");
 			};
 
@@ -119,6 +125,19 @@ public class ProcessingJobService {
 		);
 	}
 
+	private JobProcessingResult processImageConvert(UUID jobId, StoredUpload upload, ImageProcessingRequest request) {
+		updateJob(jobId, currentJob -> currentJob.updateProgress(25, "Подготавливаю imaging source и raster contract."));
+		var result = this.imageProcessingService.process(jobId, upload, request);
+		updateJob(
+			jobId,
+			currentJob -> currentJob.updateProgress(85, "Imaging artifacts собраны, сохраняю manifest и output blobs.")
+		);
+		return new JobProcessingResult(
+			"Image processing готов через backend %s.".formatted(result.runtimeLabel()),
+			result.artifacts()
+		);
+	}
+
 	private StoredArtifact buildUploadIntakeArtifact(UUID jobId, StoredUpload upload) {
 		try {
 			// Первый artifact здесь намеренно простой: он доказывает, что upload уже
@@ -145,8 +164,12 @@ public class ProcessingJobService {
 		}
 	}
 
-	private void ensureJobTypeSupported(ProcessingJobType jobType) {
-		if (jobType != ProcessingJobType.UPLOAD_INTAKE_ANALYSIS && jobType != ProcessingJobType.MEDIA_PREVIEW) {
+	private void ensureJobTypeSupported(ProcessingJobType jobType, Map<String, Object> parameters) {
+		if (
+			jobType != ProcessingJobType.UPLOAD_INTAKE_ANALYSIS &&
+			jobType != ProcessingJobType.MEDIA_PREVIEW &&
+			jobType != ProcessingJobType.IMAGE_CONVERT
+		) {
 			throw new ResponseStatusException(
 				HttpStatus.BAD_REQUEST,
 				"Этот job type уже описан в backend plan, но ещё не реализован в текущем foundation-срезе."
@@ -158,6 +181,16 @@ public class ProcessingJobService {
 				HttpStatus.SERVICE_UNAVAILABLE,
 				"MEDIA_PREVIEW job требует доступных ffmpeg/ffprobe binaries в backend окружении."
 			);
+		}
+
+		if (jobType == ProcessingJobType.IMAGE_CONVERT) {
+			parseImageJobRequest(parameters);
+			if (!this.imageProcessingService.isAvailable()) {
+				throw new ResponseStatusException(
+					HttpStatus.SERVICE_UNAVAILABLE,
+					"IMAGE_CONVERT job требует доступных convert/ffmpeg/potrace/raw-preview binaries в backend окружении."
+				);
+			}
 		}
 	}
 
@@ -177,8 +210,79 @@ public class ProcessingJobService {
 		return switch (jobType) {
 			case UPLOAD_INTAKE_ANALYSIS -> "Начинаю intake-analysis для backend processing foundation.";
 			case MEDIA_PREVIEW -> "Запускаю backend media preview pipeline через ffprobe/ffmpeg.";
+			case IMAGE_CONVERT -> "Запускаю backend imaging pipeline через convert/ffmpeg/potrace.";
 			default -> "Запускаю backend processing job.";
 		};
+	}
+
+	private ImageProcessingRequest parseImageJobRequest(Map<String, Object> parameters) {
+		var operation = readRequiredString(parameters, "operation");
+		if (!"preview".equals(operation) && !"convert".equals(operation)) {
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "IMAGE_CONVERT принимает operation только preview или convert.");
+		}
+
+		var targetExtension = readOptionalString(parameters, "targetExtension");
+		if ("convert".equals(operation) && (targetExtension == null || targetExtension.isBlank())) {
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "IMAGE_CONVERT convert path требует targetExtension.");
+		}
+
+		return new ImageProcessingRequest(
+			operation,
+			targetExtension == null ? null : targetExtension.toLowerCase(),
+			readOptionalInteger(parameters, "maxWidth"),
+			readOptionalInteger(parameters, "maxHeight"),
+			readOptionalDouble(parameters, "quality"),
+			readOptionalString(parameters, "backgroundColor"),
+			readOptionalString(parameters, "presetLabel")
+		);
+	}
+
+	private String readRequiredString(Map<String, Object> parameters, String key) {
+		var value = readOptionalString(parameters, key);
+		if (value == null || value.isBlank()) {
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Параметр %s обязателен для processing job.".formatted(key));
+		}
+		return value;
+	}
+
+	private String readOptionalString(Map<String, Object> parameters, String key) {
+		var value = parameters.get(key);
+		if (value == null) {
+			return null;
+		}
+		return String.valueOf(value);
+	}
+
+	private Integer readOptionalInteger(Map<String, Object> parameters, String key) {
+		var value = parameters.get(key);
+		if (value == null) {
+			return null;
+		}
+		if (value instanceof Number number) {
+			return number.intValue();
+		}
+		try {
+			return Integer.valueOf(String.valueOf(value));
+		}
+		catch (NumberFormatException exception) {
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Параметр %s должен быть integer.".formatted(key), exception);
+		}
+	}
+
+	private Double readOptionalDouble(Map<String, Object> parameters, String key) {
+		var value = parameters.get(key);
+		if (value == null) {
+			return null;
+		}
+		if (value instanceof Number number) {
+			return number.doubleValue();
+		}
+		try {
+			return Double.valueOf(String.valueOf(value));
+		}
+		catch (NumberFormatException exception) {
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Параметр %s должен быть numeric.".formatted(key), exception);
+		}
 	}
 
 	public record UploadIntakeManifest(

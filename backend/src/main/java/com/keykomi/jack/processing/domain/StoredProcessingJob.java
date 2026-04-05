@@ -2,12 +2,14 @@ package com.keykomi.jack.processing.domain;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 public record StoredProcessingJob(
 	UUID id,
 	UUID uploadId,
 	ProcessingJobType type,
+	Map<String, Object> parameters,
 	ProcessingJobStatus status,
 	int progressPercent,
 	String message,
@@ -18,11 +20,18 @@ public record StoredProcessingJob(
 	List<StoredArtifact> artifacts
 ) {
 
-	public static StoredProcessingJob queued(UUID id, UUID uploadId, ProcessingJobType type, Instant createdAt) {
+	public static StoredProcessingJob queued(
+		UUID id,
+		UUID uploadId,
+		ProcessingJobType type,
+		Map<String, Object> parameters,
+		Instant createdAt
+	) {
 		return new StoredProcessingJob(
 			id,
 			uploadId,
 			type,
+			Map.copyOf(parameters),
 			ProcessingJobStatus.QUEUED,
 			0,
 			"Job поставлен в очередь.",
@@ -39,6 +48,7 @@ public record StoredProcessingJob(
 			this.id,
 			this.uploadId,
 			this.type,
+			this.parameters,
 			ProcessingJobStatus.RUNNING,
 			10,
 			message,
@@ -55,6 +65,7 @@ public record StoredProcessingJob(
 			this.id,
 			this.uploadId,
 			this.type,
+			this.parameters,
 			this.status,
 			Math.max(0, Math.min(progressPercent, 100)),
 			message,
@@ -71,6 +82,7 @@ public record StoredProcessingJob(
 			this.id,
 			this.uploadId,
 			this.type,
+			this.parameters,
 			ProcessingJobStatus.COMPLETED,
 			100,
 			message,
@@ -87,6 +99,7 @@ public record StoredProcessingJob(
 			this.id,
 			this.uploadId,
 			this.type,
+			this.parameters,
 			ProcessingJobStatus.FAILED,
 			this.progressPercent,
 			"Job завершился с ошибкой.",
