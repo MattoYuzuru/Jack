@@ -22,24 +22,25 @@
 - есть image-processing service и async job `IMAGE_CONVERT` для heavy image preview/conversion
 - есть document-processing service и async job `DOCUMENT_PREVIEW` для document intelligence payload
 - есть metadata-processing service и async job `METADATA_EXPORT` для image/audio metadata inspect и image metadata export
+- есть server-owned capability matrix для viewer/converter format-, scenario- и preset-contracts
 - backend уже умеет сохранять source upload, считать `sha256`, отдавать artifacts и репортить capability state
 - из production-grade частей всё ещё отсутствуют постоянное хранилище, cleanup policy, retries, queueing и специализированные processing domains
 
-Вывод: backend уже стал участником продукта и забрал media, heavy imaging, document intelligence и metadata домены, а следующей крупной миграцией остаётся server-owned capability matrix.
+Вывод: backend уже стал участником продукта и забрал media, heavy imaging, document intelligence, metadata и capability-matrix домены; следующая крупная миграция теперь смещается на backend-first converter route.
 
 ### Frontend
 
-Frontend уже выполняет роль orchestration/UI слоя, но всё ещё содержит часть platform-решений:
+Frontend уже выполняет роль orchestration/UI слоя, но platform-решения теперь заметно тоньше:
 
-- сам определяет capability map и стратегии форматов через registry/runtime
-- сам всё ещё держит capability/scenario решения в браузере
+- больше не держит локальный registry/preset catalog как единственную правду
+- получает capability/source-target/preset matrix с backend и резолвит UI поверх неё
 - сам отвечает за формы, локальную фильтрацию и download UX вокруг metadata/document/media payload
 - для legacy media, heavy imaging, document preview и metadata уже общается с backend processing API
 
 Это видно по зависимостям и runtime-слою:
 
 - browser-heavy metadata deps уже удалены из active runtime после `Phase 4`
-- локальным источником правды для supported formats всё ещё остаются frontend registry/presets
+- supported formats/scenarios/presets теперь приходят через backend capability API и кэшируются на frontend только как thin data layer
 
 ## Что Уже Нельзя Считать Только UI-Логикой
 
@@ -207,7 +208,9 @@ Frontend уже выполняет роль orchestration/UI слоя, но вс
 
 ### 5. Capability Registry И Scenario Registry Как Общий Контракт
 
-Сейчас registry определён только во frontend:
+Статус: закрыто в `Phase 5`.
+
+Раньше registry был определён только во frontend:
 
 - `viewer-registry.ts`
 - `converter-registry.ts`
@@ -220,8 +223,9 @@ Frontend уже выполняет роль orchestration/UI слоя, но вс
 
 Решение:
 
-- перенести capability/source-target matrix в общий server-owned contract
-- фронтенду отдавать матрицу через API или собирать из shared schema
+- перенесено: backend теперь отдаёт viewer/converter matrix через capability API
+- matrix включает format/scenario/preset definitions, required job types, accept rules и explicit availability details
+- frontend больше не использует локальный registry/preset catalog как единственный источник правды и только резолвит UI поверх server-owned contract
 
 Приоритет: `P1`
 

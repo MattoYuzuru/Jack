@@ -340,6 +340,14 @@ Frontend отвечает за:
 
 Приоритет: `P1`
 
+Статус:
+
+- выполнено: backend теперь отдаёт server-owned viewer matrix с format definitions, accept rules, required job types и explicit availability details
+- выполнено: backend теперь отдаёт server-owned converter matrix с source formats, target constraints, scenario execution mode и preset rules
+- выполнено: frontend viewer/converter больше не держат registry/preset catalog как единственную правду и получают capability matrix с backend
+- выполнено: processing client кеширует capability scope, а runtime/workspace используют backend matrix для resolution, accept attributes и user-facing fallback reasons
+- фазу считаем закрытой: включение новых format/scenario/preset routes теперь делается через backend contract, а не через расхождение локальных TS registry
+
 ### Phase 6. Converter Route Flip
 
 Цель:
