@@ -138,19 +138,20 @@ Viewer уже даёт browser-native preview для `jpg`, `jpeg`, `png`, `webp
 - [x] Search layer, outline/table preview и format-specific summary для поддержанных форматов
 - [x] OOXML adapters для `docx`, `xlsx`, `pptx` с preview поверх общего document contract
 - [x] Полировка UX для поддержанных документов: quick actions, sheet tabs, slide focus и более ясный search flow
+- [x] Legacy/open/database adapters для `doc`, `odt`, `xls`, `epub`, `db`, `sqlite`
 - [ ] Частичное редактирование содержимого там, где формат это позволяет
-- [ ] Поддержка: `doc`, `docx`, `pdf`, `txt`, `rtf`, `odt`, `xls`, `xlsx`, `csv`, `pptx`, `html`, `epub`, `db`, `sqlite`
+- [x] Поддержка: `doc`, `docx`, `pdf`, `txt`, `rtf`, `odt`, `xls`, `xlsx`, `csv`, `pptx`, `html`, `epub`, `db`, `sqlite`
 
 Document viewer теперь использует тот же registry/strategy foundation, что и image layer, но сводит
-`pdf`, `txt`, `csv`, `html`, `rtf`, `docx`, `xlsx`, `pptx` к общему document contract:
+`pdf`, `txt`, `csv`, `html`, `rtf`, `doc`, `docx`, `odt`, `xls`, `xlsx`, `pptx`, `epub`, `db`,
+`sqlite` к общему document contract:
 `summary + search layer + layout mode + warnings`.
 `pdf` открывается в browser embed и дополнительно поднимает page/search stats, `csv` получает table preview,
-`html` рендерится через sandbox `srcdoc`, `rtf` идёт через text extraction path, `docx` собирается как
-structured document HTML, `xlsx` как workbook/sheet preview, а `pptx` как slide text deck.
+`html` рендерится через sandbox `srcdoc`, `rtf` и `doc` идут через text extraction path, `docx` и `odt`
+собираются как structured document HTML, `xls` и `xlsx` как workbook/sheet preview, `pptx` как slide
+text deck, `epub` как reflow reading layer, а `db/sqlite` как schema-aware database preview.
 Поверх этого viewer уже даёт copy/download для extracted text, внятные active states для sheets/slides
 и более читаемый search UX прямо внутри общего workspace.
-`doc`, `odt`, `xls`, `epub`, `db`, `sqlite` уже заведены в capability map как foundation-only,
-но для них parser/render adapters ещё не реализованы.
 
 #### 2.3 Video Viewer
 

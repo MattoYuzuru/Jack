@@ -1,9 +1,13 @@
 import JSZip from 'jszip'
+import * as XLSX from 'xlsx'
 import { describe, expect, it } from 'vitest'
 import { findViewerDocumentMatches } from '../viewer-document'
 import {
+  buildEpubDocumentPreview,
+  buildOdtDocumentPreview,
   buildDocxDocumentPreview,
   buildPptxDocumentPreview,
+  buildXlsDocumentPreview,
   buildXlsxDocumentPreview,
   decodeRtfDocument,
   parseDelimitedTextDocument,
@@ -173,6 +177,109 @@ describe('viewer document preview', () => {
     expect(preview.layout.mode).toBe('slides')
     expect(preview.layout.mode === 'slides' ? preview.layout.slides[0]?.title : '').toBe('Viewer Deck')
     expect(preview.searchableText).toContain('First bullet')
+  })
+
+  it('builds workbook preview from a generated xls file', async () => {
+    const workbook = XLSX.utils.book_new()
+    const worksheet = XLSX.utils.aoa_to_sheet([
+      ['Name', 'Status'],
+      ['Viewer', 'Ready'],
+    ])
+
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Legacy')
+
+    const file = new File(
+      [XLSX.write(workbook, { bookType: 'xls', type: 'array' })],
+      'viewer.xls',
+    )
+    const preview = await buildXlsDocumentPreview(file)
+
+    expect(preview.layout.mode).toBe('workbook')
+    expect(preview.layout.mode === 'workbook' ? preview.layout.sheets[0]?.name : '').toBe('Legacy')
+    expect(preview.searchableText).toContain('Viewer')
+  })
+
+  it('builds odt preview from a minimal content.xml package', async () => {
+    const zip = new JSZip()
+    zip.file(
+      'content.xml',
+      `<?xml version="1.0" encoding="UTF-8"?>
+      <office:document-content
+        xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+        xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0"
+        xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0">
+        <office:body>
+          <office:text>
+            <text:h text:outline-level="1">Viewer ODT</text:h>
+            <text:p>Archive paragraph</text:p>
+            <table:table>
+              <table:table-row>
+                <table:table-cell><text:p>Name</text:p></table:table-cell>
+                <table:table-cell><text:p>Value</text:p></table:table-cell>
+              </table:table-row>
+              <table:table-row>
+                <table:table-cell><text:p>Search</text:p></table:table-cell>
+                <table:table-cell><text:p>Enabled</text:p></table:table-cell>
+              </table:table-row>
+            </table:table>
+          </office:text>
+        </office:body>
+      </office:document-content>`,
+    )
+
+    const file = new File([toArrayBuffer(await zip.generateAsync({ type: 'uint8array' }))], 'viewer.odt')
+    const preview = await buildOdtDocumentPreview(file)
+
+    expect(preview.layout.mode).toBe('html')
+    expect(preview.searchableText).toContain('Archive paragraph')
+    expect(preview.layout.mode === 'html' ? preview.layout.outline[0]?.label : '').toBe('Viewer ODT')
+  })
+
+  it('builds epub preview from a minimal spine package', async () => {
+    const zip = new JSZip()
+    zip.file(
+      'META-INF/container.xml',
+      `<?xml version="1.0" encoding="UTF-8"?>
+      <container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+        <rootfiles>
+          <rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>
+        </rootfiles>
+      </container>`,
+    )
+    zip.file(
+      'OEBPS/content.opf',
+      `<?xml version="1.0" encoding="UTF-8"?>
+      <package xmlns="http://www.idpf.org/2007/opf" version="3.0">
+        <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+          <dc:title>Viewer Book</dc:title>
+          <dc:creator>Jack</dc:creator>
+          <dc:language>en</dc:language>
+        </metadata>
+        <manifest>
+          <item id="chapter-1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>
+        </manifest>
+        <spine>
+          <itemref idref="chapter-1"/>
+        </spine>
+      </package>`,
+    )
+    zip.file(
+      'OEBPS/chapter1.xhtml',
+      `<!doctype html>
+      <html>
+        <body>
+          <h1>Viewer Chapter</h1>
+          <p>EPUB foundation text</p>
+        </body>
+      </html>`,
+    )
+
+    const file = new File([toArrayBuffer(await zip.generateAsync({ type: 'uint8array' }))], 'viewer.epub')
+    const preview = await buildEpubDocumentPreview(file)
+
+    expect(preview.layout.mode).toBe('html')
+    expect(preview.searchableText).toContain('EPUB foundation text')
+    expect(preview.summary).toContainEqual({ label: 'Название', value: 'Viewer Book' })
   })
 })
 

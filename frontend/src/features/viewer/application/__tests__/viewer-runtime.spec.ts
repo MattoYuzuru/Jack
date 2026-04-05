@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createEmptyMetadataPayload } from '../viewer-metadata'
 import { createViewerRuntime, releaseViewerEntry } from '../viewer-runtime'
+import { ViewerDatabaseFormatError } from '../viewer-document-database'
 
 const originalCreateObjectUrl = URL.createObjectURL
 const originalRevokeObjectUrl = URL.revokeObjectURL
@@ -149,25 +150,6 @@ describe('viewer runtime', () => {
     expect(revokeObjectUrl).toHaveBeenCalledWith('blob:pdf-preview')
   })
 
-  it('routes planned office formats into a capability-aware placeholder', async () => {
-    const runtime = createViewerRuntime()
-
-    const result = await runtime.resolve(
-      new File(['epub'], 'book.epub', {
-        type: 'application/epub+zip',
-      }),
-    )
-
-    expect(result.kind).toBe('unknown')
-
-    if (result.kind !== 'unknown') {
-      throw new Error('Expected a planned document placeholder.')
-    }
-
-    expect(result.headline).toContain('EPUB')
-    expect(result.detail).toContain('Foundation')
-  })
-
   it('routes xlsx files through the workbook document adapter', async () => {
     const runtime = createViewerRuntime({
       buildXlsxDocument: async () => ({
@@ -208,5 +190,79 @@ describe('viewer runtime', () => {
 
     expect(result.previewLabel).toBe('XLSX workbook adapter')
     expect(result.layout.mode).toBe('workbook')
+  })
+
+  it('routes doc files through the legacy document adapter', async () => {
+    const runtime = createViewerRuntime({
+      buildDocDocument: async () => ({
+        summary: [{ label: 'Тип документа', value: 'DOC' }],
+        searchableText: 'Legacy viewer text',
+        warnings: [],
+        layout: {
+          mode: 'text',
+          text: 'Legacy viewer text',
+          paragraphs: ['Legacy viewer text'],
+        },
+        previewLabel: 'DOC legacy text adapter',
+      }),
+    })
+
+    const result = await runtime.resolve(new File(['doc'], 'legacy.doc', { type: 'application/msword' }))
+
+    if (result.kind !== 'document') {
+      throw new Error('Expected a DOC document preview result.')
+    }
+
+    expect(result.previewLabel).toBe('DOC legacy text adapter')
+    expect(result.layout.mode).toBe('text')
+  })
+
+  it('routes epub files through the reflow document adapter', async () => {
+    const runtime = createViewerRuntime({
+      buildEpubDocument: async () => ({
+        summary: [{ label: 'Тип документа', value: 'EPUB' }],
+        searchableText: 'Viewer chapter text',
+        warnings: [],
+        layout: {
+          mode: 'html',
+          text: 'Viewer chapter text',
+          srcDoc: '<html><body><h1>Viewer</h1></body></html>',
+          outline: [{ id: 'epub-1', label: 'Viewer', level: 1 }],
+        },
+        previewLabel: 'EPUB reading adapter',
+      }),
+    })
+
+    const result = await runtime.resolve(
+      new File(['epub'], 'book.epub', {
+        type: 'application/epub+zip',
+      }),
+    )
+
+    if (result.kind !== 'document') {
+      throw new Error('Expected an EPUB document preview result.')
+    }
+
+    expect(result.previewLabel).toBe('EPUB reading adapter')
+    expect(result.layout.mode).toBe('html')
+  })
+
+  it('falls back to unknown when db extension does not confirm sqlite signature', async () => {
+    const runtime = createViewerRuntime({
+      buildSqliteDocument: async () => {
+        throw new ViewerDatabaseFormatError('DB file is not SQLite')
+      },
+    })
+
+    const result = await runtime.resolve(new File(['db'], 'storage.db'))
+
+    expect(result.kind).toBe('unknown')
+
+    if (result.kind !== 'unknown') {
+      throw new Error('Expected a DB fallback result.')
+    }
+
+    expect(result.headline).toContain('DB')
+    expect(result.detail).toContain('not SQLite')
   })
 })

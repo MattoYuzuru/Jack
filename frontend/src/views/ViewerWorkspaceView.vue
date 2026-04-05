@@ -26,6 +26,7 @@ const metadataQuery = ref('')
 const documentQuery = ref('')
 const documentSheetIndex = ref(0)
 const documentSlideIndex = ref(0)
+const documentDatabaseTableIndex = ref(0)
 const activeDocumentMatchIndex = ref(0)
 const metadataDraft = ref<ViewerEditableMetadata>(createEmptyEditableMetadata())
 const isSavingMetadata = ref(false)
@@ -97,6 +98,7 @@ watch(
     documentQuery.value = ''
     documentSheetIndex.value = 0
     documentSlideIndex.value = 0
+    documentDatabaseTableIndex.value = 0
     activeDocumentMatchIndex.value = 0
     documentActionMessage.value = ''
   },
@@ -243,6 +245,25 @@ const documentSlides = computed(() => {
 
 const activeDocumentSlide = computed(() => documentSlides.value[documentSlideIndex.value] ?? null)
 
+const documentDatabase = computed(() => {
+  if (selection.value?.kind !== 'document' || selection.value.layout.mode !== 'database') {
+    return null
+  }
+
+  return selection.value.layout
+})
+
+const activeDocumentDatabaseTable = computed(() => {
+  if (!documentDatabase.value) {
+    return null
+  }
+
+  const maxIndex = Math.max(documentDatabase.value.tables.length - 1, 0)
+  const safeIndex = Math.min(documentDatabaseTableIndex.value, maxIndex)
+
+  return documentDatabase.value.tables[safeIndex] ?? null
+})
+
 const documentModeLabel = computed(() => {
   if (selection.value?.kind !== 'document') {
     return ''
@@ -255,6 +276,7 @@ const documentModeLabel = computed(() => {
     html: 'HTML Canvas',
     workbook: 'Workbook Preview',
     slides: 'Slide Deck',
+    database: 'Database Preview',
   }
 
   return labelMap[selection.value.layout.mode] ?? 'Document Preview'
@@ -280,6 +302,7 @@ const documentSearchPlaceholder = computed(() => {
     html: 'heading, link text, paragraph...',
     workbook: 'sheet name, cell value, total...',
     slides: 'slide title, bullet, agenda...',
+    database: 'table, column, schema, value...',
   }
 
   return placeholderMap[selection.value.layout.mode] ?? 'Search document...'
@@ -424,6 +447,10 @@ function selectDocumentSlide(index: number) {
   documentSlideIndex.value = index
 }
 
+function selectDocumentDatabaseTable(index: number) {
+  documentDatabaseTableIndex.value = index
+}
+
 onMounted(() => {
   document.addEventListener('fullscreenchange', syncFullscreenState)
 })
@@ -447,18 +474,18 @@ onBeforeUnmount(() => {
       <div class="app-topbar__status">
         <RouterLink class="back-link" to="/">Back to Home</RouterLink>
         <span class="chip-pill">Images + Docs</span>
-        <span class="chip-pill chip-pill--accent">Document UX Polish</span>
+        <span class="chip-pill chip-pill--accent">Remaining Document Formats</span>
       </div>
     </header>
 
     <section class="viewer-hero-grid">
       <article class="panel-surface viewer-intro">
         <p class="eyebrow">Iteration 03 · File Viewer</p>
-        <h1>Viewer уже не просто поддерживает документы, а даёт рабочий UX для них.</h1>
+        <h1>Viewer закрыл document roadmap целиком и теперь держит legacy, archive и database paths.</h1>
         <p class="lead">
           Архитектура остаётся registry-driven: image и document форматы идут через общий workspace,
-          а поверх document runtime теперь есть search, быстрые actions, sheet/slide navigation и
-          более внятные preview states для каждого поддержанного режима.
+          а поверх document runtime теперь есть search, быстрые actions, sheet/slide/database
+          navigation и более внятные preview states для каждого поддержанного режима.
         </p>
 
         <div
@@ -479,8 +506,9 @@ onBeforeUnmount(() => {
           <div class="viewer-dropzone__copy">
             <strong>Загрузить файл в viewer</strong>
             <span>
-              На этом проходе viewer уже умеет работать не только с изображениями, но и с document
-              сценариями: `pdf`, `txt`, `csv`, `html`, `rtf`, `docx`, `xlsx`, `pptx`.
+              На этом проходе viewer уже умеет работать не только с изображениями, но и со всем
+              document-набором roadmap: `doc`, `docx`, `pdf`, `txt`, `rtf`, `odt`, `xls`, `xlsx`,
+              `csv`, `pptx`, `html`, `epub`, `db`, `sqlite`.
             </span>
           </div>
 
@@ -500,9 +528,9 @@ onBeforeUnmount(() => {
 
         <div class="signal-row">
           <span class="chip-pill">Image tooling live</span>
-          <span class="chip-pill">OOXML previews</span>
+          <span class="chip-pill">Legacy + archive + database</span>
           <span class="chip-pill">Search layer</span>
-          <span class="chip-pill">Sheets + slides + quick actions</span>
+          <span class="chip-pill">Sheets + slides + tables + quick actions</span>
         </div>
       </article>
 
@@ -702,6 +730,68 @@ onBeforeUnmount(() => {
               </div>
             </div>
 
+            <div v-else-if="selection.layout.mode === 'database'" class="document-database">
+              <div class="document-workbook__tabs">
+                <button
+                  v-for="(table, tableIndex) in selection.layout.tables"
+                  :key="table.id"
+                  class="document-sheet-chip"
+                  :class="{ 'document-sheet-chip--active': documentDatabaseTableIndex === tableIndex }"
+                  type="button"
+                  @click="selectDocumentDatabaseTable(tableIndex)"
+                >
+                  {{ table.name }}
+                </button>
+              </div>
+
+              <article v-if="activeDocumentDatabaseTable" class="document-database__schema">
+                <div class="document-table__summary">
+                  <strong>{{
+                    activeDocumentDatabaseTable.rowCount == null
+                      ? 'Rows: n/a'
+                      : `${activeDocumentDatabaseTable.rowCount} rows`
+                  }}</strong>
+                  <span>{{ activeDocumentDatabaseTable.columns.length }} columns</span>
+                </div>
+                <pre>{{ activeDocumentDatabaseTable.schemaSql }}</pre>
+              </article>
+
+              <div v-if="activeDocumentDatabaseTable" class="document-table">
+                <div class="document-table__summary">
+                  <strong>{{ activeDocumentDatabaseTable.sample.totalRows }} rows</strong>
+                  <span>{{ activeDocumentDatabaseTable.sample.totalColumns }} columns</span>
+                </div>
+                <div class="document-table__scroll">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th
+                          v-for="column in activeDocumentDatabaseTable.sample.columns"
+                          :key="column"
+                        >
+                          {{ column }}
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr
+                        v-for="(row, rowIndex) in activeDocumentDatabaseTable.sample.rows"
+                        :key="`${activeDocumentDatabaseTable.id}-${rowIndex}`"
+                      >
+                        <td v-for="(cell, columnIndex) in row" :key="`${rowIndex}-${columnIndex}`">
+                          {{ cell || '—' }}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <p v-else class="viewer-panel__empty">
+                В этой базе не найдено таблиц для preview.
+              </p>
+            </div>
+
             <div v-else-if="selection.layout.mode === 'slides'" class="document-slide-grid">
               <article v-if="activeDocumentSlide" class="document-slide-card document-slide-card--focus">
                 <div class="document-slide-card__meta">
@@ -766,8 +856,8 @@ onBeforeUnmount(() => {
           <div v-else class="viewer-empty-state">
             <strong>Viewer готов к первой загрузке</strong>
             <span>
-              Сейчас уже работают image formats и document preview paths: `pdf`, `txt`, `csv`,
-              `html`, `rtf`, `docx`, `xlsx`, `pptx`.
+              Сейчас уже работают image formats и весь document roadmap: от `doc/xls/odt/epub`
+              до `sqlite/db`.
             </span>
           </div>
         </div>
@@ -1084,7 +1174,7 @@ onBeforeUnmount(() => {
           {{
             documentQuery
               ? 'Совпадения не найдены.'
-              : 'Search panel работает для PDF text layer, TXT, CSV, HTML, RTF и OOXML document adapters.'
+              : 'Search panel работает для legacy, OOXML, archive/reflow и SQLite document adapters.'
           }}
         </p>
       </article>
@@ -1138,6 +1228,21 @@ onBeforeUnmount(() => {
           </article>
         </div>
 
+        <div v-else-if="documentDatabase" class="outline-stack">
+          <article
+            v-for="(table, tableIndex) in documentDatabase.tables"
+            :key="table.id"
+            class="outline-card outline-card--interactive"
+            :class="{ 'outline-card--active': documentDatabaseTableIndex === tableIndex }"
+            @click="selectDocumentDatabaseTable(tableIndex)"
+          >
+            <strong>Table</strong>
+            <span>{{
+              table.rowCount == null ? table.name : `${table.name} · ${table.rowCount} rows`
+            }}</span>
+          </article>
+        </div>
+
         <div v-else-if="documentParagraphs.length" class="excerpt-stack">
           <article v-for="(paragraph, index) in documentParagraphs" :key="index" class="excerpt-card">
             {{ paragraph }}
@@ -1183,6 +1288,10 @@ onBeforeUnmount(() => {
             </article>
           </div>
         </div>
+        <p v-if="!plannedDocumentFormats.length" class="viewer-panel__empty">
+          Для document roadmap в этой итерации больше нет planned-only слотов: все заявленные
+          форматы теперь идут через реальные preview strategies.
+        </p>
       </article>
 
       <article class="panel-surface viewer-panel viewer-panel--wide">
@@ -1191,7 +1300,7 @@ onBeforeUnmount(() => {
         <div class="architecture-grid">
           <article class="architecture-card">
             <strong>Format Registry</strong>
-            <p>Теперь знает не только image family, но и document capability map с честными planned слотами.</p>
+            <p>Теперь знает не только image family, но и весь document capability map без foundation-only хвостов в текущем срезе.</p>
           </article>
           <article class="architecture-card">
             <strong>Strategy Runtime</strong>
@@ -1199,7 +1308,7 @@ onBeforeUnmount(() => {
           </article>
           <article class="architecture-card">
             <strong>Layout Modes</strong>
-            <p>PDF embed, plain text, tabular preview и sandbox HTML живут как mode-подтипы одной модели.</p>
+            <p>PDF embed, plain text, tabular preview, sandbox HTML и database inspection живут как mode-подтипы одной модели.</p>
           </article>
           <article class="architecture-card">
             <strong>Search Layer</strong>
@@ -1207,7 +1316,7 @@ onBeforeUnmount(() => {
           </article>
           <article class="architecture-card">
             <strong>Capability Honesty</strong>
-            <p>DOCX/XLSX/PPTX уже живые, а `doc`, `odt`, `xls`, `epub`, `db`, `sqlite` всё ещё честно помечены как foundation only.</p>
+            <p>Legacy, archive и SQLite paths честно показывают упрощённый preview там, где faithful render неразумен, вместо ложной promise-поддержки.</p>
           </article>
           <article class="architecture-card">
             <strong>Shared Workspace</strong>
@@ -1435,6 +1544,7 @@ h2 {
 .document-text,
 .document-table,
 .document-workbook,
+.document-database,
 .document-slide-grid,
 .warning-stack,
 .search-match-stack,
@@ -1467,6 +1577,10 @@ h2 {
 }
 
 .document-workbook {
+  width: 100%;
+}
+
+.document-database {
   width: 100%;
 }
 
@@ -1507,6 +1621,25 @@ h2 {
   overflow: auto;
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow-pressed);
+}
+
+.document-database__schema {
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+  border-radius: var(--radius-xl);
+  background:
+    radial-gradient(circle at top right, rgba(29, 92, 85, 0.1), transparent 32%),
+    rgba(255, 250, 242, 0.88);
+  box-shadow: var(--shadow-pressed);
+}
+
+.document-database__schema pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text-main);
+  font-size: 0.95rem;
 }
 
 .document-table table {

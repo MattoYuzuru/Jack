@@ -30,7 +30,7 @@ describe('viewer registry', () => {
     expect(resolveViewerFormat('scan.tif')?.extension).toBe('tiff')
   })
 
-  it('exposes document formats with active and planned capability states', () => {
+  it('exposes document formats with active capability states across legacy, archive and database layers', () => {
     const documentFormats = listViewerFormatsByFamily('document')
 
     expect(documentFormats.map((definition) => definition.extension)).toEqual([
@@ -52,9 +52,14 @@ describe('viewer registry', () => {
 
     expect(resolveViewerFormat('sheet.csv')?.previewStrategyId).toBe('csv-document')
     expect(resolveViewerFormat('index.htm')?.extension).toBe('html')
+    expect(resolveViewerFormat('legacy.doc')?.previewStrategyId).toBe('doc-document')
+    expect(resolveViewerFormat('open.odt')?.previewStrategyId).toBe('odt-document')
     expect(resolveViewerFormat('proposal.docx')?.previewStrategyId).toBe('docx-document')
+    expect(resolveViewerFormat('sheet.xls')?.previewStrategyId).toBe('xls-document')
     expect(resolveViewerFormat('deck.pptx')?.previewStrategyId).toBe('pptx-document')
     expect(resolveViewerFormat('model.xlsx')?.previewPipeline).toBe('client-decode')
-    expect(resolveViewerFormat('book.epub')?.previewPipeline).toBe('planned')
+    expect(resolveViewerFormat('book.epub')?.previewStrategyId).toBe('epub-document')
+    expect(resolveViewerFormat('storage.sqlite')?.previewStrategyId).toBe('sqlite-document')
+    expect(resolveViewerFormat('storage.db')?.previewPipeline).toBe('client-decode')
   })
 })
