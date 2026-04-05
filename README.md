@@ -24,6 +24,7 @@ Jack задуман как практичный рабочий набор инс
 На текущем этапе собран стартовый bootstrap-слой:
 
 - backend и frontend разнесены по отдельным каталогам
+- backend теперь уже не только health-check bootstrap: есть первый processing foundation с upload/job/artifact/capability API
 - есть новый UI foundation с neumorphic home-dashboard и крупной навигационной сеткой модулей
 - home уже ведёт в два живых маршрута: `viewer` и первый `converter`
 - есть shared imaging-слой для тяжёлых image decode-сценариев, который переиспользуют модули просмотра и конвертации
@@ -71,6 +72,22 @@ docker compose down -v
 - `JACK_DB_USERNAME`
 - `JACK_DB_PASSWORD`
 - `JACK_API_BASE_URL`
+- `JACK_PROCESSING_STORAGE_ROOT`
+- `JACK_PROCESSING_MAX_UPLOAD_SIZE_BYTES`
+
+## Backend Processing Foundation
+
+Первый backend-срез теперь уже поднимает базовый processing workflow:
+
+- `POST /api/uploads` — сохраняет файл во временное backend storage
+- `GET /api/uploads/{id}` — возвращает metadata по upload
+- `POST /api/jobs` — создаёт processing job
+- `GET /api/jobs/{id}` — возвращает статус, progress и artifacts
+- `GET /api/jobs/{id}/artifacts/{artifactId}` — скачивает artifact
+- `GET /api/capabilities/viewer`
+- `GET /api/capabilities/converter`
+
+В текущем срезе реально реализован foundation job `UPLOAD_INTAKE_ANALYSIS`: он подтверждает upload/storage/job flow и собирает manifest artifact, на который дальше будут навешиваться `ffmpeg`, imaging и document adapters.
 
 ## Локальный Запуск Без Docker
 
