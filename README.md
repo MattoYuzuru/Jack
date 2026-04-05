@@ -27,7 +27,7 @@ Jack задуман как практичный рабочий набор инс
 - backend теперь уже не только health-check bootstrap: есть первый processing foundation с upload/job/artifact/capability API
 - есть новый UI foundation с neumorphic home-dashboard и крупной навигационной сеткой модулей
 - home уже ведёт в два живых маршрута: `viewer` и первый `converter`
-- есть server-assisted processing layer: backend уже закрывает legacy media preview, heavy image-processing jobs и document intelligence preview
+- есть server-assisted processing layer: backend уже закрывает legacy media preview, heavy image-processing jobs, document intelligence preview и metadata operations
 - подготовлены логотип и favicon для дальнейшего использования
 - есть `docker compose`-окружение для локального старта
 - задокументированы workflow-правила и roadmap для будущих итераций
@@ -95,15 +95,16 @@ docker compose down -v
 - `GET /api/capabilities/viewer`
 - `GET /api/capabilities/converter`
 
-В текущем срезе реально реализованы четыре job type:
+В текущем срезе реально реализованы пять job type:
 
 - `UPLOAD_INTAKE_ANALYSIS` — подтверждает upload/storage/job flow и собирает manifest artifact
 - `MEDIA_PREVIEW` — через `ffprobe` и `ffmpeg` собирает browser-friendly preview для legacy video/audio контейнеров и кладёт в artifacts и binary preview, и manifest
 - `IMAGE_CONVERT` — через server imaging toolchain собирает preview/result artifacts для heavy image preview и conversion scenarios
 - `DOCUMENT_PREVIEW` — через backend document intelligence service собирает `summary`, `warnings`, `searchableText`, `layout payload` и при необходимости PDF preview artifact
+- `METADATA_EXPORT` — через backend metadata service читает image/audio metadata и собирает validated export artifact: embedded JPEG EXIF там, где это безопасно, и sidecar JSON для остальных контейнеров
 
 Контейнерный backend теперь сам ставит `ffmpeg`, `ffprobe`, `ImageMagick`, `Ghostscript`, `potrace` и `libraw`, поэтому `MEDIA_PREVIEW` и `IMAGE_CONVERT` работают внутри `docker compose` без внешней подготовки образа.
-Frontend viewer уже использует backend path для `avi`, `mkv`, `wmv`, `flv`, `aac`, `flac`, `aiff`, `heic`, `tiff`, `raw` family и всего document stack (`pdf`, `txt`, `csv`, `html`, `rtf`, `doc`, `docx`, `odt`, `xls`, `xlsx`, `pptx`, `epub`, `db`, `sqlite`), а converter гонит через него heavy image scenarios, поэтому для локальной разработки backend также должен разрешать origin из `JACK_WEB_ALLOWED_ORIGINS`.
+Frontend viewer уже использует backend path для `avi`, `mkv`, `wmv`, `flv`, `aac`, `flac`, `aiff`, `heic`, `tiff`, `raw` family, всего document stack (`pdf`, `txt`, `csv`, `html`, `rtf`, `doc`, `docx`, `odt`, `xls`, `xlsx`, `pptx`, `epub`, `db`, `sqlite`) и metadata read/export, а converter гонит через него heavy image scenarios, поэтому для локальной разработки backend также должен разрешать origin из `JACK_WEB_ALLOWED_ORIGINS`.
 
 ## Локальный Запуск Без Docker
 
@@ -162,7 +163,7 @@ npm run dev
 
 Viewer уже даёт browser-native preview для `jpg`, `jpeg`, `png`, `webp`, `avif`, `gif`, `bmp`, `svg`, `ico`.
 `heic`, `tiff` и `raw` family (`raw`, `dng`, `cr2`, `cr3`, `nef`, `arw`, `raf`, `rw2`, `orf`, `pef`, `srw`) теперь проходят через backend `IMAGE_CONVERT`, который собирает browser-friendly preview artifact и возвращает его в тот же image workspace.
-Поверх preview viewer теперь поднимает metadata payload с summary/groups/editable draft, даёт EXIF/ICC inspection, экспорт metadata patch и image analysis tooling прямо в той же рабочей зоне.
+Поверх preview viewer теперь поднимает metadata payload с summary/groups/editable draft через backend `METADATA_EXPORT`, даёт EXIF/ICC inspection, backend-validated export и image analysis tooling прямо в той же рабочей зоне.
 
 #### 2.2 Office Documents
 
@@ -219,7 +220,8 @@ Audio layer теперь поднимается тем же registry/strategy п
 `mp3`, `wav`, `ogg`, `opus` идут в browser-native audio path, а `aac`, `flac`, `aiff` получают
 server-assisted preview через backend `MEDIA_PREVIEW` и затем сводятся к тому же audio contract.
 Поверх foundation viewer даёт waveform preview, cover-art display, tag inspector с common/native
-groups, timeline/volume/rate controls, loop и keyboard flow для быстрых playback-check сценариев.
+groups, timeline/volume/rate controls, loop и keyboard flow для быстрых playback-check сценариев,
+но audio tag extraction теперь тоже приходит через backend metadata service, а не из browser-only parser'а.
 
 #### 2.5 Другие Форматы
 

@@ -4,6 +4,8 @@ import com.keykomi.jack.processing.domain.ProcessingJobStatus;
 import com.keykomi.jack.processing.domain.ProcessingJobType;
 import com.keykomi.jack.processing.domain.StoredArtifact;
 import com.keykomi.jack.processing.domain.ImageProcessingRequest;
+import com.keykomi.jack.processing.domain.MetadataPayloads;
+import com.keykomi.jack.processing.domain.MetadataProcessingRequest;
 import com.keykomi.jack.processing.domain.StoredProcessingJob;
 import com.keykomi.jack.processing.domain.StoredUpload;
 import java.io.IOException;
@@ -28,6 +30,7 @@ public class ProcessingJobService {
 	private final MediaPreviewService mediaPreviewService;
 	private final ImageProcessingService imageProcessingService;
 	private final DocumentPreviewService documentPreviewService;
+	private final MetadataProcessingService metadataProcessingService;
 	private final ExecutorService processingExecutor;
 	private final Map<UUID, StoredProcessingJob> jobs = new ConcurrentHashMap<>();
 
@@ -37,6 +40,7 @@ public class ProcessingJobService {
 		MediaPreviewService mediaPreviewService,
 		ImageProcessingService imageProcessingService,
 		DocumentPreviewService documentPreviewService,
+		MetadataProcessingService metadataProcessingService,
 		ExecutorService processingExecutor
 	) {
 		this.uploadStorageService = uploadStorageService;
@@ -44,6 +48,7 @@ public class ProcessingJobService {
 		this.mediaPreviewService = mediaPreviewService;
 		this.imageProcessingService = imageProcessingService;
 		this.documentPreviewService = documentPreviewService;
+		this.metadataProcessingService = metadataProcessingService;
 		this.processingExecutor = processingExecutor;
 	}
 
@@ -91,6 +96,7 @@ public class ProcessingJobService {
 				case MEDIA_PREVIEW -> processMediaPreview(job.id(), upload);
 				case IMAGE_CONVERT -> processImageConvert(job.id(), upload, parseImageJobRequest(job.parameters()));
 				case DOCUMENT_PREVIEW -> processDocumentPreview(job.id(), upload);
+				case METADATA_EXPORT -> processMetadataExport(job.id(), upload, parseMetadataJobRequest(job.parameters()));
 				default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Для этого job type backend processor ещё не реализован.");
 			};
 
@@ -155,6 +161,23 @@ public class ProcessingJobService {
 		);
 	}
 
+	private JobProcessingResult processMetadataExport(
+		UUID jobId,
+		StoredUpload upload,
+		MetadataProcessingRequest request
+	) {
+		updateJob(jobId, currentJob -> currentJob.updateProgress(25, "Подготавливаю backend metadata inspect/export pipeline."));
+		var result = this.metadataProcessingService.process(jobId, upload, request);
+		updateJob(
+			jobId,
+			currentJob -> currentJob.updateProgress(85, "Metadata manifest и export artifacts собраны, сохраняю результат.")
+		);
+		return new JobProcessingResult(
+			"Metadata processing готов через backend %s.".formatted(result.runtimeLabel()),
+			result.artifacts()
+		);
+	}
+
 	private StoredArtifact buildUploadIntakeArtifact(UUID jobId, StoredUpload upload) {
 		try {
 			// Первый artifact здесь намеренно простой: он доказывает, что upload уже
@@ -186,7 +209,8 @@ public class ProcessingJobService {
 			jobType != ProcessingJobType.UPLOAD_INTAKE_ANALYSIS &&
 			jobType != ProcessingJobType.MEDIA_PREVIEW &&
 			jobType != ProcessingJobType.IMAGE_CONVERT &&
-			jobType != ProcessingJobType.DOCUMENT_PREVIEW
+			jobType != ProcessingJobType.DOCUMENT_PREVIEW &&
+			jobType != ProcessingJobType.METADATA_EXPORT
 		) {
 			throw new ResponseStatusException(
 				HttpStatus.BAD_REQUEST,
@@ -217,6 +241,16 @@ public class ProcessingJobService {
 				"DOCUMENT_PREVIEW job требует доступного backend document intelligence service."
 			);
 		}
+
+		if (jobType == ProcessingJobType.METADATA_EXPORT) {
+			parseMetadataJobRequest(parameters);
+			if (!this.metadataProcessingService.isAvailable()) {
+				throw new ResponseStatusException(
+					HttpStatus.SERVICE_UNAVAILABLE,
+					"METADATA_EXPORT job требует доступного backend metadata service."
+				);
+			}
+		}
 	}
 
 	private void updateJob(UUID jobId, UnaryOperator<StoredProcessingJob> mutation) {
@@ -237,6 +271,7 @@ public class ProcessingJobService {
 			case MEDIA_PREVIEW -> "Запускаю backend media preview pipeline через ffprobe/ffmpeg.";
 			case IMAGE_CONVERT -> "Запускаю backend imaging pipeline через convert/ffmpeg/potrace.";
 			case DOCUMENT_PREVIEW -> "Запускаю backend document intelligence pipeline.";
+			case METADATA_EXPORT -> "Запускаю backend metadata inspect/export pipeline.";
 			default -> "Запускаю backend processing job.";
 		};
 	}
@@ -261,6 +296,50 @@ public class ProcessingJobService {
 			readOptionalString(parameters, "backgroundColor"),
 			readOptionalString(parameters, "presetLabel")
 		);
+	}
+
+	private MetadataProcessingRequest parseMetadataJobRequest(Map<String, Object> parameters) {
+		var operation = readRequiredString(parameters, "operation");
+
+		return switch (operation) {
+			case "inspect-image" -> new MetadataProcessingRequest(
+				MetadataProcessingRequest.Operation.INSPECT_IMAGE,
+				null
+			);
+			case "inspect-audio" -> new MetadataProcessingRequest(
+				MetadataProcessingRequest.Operation.INSPECT_AUDIO,
+				null
+			);
+			case "export-image" -> new MetadataProcessingRequest(
+				MetadataProcessingRequest.Operation.EXPORT_IMAGE,
+				parseEditableMetadata(parameters.get("metadata"))
+			);
+			default -> throw new ResponseStatusException(
+				HttpStatus.BAD_REQUEST,
+				"METADATA_EXPORT принимает operation только inspect-image, inspect-audio или export-image."
+			);
+		};
+	}
+
+	private MetadataPayloads.EditableMetadata parseEditableMetadata(Object rawMetadata) {
+		if (rawMetadata == null) {
+			return null;
+		}
+		if (!(rawMetadata instanceof Map<?, ?> rawMap)) {
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Параметр metadata должен быть object.");
+		}
+
+		return new MetadataPayloads.EditableMetadata(
+			readStringFromMap(rawMap, "description"),
+			readStringFromMap(rawMap, "artist"),
+			readStringFromMap(rawMap, "copyright"),
+			readStringFromMap(rawMap, "capturedAt")
+		);
+	}
+
+	private String readStringFromMap(Map<?, ?> rawMap, String key) {
+		var value = rawMap.get(key);
+		return value == null ? "" : String.valueOf(value);
 	}
 
 	private String readRequiredString(Map<String, Object> parameters, String key) {

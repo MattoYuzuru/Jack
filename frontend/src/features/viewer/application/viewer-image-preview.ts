@@ -4,12 +4,7 @@ import {
   runProcessingJob,
   type ProcessingJobResponse,
 } from '../../processing/application/processing-client'
-import {
-  extractRawFallbackMetadata,
-  loadStructuredMetadata,
-  type ViewerBinaryPreview,
-} from './viewer-preview'
-import { createEmptyMetadataPayload, mergeMetadataPayload } from './viewer-metadata'
+import { loadStructuredMetadata, type ViewerBinaryPreview } from './viewer-preview'
 
 interface ViewerImagePreviewManifest {
   operation: string
@@ -33,46 +28,32 @@ interface ViewerImagePreviewContext {
 const IMAGE_PREVIEW_JOB_TYPE = 'IMAGE_CONVERT'
 
 export async function decodeHeicPreview(
-  buffer: ArrayBuffer,
+  _buffer: ArrayBuffer,
   context: ViewerImagePreviewContext,
 ): Promise<ViewerBinaryPreview> {
-  const metadata = await loadStructuredMetadata(buffer)
+  const metadata = await loadStructuredMetadata(context.file)
   return buildServerImagePreview(context, metadata)
 }
 
 export async function decodeTiffPreview(
-  buffer: ArrayBuffer,
+  _buffer: ArrayBuffer,
   context: ViewerImagePreviewContext,
 ): Promise<ViewerBinaryPreview> {
-  const metadata = await loadStructuredMetadata(buffer)
+  const metadata = await loadStructuredMetadata(context.file)
   return buildServerImagePreview(context, metadata)
 }
 
 export async function decodeRawPreview(
-  buffer: ArrayBuffer,
+  _buffer: ArrayBuffer,
   context: ViewerImagePreviewContext,
 ): Promise<ViewerBinaryPreview> {
-  const fallbackEntries = extractRawFallbackMetadata(buffer)
-  const metadata = mergeMetadataPayload(
-    await loadStructuredMetadata(buffer),
-    fallbackEntries,
-    fallbackEntries.length
-      ? [
-          {
-            id: 'raw-fallback',
-            label: 'RAW Fallback',
-            entries: fallbackEntries,
-          },
-        ]
-      : [],
-  )
-
+  const metadata = await loadStructuredMetadata(context.file)
   return buildServerImagePreview(context, metadata)
 }
 
 async function buildServerImagePreview(
   context: ViewerImagePreviewContext,
-  metadata = createEmptyMetadataPayload(),
+  metadata: ViewerBinaryPreview['metadata'],
 ): Promise<ViewerBinaryPreview> {
   const completedJob = await runProcessingJob({
     scope: 'viewer',

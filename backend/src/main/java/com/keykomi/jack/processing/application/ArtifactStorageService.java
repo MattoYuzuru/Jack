@@ -73,4 +73,29 @@ public class ArtifactStorageService {
 		}
 	}
 
+	public StoredArtifact storeBytesArtifact(UUID jobId, String kind, String fileName, String mediaType, byte[] bytes) {
+		var artifactId = UUID.randomUUID();
+		var artifactDirectory = this.processingProperties.artifactsDirectory().resolve(jobId.toString());
+		var storagePath = artifactDirectory.resolve(artifactId + "-" + fileName);
+
+		try {
+			Files.createDirectories(artifactDirectory);
+			Files.write(storagePath, bytes);
+
+			return new StoredArtifact(
+				artifactId,
+				jobId,
+				kind,
+				fileName,
+				mediaType,
+				Files.size(storagePath),
+				Instant.now(),
+				storagePath
+			);
+		}
+		catch (IOException exception) {
+			throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Не удалось сохранить in-memory artifact.", exception);
+		}
+	}
+
 }

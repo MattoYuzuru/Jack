@@ -10,25 +10,29 @@ public class CapabilityCatalogService {
 	private final MediaPreviewService mediaPreviewService;
 	private final ImageProcessingService imageProcessingService;
 	private final DocumentPreviewService documentPreviewService;
+	private final MetadataProcessingService metadataProcessingService;
 
 	public CapabilityCatalogService(
 		MediaPreviewService mediaPreviewService,
 		ImageProcessingService imageProcessingService,
-		DocumentPreviewService documentPreviewService
+		DocumentPreviewService documentPreviewService,
+		MetadataProcessingService metadataProcessingService
 	) {
 		this.mediaPreviewService = mediaPreviewService;
 		this.imageProcessingService = imageProcessingService;
 		this.documentPreviewService = documentPreviewService;
+		this.metadataProcessingService = metadataProcessingService;
 	}
 
 	public CapabilityScope viewerCapabilities() {
 		var mediaPreviewAvailable = this.mediaPreviewService.isAvailable();
 		var imageProcessingAvailable = this.imageProcessingService.isAvailable();
 		var documentPreviewAvailable = this.documentPreviewService.isAvailable();
+		var metadataProcessingAvailable = this.metadataProcessingService.isAvailable();
 
 		return new CapabilityScope(
 			"viewer",
-			"document-intelligence",
+			"metadata-service",
 			List.of(
 				new JobTypeCapability(ProcessingJobType.UPLOAD_INTAKE_ANALYSIS, true, "Backend уже умеет принять файл, создать job и собрать manifest artifact."),
 				new JobTypeCapability(
@@ -52,11 +56,17 @@ public class CapabilityCatalogService {
 						? "Backend уже умеет собирать structured document payload для PDF/TXT/CSV/HTML/RTF/DOC/DOCX/ODT/XLS/XLSX/PPTX/EPUB/SQLite."
 						: "Document intelligence service сейчас недоступна в текущем backend окружении."
 				),
-				new JobTypeCapability(ProcessingJobType.METADATA_EXPORT, false, "Metadata read/write пока остаётся на frontend runtime.")
+				new JobTypeCapability(
+					ProcessingJobType.METADATA_EXPORT,
+					metadataProcessingAvailable,
+					metadataProcessingAvailable
+						? "Backend уже умеет читать image/audio metadata и собирать validated metadata export для image files."
+						: "Metadata service сейчас недоступна в текущем backend окружении."
+				)
 			),
 			List.of(
-				"Viewer уже использует server-assisted preview для legacy media, heavy imaging и document intelligence.",
-				"Metadata mutation остаётся следующей большой backend phase после document route flip."
+				"Viewer уже использует server-assisted preview для legacy media, heavy imaging, document intelligence и metadata operations.",
+				"На frontend остаются формы, локальная фильтрация и UX вокруг save/export/download."
 			)
 		);
 	}
@@ -65,10 +75,11 @@ public class CapabilityCatalogService {
 		var mediaPreviewAvailable = this.mediaPreviewService.isAvailable();
 		var imageProcessingAvailable = this.imageProcessingService.isAvailable();
 		var documentPreviewAvailable = this.documentPreviewService.isAvailable();
+		var metadataProcessingAvailable = this.metadataProcessingService.isAvailable();
 
 		return new CapabilityScope(
 			"converter",
-			"document-intelligence",
+			"metadata-service",
 			List.of(
 				new JobTypeCapability(ProcessingJobType.UPLOAD_INTAKE_ANALYSIS, true, "Можно использовать как preflight перед будущими heavy conversion jobs."),
 				new JobTypeCapability(
@@ -91,11 +102,18 @@ public class CapabilityCatalogService {
 					documentPreviewAvailable
 						? "Document preview contract уже поднят и готов к переиспользованию в PDF toolkit/editor/converter flows."
 						: "Document intelligence service пока недоступна и не может переиспользоваться в converter-related сценариях."
+				),
+				new JobTypeCapability(
+					ProcessingJobType.METADATA_EXPORT,
+					metadataProcessingAvailable,
+					metadataProcessingAvailable
+						? "Metadata inspect/export service уже поднята и может переиспользоваться в следующих editor/converter сценариях."
+						: "Metadata service пока недоступна и не может переиспользоваться в converter-related сценариях."
 				)
 			),
 			List.of(
 				"Converter route теперь hybrid: browser-native fast paths остаются локальными, heavy imaging идёт через backend job pipeline.",
-				"Document intelligence уже поднята как общая backend processing capability для следующих модулей."
+				"Document intelligence и metadata service уже подняты как общие backend processing capability для следующих модулей."
 			)
 		);
 	}
