@@ -74,6 +74,9 @@ docker compose down -v
 - `JACK_API_BASE_URL`
 - `JACK_PROCESSING_STORAGE_ROOT`
 - `JACK_PROCESSING_MAX_UPLOAD_SIZE_BYTES`
+- `JACK_PROCESSING_FFMPEG_EXECUTABLE`
+- `JACK_PROCESSING_FFPROBE_EXECUTABLE`
+- `JACK_PROCESSING_MEDIA_PREVIEW_TIMEOUT_SECONDS`
 
 ## Backend Processing Foundation
 
@@ -87,7 +90,12 @@ docker compose down -v
 - `GET /api/capabilities/viewer`
 - `GET /api/capabilities/converter`
 
-В текущем срезе реально реализован foundation job `UPLOAD_INTAKE_ANALYSIS`: он подтверждает upload/storage/job flow и собирает manifest artifact, на который дальше будут навешиваться `ffmpeg`, imaging и document adapters.
+В текущем срезе реально реализованы два job type:
+
+- `UPLOAD_INTAKE_ANALYSIS` — подтверждает upload/storage/job flow и собирает manifest artifact
+- `MEDIA_PREVIEW` — через `ffprobe` и `ffmpeg` собирает browser-friendly preview для legacy video/audio контейнеров и кладёт в artifacts и binary preview, и manifest
+
+Для `MEDIA_PREVIEW` backend-окружение должно видеть исполняемые `ffmpeg` и `ffprobe`. Текущий `backend/Dockerfile` их ещё не включает, поэтому в контейнерном режиме эта фаза требует отдельной подготовки образа или внешних бинарей.
 
 ## Локальный Запуск Без Docker
 

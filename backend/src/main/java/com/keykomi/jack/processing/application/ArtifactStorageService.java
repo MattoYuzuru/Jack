@@ -48,4 +48,29 @@ public class ArtifactStorageService {
 		}
 	}
 
+	public StoredArtifact storeFileArtifact(UUID jobId, String kind, String fileName, String mediaType, java.nio.file.Path sourcePath) {
+		var artifactId = UUID.randomUUID();
+		var artifactDirectory = this.processingProperties.artifactsDirectory().resolve(jobId.toString());
+		var storagePath = artifactDirectory.resolve(artifactId + "-" + fileName);
+
+		try {
+			Files.createDirectories(artifactDirectory);
+			Files.copy(sourcePath, storagePath);
+
+			return new StoredArtifact(
+				artifactId,
+				jobId,
+				kind,
+				fileName,
+				mediaType,
+				Files.size(storagePath),
+				Instant.now(),
+				storagePath
+			);
+		}
+		catch (IOException exception) {
+			throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Не удалось сохранить binary artifact.", exception);
+		}
+	}
+
 }
