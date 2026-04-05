@@ -3,12 +3,21 @@ export interface ViewerVideoFact {
   value: string
 }
 
+export interface ViewerVideoMetadata {
+  mimeType: string
+  aspectRatio: string
+  orientation: string
+  estimatedBitrateBitsPerSecond: number | null
+  sizeBytes: number
+}
+
 export type ViewerVideoLayout = {
   mode: 'native'
   objectUrl: string
   durationSeconds: number
   width: number
   height: number
+  metadata: ViewerVideoMetadata
 }
 
 export interface ViewerVideoPreviewPayload {

@@ -7,9 +7,13 @@ import {
 } from '../features/viewer/domain/viewer-registry'
 import { useViewerWorkspace } from '../features/viewer/composables/useViewerWorkspace'
 import { useViewerImageTools } from '../features/viewer/composables/useViewerImageTools'
-import { useViewerVideoPlayback } from '../features/viewer/composables/useViewerVideoPlayback'
+import {
+  useViewerVideoPlayback,
+  viewerVideoSubtitleAcceptAttribute,
+} from '../features/viewer/composables/useViewerVideoPlayback'
 import { findViewerDocumentMatches } from '../features/viewer/application/viewer-document'
 import { formatViewerVideoDuration } from '../features/viewer/application/viewer-video'
+import { formatViewerVideoBitrate } from '../features/viewer/application/viewer-video-tools'
 import {
   createEmptyEditableMetadata,
   type ViewerEditableMetadata,
@@ -20,6 +24,7 @@ import {
 } from '../features/viewer/application/viewer-metadata-writer'
 
 const fileInput = ref<HTMLInputElement | null>(null)
+const subtitleInput = ref<HTMLInputElement | null>(null)
 const previewStage = ref<HTMLElement | null>(null)
 const previewImage = ref<HTMLImageElement | null>(null)
 const previewVideo = ref<HTMLVideoElement | null>(null)
@@ -40,6 +45,16 @@ const imageFormats = listViewerFormatsByFamily('image')
 const documentFormats = listViewerFormatsByFamily('document')
 const mediaFormats = listViewerFormatsByFamily('media')
 const videoPlaybackRates = [0.5, 0.75, 1, 1.25, 1.5, 2]
+const videoFrameRateOptions = [23.976, 24, 25, 29.97, 30, 50, 59.94, 60]
+const videoShortcutHints = [
+  { keys: 'Space', description: 'Play / pause' },
+  { keys: '← / →', description: 'Seek -5s / +5s' },
+  { keys: 'Shift + ← / →', description: 'Step one frame назад / вперёд' },
+  { keys: 'M', description: 'Mute / unmute' },
+  { keys: 'L', description: 'Toggle loop' },
+  { keys: 'P', description: 'Picture-in-picture' },
+  { keys: 'C', description: 'Copy current timestamp' },
+]
 
 const browserNativeFormats = computed(() =>
   imageFormats.filter((definition) => definition.previewPipeline === 'browser-native'),
@@ -107,13 +122,37 @@ const {
   durationLabel: videoDurationLabel,
   canUsePictureInPicture,
   isPictureInPictureActive,
+  isLooping,
+  assumedFrameRate,
+  frameStepLabel,
+  approximateFrameNumber,
+  subtitleTracks,
+  activeSubtitleTrack,
+  activeSubtitleTrackId,
+  subtitleCueCount,
+  subtitleMessage,
+  playbackMessage,
+  posterMessage,
+  posterCaptures,
   togglePlayback,
   seekTo,
   seekBy,
   setVolume,
   toggleMute,
   setPlaybackRate,
+  setAssumedFrameRate,
+  stepFrame,
+  toggleLoop,
   togglePictureInPicture,
+  loadSubtitleFiles,
+  setActiveSubtitleTrack,
+  removeSubtitleTrack,
+  clearSubtitleTracks,
+  capturePoster,
+  removePosterCapture,
+  downloadPosterCapture,
+  copyCurrentTimestamp,
+  handleShortcutKeydown,
 } = useViewerVideoPlayback(selection, previewVideo)
 
 watch(
@@ -244,6 +283,43 @@ const videoStageMetrics = computed(() => {
   return [
     `Duration: ${formatViewerVideoDuration(selection.value.layout.durationSeconds)}`,
     `Frame: ${selection.value.layout.width} x ${selection.value.layout.height}`,
+    `Aspect: ${selection.value.layout.metadata.aspectRatio}`,
+    subtitleTracks.value.length ? `Subs: ${subtitleTracks.value.length}` : 'Subs: off',
+  ]
+})
+
+const videoMetadataCards = computed(() => {
+  if (selection.value?.kind !== 'video') {
+    return []
+  }
+
+  return [
+    {
+      label: 'Aspect Ratio',
+      value: selection.value.layout.metadata.aspectRatio,
+    },
+    {
+      label: 'Orientation',
+      value: selection.value.layout.metadata.orientation,
+    },
+    {
+      label: 'Estimated Bitrate',
+      value: formatViewerVideoBitrate(selection.value.layout.metadata.estimatedBitrateBitsPerSecond),
+    },
+    {
+      label: 'Approx Frame',
+      value: approximateFrameNumber.value ? `#${approximateFrameNumber.value}` : 'n/a',
+    },
+    {
+      label: 'Subtitles',
+      value: subtitleTracks.value.length
+        ? `${subtitleTracks.value.length} tracks / ${subtitleCueCount.value} cues`
+        : 'No sidecar loaded',
+    },
+    {
+      label: 'Poster Gallery',
+      value: posterCaptures.value.length ? `${posterCaptures.value.length} captures` : 'Empty',
+    },
   ]
 })
 
@@ -367,6 +443,10 @@ const activeDocumentMatch = computed(() => documentMatches.value[activeDocumentM
 
 function openFilePicker() {
   fileInput.value?.click()
+}
+
+function openSubtitlePicker() {
+  subtitleInput.value?.click()
 }
 
 function onFileChange(event: Event) {
@@ -521,12 +601,31 @@ function onVideoRateChange(event: Event) {
   setPlaybackRate(Number(target.value))
 }
 
+function onVideoFrameRateChange(event: Event) {
+  const target = event.target as HTMLSelectElement
+  setAssumedFrameRate(Number(target.value))
+}
+
+async function onSubtitleChange(event: Event) {
+  const target = event.target as HTMLInputElement
+  const files = target.files
+
+  if (!files?.length) {
+    return
+  }
+
+  await loadSubtitleFiles(files)
+  target.value = ''
+}
+
 onMounted(() => {
   document.addEventListener('fullscreenchange', syncFullscreenState)
+  window.addEventListener('keydown', handleShortcutKeydown)
 })
 
 onBeforeUnmount(() => {
   document.removeEventListener('fullscreenchange', syncFullscreenState)
+  window.removeEventListener('keydown', handleShortcutKeydown)
 })
 </script>
 
@@ -544,18 +643,19 @@ onBeforeUnmount(() => {
       <div class="app-topbar__status">
         <RouterLink class="back-link" to="/">Back to Home</RouterLink>
         <span class="chip-pill">Images + Docs + Video</span>
-        <span class="chip-pill chip-pill--accent">Video Foundation</span>
+        <span class="chip-pill chip-pill--accent">Video Tooling</span>
       </div>
     </header>
 
     <section class="viewer-hero-grid">
       <article class="panel-surface viewer-intro">
         <p class="eyebrow">Iteration 03 · File Viewer</p>
-        <h1>Viewer начинает следующий слой: video foundation с player UX и format-aware capability map.</h1>
+        <h1>Viewer углубляет video UX: точный playback, subtitle sidecars, poster capture и richer metadata.</h1>
         <p class="lead">
-          Архитектура остаётся registry-driven: image и document форматы идут через общий workspace,
-          а video family теперь заводится тем же способом: media registry, runtime strategies и
-          отдельный playback state поверх одного viewer route.
+          Архитектура остаётся registry-driven: video family живёт в том же workspace, но поверх
+          foundation теперь получает отдельный tooling-layer. Precision controls, subtitle/session
+          state и frame-derived assets добавляются как composable state, а не как точечные ветки в
+          шаблоне.
         </p>
 
         <div
@@ -572,13 +672,21 @@ onBeforeUnmount(() => {
             :accept="viewerAcceptAttribute"
             @change="onFileChange"
           />
+          <input
+            ref="subtitleInput"
+            class="visually-hidden"
+            type="file"
+            :accept="viewerVideoSubtitleAcceptAttribute"
+            multiple
+            @change="onSubtitleChange"
+          />
 
           <div class="viewer-dropzone__copy">
             <strong>Загрузить файл в viewer</strong>
             <span>
-              Viewer уже держит image и document roadmap, а на этой итерации поднимает video
-              foundation: `mp4`, `mov`, `webm` через browser-native player и честные planned slots
-              для `avi`, `mkv`, `wmv`, `flv`.
+              Viewer уже держит image и document roadmap, а этот проход усиливает video-layer:
+              browser-native playback для `mp4`, `mov`, `webm` теперь получает frame stepping,
+              poster extraction, subtitle sidecars, keyboard flow и richer metadata inspector.
             </span>
           </div>
 
@@ -599,8 +707,8 @@ onBeforeUnmount(() => {
         <div class="signal-row">
           <span class="chip-pill">Image tooling live</span>
           <span class="chip-pill">Document stack complete</span>
-          <span class="chip-pill">Video player foundation</span>
-          <span class="chip-pill">Timeline + speed + PiP</span>
+          <span class="chip-pill">Video precision controls</span>
+          <span class="chip-pill">Subtitle + poster tools</span>
         </div>
       </article>
 
@@ -696,8 +804,17 @@ onBeforeUnmount(() => {
                 <button class="action-button" type="button" @click="togglePlayback">
                   {{ isVideoPlaying ? 'Pause' : 'Play' }}
                 </button>
+                <button class="action-button" type="button" @click="stepFrame(-1)">-1f</button>
+                <button class="action-button" type="button" @click="stepFrame(1)">+1f</button>
                 <button class="action-button" type="button" @click="seekBy(-5)">-5s</button>
                 <button class="action-button" type="button" @click="seekBy(5)">+5s</button>
+                <button class="action-button" type="button" @click="toggleLoop">
+                  {{ isLooping ? 'Loop On' : 'Loop Off' }}
+                </button>
+                <button class="action-button" type="button" @click="openSubtitlePicker">
+                  Subtitles
+                </button>
+                <button class="action-button" type="button" @click="capturePoster">Poster</button>
                 <button
                   class="action-button"
                   type="button"
@@ -713,9 +830,20 @@ onBeforeUnmount(() => {
               ref="previewVideo"
               class="viewer-video-frame__player"
               :src="selection.layout.objectUrl"
+              :loop="isLooping"
               preload="metadata"
               playsinline
-            ></video>
+            >
+              <track
+                v-for="track in subtitleTracks"
+                :key="track.id"
+                :kind="track.kind"
+                :label="track.label"
+                :srclang="track.language"
+                :src="track.objectUrl"
+                :default="track.id === activeSubtitleTrackId"
+              />
+            </video>
 
             <div class="video-control-panel">
               <label class="video-progress">
@@ -730,6 +858,16 @@ onBeforeUnmount(() => {
                 />
                 <span>{{ videoDurationLabel }}</span>
               </label>
+
+              <div v-if="playbackMessage" class="video-tool-message">
+                {{ playbackMessage }}
+              </div>
+              <div v-if="subtitleMessage" class="video-tool-message">
+                {{ subtitleMessage }}
+              </div>
+              <div v-if="posterMessage" class="video-tool-message">
+                {{ posterMessage }}
+              </div>
 
               <div class="video-control-row">
                 <label class="video-slider">
@@ -757,9 +895,56 @@ onBeforeUnmount(() => {
                     </option>
                   </select>
                 </label>
+                <label class="video-rate">
+                  <span>Frame Rate</span>
+                  <select :value="assumedFrameRate" @change="onVideoFrameRateChange">
+                    <option v-for="rate in videoFrameRateOptions" :key="rate" :value="rate">
+                      {{ rate }} fps
+                    </option>
+                  </select>
+                </label>
                 <span class="chip-pill chip-pill--compact">
                   {{ videoProgressPercent.toFixed(0) }}%
                 </span>
+                <span class="chip-pill chip-pill--compact">
+                  {{ frameStepLabel }} / frame
+                </span>
+                <span class="chip-pill chip-pill--compact">
+                  {{ approximateFrameNumber ? `Frame #${approximateFrameNumber}` : 'Frame n/a' }}
+                </span>
+              </div>
+
+              <div class="video-control-row">
+                <div class="viewer-dropzone__actions">
+                  <button class="action-button" type="button" @click="copyCurrentTimestamp">
+                    Copy Timestamp
+                  </button>
+                  <button class="action-button" type="button" @click="capturePoster">
+                    Capture Poster
+                  </button>
+                  <button class="action-button" type="button" @click="openSubtitlePicker">
+                    Add Subtitles
+                  </button>
+                  <button
+                    class="action-button"
+                    type="button"
+                    :disabled="!subtitleTracks.length"
+                    @click="clearSubtitleTracks"
+                  >
+                    Clear Subs
+                  </button>
+                </div>
+                <div class="document-stage-hud__meta">
+                  <span class="chip-pill chip-pill--compact">
+                    {{ isLooping ? 'Looping' : 'Loop once' }}
+                  </span>
+                  <span class="chip-pill chip-pill--compact">
+                    {{ activeSubtitleTrack ? `Active: ${activeSubtitleTrack.label}` : 'Subtitles off' }}
+                  </span>
+                  <span class="chip-pill chip-pill--compact chip-pill--accent">
+                    {{ posterCaptures.length ? `${posterCaptures.length} posters` : 'Poster rail empty' }}
+                  </span>
+                </div>
               </div>
             </div>
           </div>
@@ -1013,8 +1198,8 @@ onBeforeUnmount(() => {
           <div v-else class="viewer-empty-state">
             <strong>Viewer готов к первой загрузке</strong>
             <span>
-              Сейчас уже работают image formats, весь document roadmap и первый video layer для
-              `mp4`, `mov`, `webm`.
+              Сейчас уже работают image formats, весь document roadmap и video workbench для
+              `mp4`, `mov`, `webm` с subtitle/poster tooling.
             </span>
           </div>
         </div>
@@ -1285,6 +1470,7 @@ onBeforeUnmount(() => {
           <span class="chip-pill chip-pill--compact chip-pill--accent">{{ selection.format.label }}</span>
           <span class="chip-pill chip-pill--compact">{{ videoCurrentTimeLabel }} / {{ videoDurationLabel }}</span>
           <span class="chip-pill chip-pill--compact">{{ isVideoPlaying ? 'Playing' : 'Paused' }}</span>
+          <span class="chip-pill chip-pill--compact">{{ isLooping ? 'Loop On' : 'Loop Off' }}</span>
         </div>
         <dl class="facts-grid">
           <template v-for="fact in selectionFacts" :key="fact.label">
@@ -1300,27 +1486,113 @@ onBeforeUnmount(() => {
       </article>
 
       <article class="panel-surface viewer-panel">
-        <p class="eyebrow">Playback</p>
-        <h2>Scrubbing, speed и стандартные video controls</h2>
+        <p class="eyebrow">Precision</p>
+        <h2>Frame stepping, rate assumptions и session tooling</h2>
         <div class="outline-stack">
-          <article class="outline-card">
-            <strong>Seek</strong>
-            <span>Timeline, `-5s/+5s`, fullscreen и picture-in-picture доступны прямо в stage.</span>
+          <article v-for="card in videoMetadataCards" :key="card.label" class="outline-card">
+            <strong>{{ card.label }}</strong>
+            <span>{{ card.value }}</span>
           </article>
-          <article class="outline-card">
-            <strong>Speed</strong>
-            <span>Foundation уже держит rates от `0.5x` до `2x` через единый playback state.</span>
+        </div>
+      </article>
+
+      <article class="panel-surface viewer-panel">
+        <p class="eyebrow">Subtitles</p>
+        <h2>Sidecar tracks, cue count и quick switching</h2>
+        <div class="viewer-dropzone__actions">
+          <button class="action-button action-button--accent" type="button" @click="openSubtitlePicker">
+            Add Subtitle File
+          </button>
+          <button
+            class="action-button"
+            type="button"
+            :class="{ 'action-button--accent': activeSubtitleTrackId === 'off' }"
+            @click="setActiveSubtitleTrack('off')"
+          >
+            Turn Off
+          </button>
+          <button
+            class="action-button"
+            type="button"
+            :disabled="!subtitleTracks.length"
+            @click="clearSubtitleTracks"
+          >
+            Clear All
+          </button>
+        </div>
+        <div v-if="subtitleTracks.length" class="subtitle-track-grid">
+          <article
+            v-for="track in subtitleTracks"
+            :key="track.id"
+            class="subtitle-track-card"
+            :class="{ 'subtitle-track-card--active': activeSubtitleTrackId === track.id }"
+          >
+            <button class="subtitle-track-card__select" type="button" @click="setActiveSubtitleTrack(track.id)">
+              <strong>{{ track.label }}</strong>
+              <span>{{ track.language.toUpperCase() }} · {{ track.cueCount }} cues · {{ track.format.toUpperCase() }}</span>
+            </button>
+            <button class="subtitle-track-card__action" type="button" @click="removeSubtitleTrack(track.id)">
+              Remove
+            </button>
           </article>
-          <article class="outline-card">
-            <strong>Audio</strong>
-            <span>Mute и volume slider живут в том же control contract, чтобы дальше без боли добавить audio viewer.</span>
+        </div>
+        <p v-else class="viewer-panel__empty">
+          В viewer можно подложить `.vtt` или `.srt` как session subtitle tracks без пересборки
+          самого файла.
+        </p>
+      </article>
+
+      <article class="panel-surface viewer-panel viewer-panel--wide">
+        <p class="eyebrow">Poster Lab</p>
+        <h2>Frame-derived stills, timestamp export и quick review rail</h2>
+        <div class="viewer-dropzone__actions">
+          <button class="action-button action-button--accent" type="button" @click="capturePoster">
+            Capture Current Frame
+          </button>
+          <button class="action-button" type="button" @click="copyCurrentTimestamp">
+            Copy Timestamp
+          </button>
+        </div>
+        <div v-if="posterCaptures.length" class="poster-capture-grid">
+          <article v-for="capture in posterCaptures" :key="capture.id" class="poster-capture-card">
+            <img :src="capture.objectUrl" :alt="capture.fileName" />
+            <div class="poster-capture-card__meta">
+              <strong>{{ capture.timeLabel }}</strong>
+              <span>{{ capture.width }} x {{ capture.height }}</span>
+            </div>
+            <div class="viewer-dropzone__actions">
+              <button class="action-button" type="button" @click="seekTo(capture.timeSeconds)">
+                Jump
+              </button>
+              <button class="action-button" type="button" @click="downloadPosterCapture(capture.id)">
+                Download
+              </button>
+              <button class="action-button" type="button" @click="removePosterCapture(capture.id)">
+                Remove
+              </button>
+            </div>
+          </article>
+        </div>
+        <p v-else class="viewer-panel__empty">
+          Poster rail пока пуст. Захват кадра полезен для cover-image, handoff в converter и
+          быстрых visual checks без отдельного export-пайплайна.
+        </p>
+      </article>
+
+      <article class="panel-surface viewer-panel">
+        <p class="eyebrow">Shortcuts</p>
+        <h2>Keyboard flow для точной навигации</h2>
+        <div class="outline-stack">
+          <article v-for="shortcut in videoShortcutHints" :key="shortcut.keys" class="outline-card">
+            <strong>{{ shortcut.keys }}</strong>
+            <span>{{ shortcut.description }}</span>
           </article>
         </div>
       </article>
 
       <article class="panel-surface viewer-panel viewer-panel--wide">
         <p class="eyebrow">Capability Map</p>
-        <h2>Video foundation и текущие playback paths</h2>
+        <h2>Video runtime и текущие playback paths</h2>
         <div class="capability-columns">
           <div class="format-grid">
             <article
@@ -1812,6 +2084,15 @@ h2 {
   box-shadow: var(--shadow-pressed);
 }
 
+.video-tool-message {
+  width: 100%;
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: linear-gradient(145deg, rgba(255, 246, 232, 0.9), rgba(229, 218, 201, 0.94));
+  box-shadow: var(--shadow-pressed);
+  color: var(--text-main);
+}
+
 .video-progress,
 .video-slider,
 .video-rate {
@@ -1861,6 +2142,8 @@ h2 {
 .document-workbook,
 .document-database,
 .document-slide-grid,
+.subtitle-track-grid,
+.poster-capture-grid,
 .warning-stack,
 .search-match-stack,
 .outline-stack,
@@ -1872,6 +2155,74 @@ h2 {
 .architecture-grid {
   display: grid;
   gap: 14px;
+}
+
+.subtitle-track-grid,
+.poster-capture-grid {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.subtitle-track-card,
+.poster-capture-card {
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+  border-radius: var(--radius-xl);
+  background: rgba(255, 250, 242, 0.84);
+  box-shadow: var(--shadow-pressed);
+}
+
+.subtitle-track-card--active {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.72),
+    0 18px 32px rgba(20, 48, 45, 0.16);
+  outline: 1px solid rgba(29, 92, 85, 0.22);
+}
+
+.subtitle-track-card__select,
+.subtitle-track-card__action {
+  border: 0;
+  border-radius: 16px;
+  background: transparent;
+  color: inherit;
+}
+
+.subtitle-track-card__select {
+  display: grid;
+  gap: 6px;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+}
+
+.subtitle-track-card__action {
+  justify-self: start;
+  padding: 10px 14px;
+  background: rgba(29, 92, 85, 0.1);
+  box-shadow: var(--shadow-pressed);
+  cursor: pointer;
+}
+
+.subtitle-track-card__select span,
+.poster-capture-card__meta span {
+  color: var(--text-soft);
+}
+
+.poster-capture-card img {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: 18px;
+  box-shadow:
+    0 16px 30px rgba(20, 48, 45, 0.18),
+    0 2px 0 rgba(255, 255, 255, 0.54);
+}
+
+.poster-capture-card__meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .document-text {

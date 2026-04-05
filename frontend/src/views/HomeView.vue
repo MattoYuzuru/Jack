@@ -27,7 +27,7 @@ const signalPills = [
   'Converter route',
   'Shared imaging layer',
   'Full document coverage',
-  'Video foundation',
+  'Video tooling',
   'Legacy + archive + database adapters',
   'Decode + encode + vector trace',
   'AVIF / ICO targets',
@@ -57,9 +57,9 @@ const toolCards: ToolCard[] = [
     label: '01 · File Viewer',
     title: 'Viewer',
     description:
-      'Рабочий маршрут для preview и анализа: image tooling, полный document stack и первый video layer внутри одного workspace.',
+      'Рабочий маршрут для preview и анализа: image tooling, полный document stack и video workbench внутри одного workspace.',
     detail:
-      'Viewer уже закрывает весь стартовый image-format set, document layer и теперь поднимает video foundation: browser-native playback для MP4/MOV/WebM, timeline/speed/volume/PiP controls и capability map для legacy контейнеров.',
+      'Viewer уже закрывает весь стартовый image-format set, document layer и теперь усиливает video layer: browser-native playback для MP4/MOV/WebM, frame stepping, subtitle sidecars, poster capture, timeline/speed/volume/PiP controls и capability map для legacy контейнеров.',
     status: 'Active route',
     route: '/viewer',
     accents: ['Images', 'Docs', 'Video', 'Search'],
@@ -151,7 +151,7 @@ const toolCards: ToolCard[] = [
         <p class="lead">
           Home сохраняет soft industrial foundation, но теперь работает как switchboard для двух
           живых маршрутов: viewer отвечает за preview, analysis, полный document stack, video
-          foundation и image tooling, а converter закрывает первую волну image-конвертаций,
+          tooling и image tooling, а converter закрывает первую волну image-конвертаций,
           vector/icon targets, archive-friendly TIFF target и document-target через scenario
           registry, shared imaging и отдельные decode/encode стратегии.
         </p>

@@ -161,6 +161,13 @@ describe('viewer runtime', () => {
           durationSeconds: 12,
           width: 1920,
           height: 1080,
+          metadata: {
+            mimeType: 'video/mp4',
+            aspectRatio: '16:9',
+            orientation: 'Landscape',
+            estimatedBitrateBitsPerSecond: 4_200_000,
+            sizeBytes: 6_300_000,
+          },
         },
         previewLabel: 'Browser video',
       }),
