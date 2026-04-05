@@ -200,11 +200,11 @@ const documentFormatDefinitions: ViewerFormatDefinition[] = [
     label: 'PDF',
     family: 'document',
     mimeTypes: ['application/pdf'],
-    previewPipeline: 'browser-native',
+    previewPipeline: 'server-assisted',
     previewStrategyId: 'pdf-document',
-    statusLabel: 'Browser document',
+    statusLabel: 'Server document preview',
     notes:
-      'PDF остаётся в browser embed preview, но viewer дополнительно поднимает page stats и search layer через document runtime.',
+      'PDF preview теперь подготавливается через backend DOCUMENT_PREVIEW: backend собирает page stats и search layer, а браузер получает готовый PDF artifact для embed.',
     accents: ['Pages', 'Search layer'],
   },
   {
@@ -213,11 +213,11 @@ const documentFormatDefinitions: ViewerFormatDefinition[] = [
     label: 'TXT',
     family: 'document',
     mimeTypes: ['text/plain'],
-    previewPipeline: 'client-decode',
+    previewPipeline: 'server-assisted',
     previewStrategyId: 'text-document',
-    statusLabel: 'Text decode',
+    statusLabel: 'Server text preview',
     notes:
-      'Plain text читается прямо в клиенте и получает search-панель без отдельного viewer-слоя.',
+      'Plain text проходит через backend DOCUMENT_PREVIEW и возвращается в общий text/search contract без локального decode runtime.',
     accents: ['Text', 'Search'],
   },
   {
@@ -226,11 +226,11 @@ const documentFormatDefinitions: ViewerFormatDefinition[] = [
     label: 'CSV',
     family: 'document',
     mimeTypes: ['text/csv', 'application/csv'],
-    previewPipeline: 'client-decode',
+    previewPipeline: 'server-assisted',
     previewStrategyId: 'csv-document',
-    statusLabel: 'Table decode',
+    statusLabel: 'Server table preview',
     notes:
-      'CSV поднимается как tabular preview со строками, колонками, delimiter summary и quick find.',
+      'CSV preview теперь собирается backend-side: браузер получает bounded table payload, delimiter summary и searchable text layer.',
     accents: ['Table', 'Search'],
   },
   {
@@ -239,11 +239,11 @@ const documentFormatDefinitions: ViewerFormatDefinition[] = [
     label: 'HTML',
     family: 'document',
     mimeTypes: ['text/html'],
-    previewPipeline: 'client-decode',
+    previewPipeline: 'server-assisted',
     previewStrategyId: 'html-document',
-    statusLabel: 'Sandbox preview',
+    statusLabel: 'Server sandbox preview',
     notes:
-      'HTML рендерится внутри sandbox iframe после безопасной очистки активного контента и сбора outline.',
+      'HTML сначала проходит через backend sanitization и outline extraction, а затем рендерится в sandbox iframe как готовый srcdoc.',
     accents: ['Sandbox', 'Outline'],
   },
   {
@@ -252,11 +252,11 @@ const documentFormatDefinitions: ViewerFormatDefinition[] = [
     label: 'RTF',
     family: 'document',
     mimeTypes: ['application/rtf', 'text/rtf'],
-    previewPipeline: 'client-decode',
+    previewPipeline: 'server-assisted',
     previewStrategyId: 'rtf-document',
-    statusLabel: 'Text extraction',
+    statusLabel: 'Server text extraction',
     notes:
-      'RTF пока сводится в текстовый слой с поиском и статистикой, без faithful layout render.',
+      'RTF теперь извлекается на backend и сводится к text/search layer без faithful layout render в браузере.',
     accents: ['Legacy', 'Search'],
   },
   {
@@ -265,11 +265,11 @@ const documentFormatDefinitions: ViewerFormatDefinition[] = [
     label: 'DOC',
     family: 'document',
     mimeTypes: ['application/msword'],
-    previewPipeline: 'client-decode',
+    previewPipeline: 'server-assisted',
     previewStrategyId: 'doc-document',
-    statusLabel: 'Legacy adapter',
+    statusLabel: 'Server legacy adapter',
     notes:
-      'Legacy Word идёт через binary text extraction adapter: viewer поднимает readable text layer и search, но не обещает faithful layout Word.',
+      'Legacy Word теперь разбирается backend-side: viewer получает readable text layer и search без локального binary parser.',
     accents: ['Word', 'Legacy'],
   },
   {
@@ -278,11 +278,11 @@ const documentFormatDefinitions: ViewerFormatDefinition[] = [
     label: 'DOCX',
     family: 'document',
     mimeTypes: ['application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
-    previewPipeline: 'client-decode',
+    previewPipeline: 'server-assisted',
     previewStrategyId: 'docx-document',
-    statusLabel: 'OOXML adapter',
+    statusLabel: 'Server OOXML preview',
     notes:
-      'DOCX проходит через OOXML container parser: viewer поднимает headings, tables, текстовый слой и упрощённый document HTML preview.',
+      'DOCX проходит через backend OOXML parser: headings, tables, текстовый слой и document HTML preview приходят готовым payload.',
     accents: ['Word', 'OOXML'],
   },
   {
@@ -291,11 +291,11 @@ const documentFormatDefinitions: ViewerFormatDefinition[] = [
     label: 'ODT',
     family: 'document',
     mimeTypes: ['application/vnd.oasis.opendocument.text'],
-    previewPipeline: 'client-decode',
+    previewPipeline: 'server-assisted',
     previewStrategyId: 'odt-document',
-    statusLabel: 'Archive adapter',
+    statusLabel: 'Server archive adapter',
     notes:
-      'ODT разбирается как zip/xml документ: viewer поднимает headings, таблицы и searchable text поверх общего HTML-oriented document layer.',
+      'ODT теперь разбирается на backend как zip/xml документ и возвращается как headings/tables/searchable text payload.',
     accents: ['OpenDocument', 'Archive'],
   },
   {
@@ -304,11 +304,11 @@ const documentFormatDefinitions: ViewerFormatDefinition[] = [
     label: 'XLS',
     family: 'document',
     mimeTypes: ['application/vnd.ms-excel'],
-    previewPipeline: 'client-decode',
+    previewPipeline: 'server-assisted',
     previewStrategyId: 'xls-document',
-    statusLabel: 'Legacy workbook',
+    statusLabel: 'Server workbook preview',
     notes:
-      'Legacy Excel проходит через workbook decode path: viewer нормализует листы и табличные данные в тот же contract, что и XLSX.',
+      'Legacy Excel теперь проходит через backend workbook adapter: viewer получает sheet/table contract без локального workbook decode.',
     accents: ['Spreadsheet', 'Legacy'],
   },
   {
@@ -317,11 +317,11 @@ const documentFormatDefinitions: ViewerFormatDefinition[] = [
     label: 'XLSX',
     family: 'document',
     mimeTypes: ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
-    previewPipeline: 'client-decode',
+    previewPipeline: 'server-assisted',
     previewStrategyId: 'xlsx-document',
-    statusLabel: 'OOXML adapter',
+    statusLabel: 'Server workbook preview',
     notes:
-      'XLSX поднимается как workbook preview: sheets, первая табличная проекция, search layer и summary по структуре книги.',
+      'XLSX поднимается через backend workbook preview: sheets, табличная проекция и search layer приходят как готовый payload.',
     accents: ['Spreadsheet', 'OOXML'],
   },
   {
@@ -330,11 +330,11 @@ const documentFormatDefinitions: ViewerFormatDefinition[] = [
     label: 'PPTX',
     family: 'document',
     mimeTypes: ['application/vnd.openxmlformats-officedocument.presentationml.presentation'],
-    previewPipeline: 'client-decode',
+    previewPipeline: 'server-assisted',
     previewStrategyId: 'pptx-document',
-    statusLabel: 'OOXML adapter',
+    statusLabel: 'Server slide preview',
     notes:
-      'PPTX идёт через slide-aware text adapter: viewer строит deck summary, slide titles и searchable text layer.',
+      'PPTX идёт через backend slide-aware parser: viewer получает deck summary, slide titles и searchable text layer без локального OOXML runtime.',
     accents: ['Slides', 'OOXML'],
   },
   {
@@ -343,11 +343,11 @@ const documentFormatDefinitions: ViewerFormatDefinition[] = [
     label: 'EPUB',
     family: 'document',
     mimeTypes: ['application/epub+zip'],
-    previewPipeline: 'client-decode',
+    previewPipeline: 'server-assisted',
     previewStrategyId: 'epub-document',
-    statusLabel: 'Reading adapter',
+    statusLabel: 'Server reading preview',
     notes:
-      'EPUB собирается как reflowable reading layer со spine-aware chapter parsing, outline и searchable text без faithful e-book chrome.',
+      'EPUB собирается backend-side как reflowable reading layer: outline и searchable text приходят без локального archive parser.',
     accents: ['Book', 'Reflow'],
   },
   {
@@ -356,11 +356,11 @@ const documentFormatDefinitions: ViewerFormatDefinition[] = [
     label: 'DB',
     family: 'document',
     mimeTypes: [],
-    previewPipeline: 'client-decode',
+    previewPipeline: 'server-assisted',
     previewStrategyId: 'sqlite-document',
-    statusLabel: 'SQLite introspection',
+    statusLabel: 'Server SQLite introspection',
     notes:
-      'DB route сейчас предполагает SQLite-compatible container: viewer поднимает schema/table preview, а для не-SQLite сигнатур возвращает честный fallback.',
+      'DB route теперь предполагает SQLite-compatible container и разбирается через backend DOCUMENT_PREVIEW read-only introspection path.',
     accents: ['Data', 'Schema'],
   },
   {
@@ -369,11 +369,11 @@ const documentFormatDefinitions: ViewerFormatDefinition[] = [
     label: 'SQLite',
     family: 'document',
     mimeTypes: ['application/vnd.sqlite3'],
-    previewPipeline: 'client-decode',
+    previewPipeline: 'server-assisted',
     previewStrategyId: 'sqlite-document',
-    statusLabel: 'SQLite introspection',
+    statusLabel: 'Server SQLite introspection',
     notes:
-      'SQLite viewer поднимает schema-aware preview: список таблиц, sample rows, create SQL и searchable text поверх read-only introspection слоя.',
+      'SQLite viewer теперь получает schema-aware preview с backend: таблицы, sample rows, create SQL и searchable text остаются в read-only contract.',
     accents: ['Data', 'Database'],
   },
 ]

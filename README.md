@@ -27,7 +27,7 @@ Jack задуман как практичный рабочий набор инс
 - backend теперь уже не только health-check bootstrap: есть первый processing foundation с upload/job/artifact/capability API
 - есть новый UI foundation с neumorphic home-dashboard и крупной навигационной сеткой модулей
 - home уже ведёт в два живых маршрута: `viewer` и первый `converter`
-- есть server-assisted processing layer: backend уже закрывает legacy media preview и heavy image-processing jobs
+- есть server-assisted processing layer: backend уже закрывает legacy media preview, heavy image-processing jobs и document intelligence preview
 - подготовлены логотип и favicon для дальнейшего использования
 - есть `docker compose`-окружение для локального старта
 - задокументированы workflow-правила и roadmap для будущих итераций
@@ -95,14 +95,15 @@ docker compose down -v
 - `GET /api/capabilities/viewer`
 - `GET /api/capabilities/converter`
 
-В текущем срезе реально реализованы три job type:
+В текущем срезе реально реализованы четыре job type:
 
 - `UPLOAD_INTAKE_ANALYSIS` — подтверждает upload/storage/job flow и собирает manifest artifact
 - `MEDIA_PREVIEW` — через `ffprobe` и `ffmpeg` собирает browser-friendly preview для legacy video/audio контейнеров и кладёт в artifacts и binary preview, и manifest
 - `IMAGE_CONVERT` — через server imaging toolchain собирает preview/result artifacts для heavy image preview и conversion scenarios
+- `DOCUMENT_PREVIEW` — через backend document intelligence service собирает `summary`, `warnings`, `searchableText`, `layout payload` и при необходимости PDF preview artifact
 
 Контейнерный backend теперь сам ставит `ffmpeg`, `ffprobe`, `ImageMagick`, `Ghostscript`, `potrace` и `libraw`, поэтому `MEDIA_PREVIEW` и `IMAGE_CONVERT` работают внутри `docker compose` без внешней подготовки образа.
-Frontend viewer уже использует этот backend path для `avi`, `mkv`, `wmv`, `flv`, `aac`, `flac`, `aiff`, `heic`, `tiff` и `raw` family, а converter гонит через него heavy image scenarios, поэтому для локальной разработки backend также должен разрешать origin из `JACK_WEB_ALLOWED_ORIGINS`.
+Frontend viewer уже использует backend path для `avi`, `mkv`, `wmv`, `flv`, `aac`, `flac`, `aiff`, `heic`, `tiff`, `raw` family и всего document stack (`pdf`, `txt`, `csv`, `html`, `rtf`, `doc`, `docx`, `odt`, `xls`, `xlsx`, `pptx`, `epub`, `db`, `sqlite`), а converter гонит через него heavy image scenarios, поэтому для локальной разработки backend также должен разрешать origin из `JACK_WEB_ALLOWED_ORIGINS`.
 
 ## Локальный Запуск Без Docker
 
@@ -174,16 +175,17 @@ Viewer уже даёт browser-native preview для `jpg`, `jpeg`, `png`, `webp
 - [ ] Частичное редактирование содержимого там, где формат это позволяет
 - [x] Поддержка: `doc`, `docx`, `pdf`, `txt`, `rtf`, `odt`, `xls`, `xlsx`, `csv`, `pptx`, `html`, `epub`, `db`, `sqlite`
 
-Document viewer теперь использует тот же registry/strategy foundation, что и image layer, но сводит
-`pdf`, `txt`, `csv`, `html`, `rtf`, `doc`, `docx`, `odt`, `xls`, `xlsx`, `pptx`, `epub`, `db`,
-`sqlite` к общему document contract:
+Document viewer теперь использует тот же registry/strategy foundation, что и image layer, но сами
+document container'ы больше не парсятся в браузере. Backend `DOCUMENT_PREVIEW` сводит
+`pdf`, `txt`, `csv`, `html`, `rtf`, `doc`, `docx`, `odt`, `xls`, `xlsx`, `pptx`, `epub`, `db`, `sqlite`
+к общему document contract:
 `summary + search layer + layout mode + warnings`.
-`pdf` открывается в browser embed и дополнительно поднимает page/search stats, `csv` получает table preview,
-`html` рендерится через sandbox `srcdoc`, `rtf` и `doc` идут через text extraction path, `docx` и `odt`
-собираются как structured document HTML, `xls` и `xlsx` как workbook/sheet preview, `pptx` как slide
+`pdf` открывается через backend-prepared PDF artifact и получает page/search stats, `csv` получает table preview,
+`html` приходит после backend sanitization в sandbox `srcdoc`, `rtf` и `doc` идут через server text extraction path,
+`docx` и `odt` собираются как structured document HTML, `xls` и `xlsx` как workbook/sheet preview, `pptx` как slide
 text deck, `epub` как reflow reading layer, а `db/sqlite` как schema-aware database preview.
-Поверх этого viewer уже даёт copy/download для extracted text, внятные active states для sheets/slides
-и более читаемый search UX прямо внутри общего workspace.
+Поверх этого viewer даёт copy/download для extracted text, внятные active states для sheets/slides
+и более читаемый search UX прямо внутри общего workspace, но тяжёлый parsing/runtime уже принадлежит backend.
 
 #### 2.3 Video Viewer
 
