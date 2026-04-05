@@ -7,6 +7,7 @@ export type PreviewStrategyId =
   | 'heic-image'
   | 'tiff-image'
   | 'raw-image'
+  | 'native-video'
   | 'pdf-document'
   | 'text-document'
   | 'csv-document'
@@ -20,6 +21,7 @@ export type PreviewStrategyId =
   | 'pptx-document'
   | 'epub-document'
   | 'sqlite-document'
+  | 'planned-media'
 
 export interface ViewerFormatDefinition {
   extension: string
@@ -368,7 +370,101 @@ const documentFormatDefinitions: ViewerFormatDefinition[] = [
   },
 ]
 
-const registry = [...imageFormatDefinitions, ...documentFormatDefinitions]
+const mediaFormatDefinitions: ViewerFormatDefinition[] = [
+  {
+    extension: 'mp4',
+    aliases: [],
+    label: 'MP4',
+    family: 'media',
+    mimeTypes: ['video/mp4'],
+    previewPipeline: 'browser-native',
+    previewStrategyId: 'native-video',
+    statusLabel: 'Browser video',
+    notes:
+      'Основной video fast path: MP4 идёт через browser-native player с metadata inspection, scrubbing и playback controls внутри viewer workspace.',
+    accents: ['Video', 'Native'],
+  },
+  {
+    extension: 'mov',
+    aliases: [],
+    label: 'MOV',
+    family: 'media',
+    mimeTypes: ['video/quicktime'],
+    previewPipeline: 'browser-native',
+    previewStrategyId: 'native-video',
+    statusLabel: 'Codec dependent',
+    notes:
+      'MOV использует тот же browser-native player, но реальная воспроизводимость зависит от конкретного codec stack в браузере.',
+    accents: ['Video', 'Codec dependent'],
+  },
+  {
+    extension: 'webm',
+    aliases: [],
+    label: 'WebM',
+    family: 'media',
+    mimeTypes: ['video/webm'],
+    previewPipeline: 'browser-native',
+    previewStrategyId: 'native-video',
+    statusLabel: 'Browser video',
+    notes:
+      'WebM хорошо ложится в browser-native video path и получает тот же player UX без отдельного decode-layer.',
+    accents: ['Video', 'Web native'],
+  },
+  {
+    extension: 'avi',
+    aliases: [],
+    label: 'AVI',
+    family: 'media',
+    mimeTypes: ['video/x-msvideo'],
+    previewPipeline: 'planned',
+    previewStrategyId: 'planned-media',
+    statusLabel: 'Foundation only',
+    notes:
+      'AVI распознан в capability map, но для стабильного preview ему позже понадобится decode/transcode bridge поверх browser player.',
+    accents: ['Video', 'Legacy'],
+  },
+  {
+    extension: 'mkv',
+    aliases: [],
+    label: 'MKV',
+    family: 'media',
+    mimeTypes: ['video/x-matroska'],
+    previewPipeline: 'planned',
+    previewStrategyId: 'planned-media',
+    statusLabel: 'Foundation only',
+    notes:
+      'Matroska-контейнер заведён в registry, но без отдельного playback adapter browser support остаётся слишком нестабильным.',
+    accents: ['Video', 'Container'],
+  },
+  {
+    extension: 'wmv',
+    aliases: [],
+    label: 'WMV',
+    family: 'media',
+    mimeTypes: ['video/x-ms-wmv'],
+    previewPipeline: 'planned',
+    previewStrategyId: 'planned-media',
+    statusLabel: 'Foundation only',
+    notes:
+      'WMV позже потребует отдельный compatibility/decode path, чтобы не зависеть от старого platform codec support.',
+    accents: ['Video', 'Windows'],
+  },
+  {
+    extension: 'flv',
+    aliases: [],
+    label: 'FLV',
+    family: 'media',
+    mimeTypes: ['video/x-flv'],
+    previewPipeline: 'planned',
+    previewStrategyId: 'planned-media',
+    statusLabel: 'Foundation only',
+    notes:
+      'FLV заведён как будущий legacy adapter scenario: foundation есть, но browser-native playback для него не обещается.',
+    accents: ['Video', 'Legacy'],
+  },
+]
+
+const registry = [...imageFormatDefinitions, ...documentFormatDefinitions, ...mediaFormatDefinitions]
 
 const formatByExtension = new Map<string, ViewerFormatDefinition>()
 const formatByMime = new Map<string, ViewerFormatDefinition>()

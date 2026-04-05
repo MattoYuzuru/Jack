@@ -62,4 +62,22 @@ describe('viewer registry', () => {
     expect(resolveViewerFormat('storage.sqlite')?.previewStrategyId).toBe('sqlite-document')
     expect(resolveViewerFormat('storage.db')?.previewPipeline).toBe('client-decode')
   })
+
+  it('exposes media formats with native and planned playback paths', () => {
+    const mediaFormats = listViewerFormatsByFamily('media')
+
+    expect(mediaFormats.map((definition) => definition.extension)).toEqual([
+      'mp4',
+      'mov',
+      'webm',
+      'avi',
+      'mkv',
+      'wmv',
+      'flv',
+    ])
+
+    expect(resolveViewerFormat('clip.mp4')?.previewStrategyId).toBe('native-video')
+    expect(resolveViewerFormat('clip.mov')?.previewPipeline).toBe('browser-native')
+    expect(resolveViewerFormat('clip.mkv')?.previewStrategyId).toBe('planned-media')
+  })
 })

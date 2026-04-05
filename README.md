@@ -155,9 +155,15 @@ text deck, `epub` как reflow reading layer, а `db/sqlite` как schema-awar
 
 #### 2.3 Video Viewer
 
-- [ ] Удобный видеоплеер
-- [ ] Перемотка, скорость воспроизведения и стандартные инструменты проигрывания
+- [x] Foundation для media runtime, capability map и video selection contract
+- [x] Базовый видеоплеер внутри viewer workspace
+- [x] Перемотка, скорость воспроизведения и стандартные инструменты проигрывания
 - [ ] Поддержка: `mp4`, `mov`, `avi`, `mkv`, `webm`, `wmv`, `flv`
+
+Video layer теперь заводится тем же registry/strategy путём, что и image/document:
+`mp4`, `mov`, `webm` идут в browser-native playback path с metadata inspection, timeline, volume,
+speed, fullscreen и picture-in-picture, а `avi`, `mkv`, `wmv`, `flv` уже описаны в capability map
+как planned media slots под будущий decode/transcode adapter.
 
 #### 2.4 Audio Viewer
 
