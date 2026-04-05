@@ -1,5 +1,11 @@
 import type { ViewerFormatDefinition } from '../domain/viewer-registry'
 import { formatViewerVideoDuration, type ViewerVideoPreviewPayload } from './viewer-video'
+import {
+  estimateViewerVideoBitrateBitsPerSecond,
+  formatViewerAspectRatio,
+  formatViewerVideoBitrate,
+  resolveViewerVideoOrientation,
+} from './viewer-video-tools'
 
 interface NativeVideoMetadata {
   durationSeconds: number
@@ -15,6 +21,10 @@ export async function buildNativeVideoPreview(
 
   try {
     const metadata = await inspectNativeVideo(objectUrl)
+    const estimatedBitrate = estimateViewerVideoBitrateBitsPerSecond(
+      file.size,
+      metadata.durationSeconds,
+    )
     const warnings: string[] = []
 
     if (format.extension === 'mov') {
@@ -28,6 +38,9 @@ export async function buildNativeVideoPreview(
         { label: 'Тип видео', value: format.label },
         { label: 'Длительность', value: formatViewerVideoDuration(metadata.durationSeconds) },
         { label: 'Кадр', value: `${metadata.width} x ${metadata.height}` },
+        { label: 'Aspect Ratio', value: formatViewerAspectRatio(metadata.width, metadata.height) },
+        { label: 'Orientation', value: resolveViewerVideoOrientation(metadata.width, metadata.height) },
+        { label: 'Estimated Bitrate', value: formatViewerVideoBitrate(estimatedBitrate) },
         { label: 'Playback path', value: 'Browser native video' },
       ],
       warnings,
@@ -37,6 +50,13 @@ export async function buildNativeVideoPreview(
         durationSeconds: metadata.durationSeconds,
         width: metadata.width,
         height: metadata.height,
+        metadata: {
+          mimeType: file.type || 'Не определён',
+          aspectRatio: formatViewerAspectRatio(metadata.width, metadata.height),
+          orientation: resolveViewerVideoOrientation(metadata.width, metadata.height),
+          estimatedBitrateBitsPerSecond: estimatedBitrate,
+          sizeBytes: file.size,
+        },
       },
       previewLabel: format.statusLabel,
     }
