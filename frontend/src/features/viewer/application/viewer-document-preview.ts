@@ -6,6 +6,7 @@ import type {
   ViewerDocumentSlidePreview,
   ViewerDocumentTablePreview,
 } from './viewer-document'
+import { buildTextSummary, readDocumentText, splitParagraphs } from './viewer-document-shared'
 import {
   escapeHtml,
   findFirstXmlChild,
@@ -18,6 +19,9 @@ import {
   resolveOoxmlPath,
   wrapViewerDocumentHtml,
 } from './viewer-ooxml'
+export { buildEpubDocumentPreview, buildOdtDocumentPreview } from './viewer-document-archive'
+export { buildSqliteDocumentPreview } from './viewer-document-database'
+export { buildDocDocumentPreview, buildXlsDocumentPreview } from './viewer-document-legacy'
 
 interface PdfJsTextItem {
   str?: string
@@ -536,54 +540,6 @@ async function loadPdfJs(): Promise<PdfJsModule> {
   })
 
   return pdfJsPromise
-}
-
-function buildTextSummary(kind: string, text: string): ViewerDocumentFact[] {
-  return [
-    { label: 'Тип документа', value: kind },
-    { label: 'Строки', value: String(countLines(text)) },
-    { label: 'Слова', value: String(countWords(text)) },
-    { label: 'Символы', value: String(text.length) },
-  ]
-}
-
-function splitParagraphs(text: string): string[] {
-  return text
-    .split(/\n{2,}/u)
-    .map((paragraph) => paragraph.trim())
-    .filter(Boolean)
-    .slice(0, 18)
-}
-
-function readDocumentText(buffer: ArrayBuffer): string {
-  const bytes = new Uint8Array(buffer)
-
-  if (bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) {
-    return new TextDecoder('utf-8').decode(bytes)
-  }
-
-  if (bytes[0] === 0xff && bytes[1] === 0xfe) {
-    return new TextDecoder('utf-16le').decode(bytes)
-  }
-
-  if (bytes[0] === 0xfe && bytes[1] === 0xff) {
-    return new TextDecoder('utf-16be').decode(bytes)
-  }
-
-  return new TextDecoder('utf-8').decode(bytes)
-}
-
-function countLines(text: string): number {
-  if (!text.length) {
-    return 0
-  }
-
-  return text.split(/\r?\n/u).length
-}
-
-function countWords(text: string): number {
-  const matches = text.match(/\S+/gu)
-  return matches?.length ?? 0
 }
 
 function detectDelimiter(content: string): string {

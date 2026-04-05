@@ -12,10 +12,14 @@ export type PreviewStrategyId =
   | 'csv-document'
   | 'html-document'
   | 'rtf-document'
+  | 'doc-document'
   | 'docx-document'
+  | 'odt-document'
+  | 'xls-document'
   | 'xlsx-document'
   | 'pptx-document'
-  | 'planned-document'
+  | 'epub-document'
+  | 'sqlite-document'
 
 export interface ViewerFormatDefinition {
   extension: string
@@ -251,11 +255,12 @@ const documentFormatDefinitions: ViewerFormatDefinition[] = [
     label: 'DOC',
     family: 'document',
     mimeTypes: ['application/msword'],
-    previewPipeline: 'planned',
-    previewStrategyId: 'planned-document',
-    statusLabel: 'Foundation only',
-    notes: 'Слот формата уже есть в registry, но для бинарного Word нужен отдельный parser/render pipeline.',
-    accents: ['Word', 'Planned'],
+    previewPipeline: 'client-decode',
+    previewStrategyId: 'doc-document',
+    statusLabel: 'Legacy adapter',
+    notes:
+      'Legacy Word идёт через binary text extraction adapter: viewer поднимает readable text layer и search, но не обещает faithful layout Word.',
+    accents: ['Word', 'Legacy'],
   },
   {
     extension: 'docx',
@@ -276,11 +281,12 @@ const documentFormatDefinitions: ViewerFormatDefinition[] = [
     label: 'ODT',
     family: 'document',
     mimeTypes: ['application/vnd.oasis.opendocument.text'],
-    previewPipeline: 'planned',
-    previewStrategyId: 'planned-document',
-    statusLabel: 'Foundation only',
-    notes: 'ODT будет добавлен поверх того же document contract, но требует отдельного archive parser.',
-    accents: ['OpenDocument', 'Planned'],
+    previewPipeline: 'client-decode',
+    previewStrategyId: 'odt-document',
+    statusLabel: 'Archive adapter',
+    notes:
+      'ODT разбирается как zip/xml документ: viewer поднимает headings, таблицы и searchable text поверх общего HTML-oriented document layer.',
+    accents: ['OpenDocument', 'Archive'],
   },
   {
     extension: 'xls',
@@ -288,10 +294,11 @@ const documentFormatDefinitions: ViewerFormatDefinition[] = [
     label: 'XLS',
     family: 'document',
     mimeTypes: ['application/vnd.ms-excel'],
-    previewPipeline: 'planned',
-    previewStrategyId: 'planned-document',
-    statusLabel: 'Foundation only',
-    notes: 'Legacy Excel пока только описан в capability map; для него нужен свой workbook decode path.',
+    previewPipeline: 'client-decode',
+    previewStrategyId: 'xls-document',
+    statusLabel: 'Legacy workbook',
+    notes:
+      'Legacy Excel проходит через workbook decode path: viewer нормализует листы и табличные данные в тот же contract, что и XLSX.',
     accents: ['Spreadsheet', 'Legacy'],
   },
   {
@@ -326,11 +333,12 @@ const documentFormatDefinitions: ViewerFormatDefinition[] = [
     label: 'EPUB',
     family: 'document',
     mimeTypes: ['application/epub+zip'],
-    previewPipeline: 'planned',
-    previewStrategyId: 'planned-document',
-    statusLabel: 'Foundation only',
-    notes: 'EPUB заведён в capability map как будущий reflowable-document сценарий.',
-    accents: ['Book', 'Planned'],
+    previewPipeline: 'client-decode',
+    previewStrategyId: 'epub-document',
+    statusLabel: 'Reading adapter',
+    notes:
+      'EPUB собирается как reflowable reading layer со spine-aware chapter parsing, outline и searchable text без faithful e-book chrome.',
+    accents: ['Book', 'Reflow'],
   },
   {
     extension: 'db',
@@ -338,11 +346,12 @@ const documentFormatDefinitions: ViewerFormatDefinition[] = [
     label: 'DB',
     family: 'document',
     mimeTypes: [],
-    previewPipeline: 'planned',
-    previewStrategyId: 'planned-document',
-    statusLabel: 'Foundation only',
-    notes: 'Database container распознан в registry, но отдельный data-viewer будет подключён позже.',
-    accents: ['Data', 'Planned'],
+    previewPipeline: 'client-decode',
+    previewStrategyId: 'sqlite-document',
+    statusLabel: 'SQLite introspection',
+    notes:
+      'DB route сейчас предполагает SQLite-compatible container: viewer поднимает schema/table preview, а для не-SQLite сигнатур возвращает честный fallback.',
+    accents: ['Data', 'Schema'],
   },
   {
     extension: 'sqlite',
@@ -350,10 +359,11 @@ const documentFormatDefinitions: ViewerFormatDefinition[] = [
     label: 'SQLite',
     family: 'document',
     mimeTypes: ['application/vnd.sqlite3'],
-    previewPipeline: 'planned',
-    previewStrategyId: 'planned-document',
-    statusLabel: 'Foundation only',
-    notes: 'SQLite позже пойдёт в table-aware viewer с introspection схемы и query-safe preview.',
+    previewPipeline: 'client-decode',
+    previewStrategyId: 'sqlite-document',
+    statusLabel: 'SQLite introspection',
+    notes:
+      'SQLite viewer поднимает schema-aware preview: список таблиц, sample rows, create SQL и searchable text поверх read-only introspection слоя.',
     accents: ['Data', 'Database'],
   },
 ]

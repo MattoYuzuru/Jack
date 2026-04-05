@@ -29,6 +29,23 @@ export interface ViewerDocumentSlidePreview {
   bullets: string[]
 }
 
+export interface ViewerDocumentDatabaseColumnPreview {
+  name: string
+  type: string
+  nullable: boolean
+  primaryKey: boolean
+  defaultValue: string
+}
+
+export interface ViewerDocumentDatabaseTablePreview {
+  id: string
+  name: string
+  rowCount: number | null
+  schemaSql: string
+  columns: ViewerDocumentDatabaseColumnPreview[]
+  sample: ViewerDocumentTablePreview
+}
+
 export interface ViewerDocumentSearchMatch {
   id: string
   excerpt: string
@@ -66,6 +83,12 @@ export type ViewerDocumentLayout =
       mode: 'slides'
       text: string
       slides: ViewerDocumentSlidePreview[]
+    }
+  | {
+      mode: 'database'
+      text: string
+      tables: ViewerDocumentDatabaseTablePreview[]
+      activeTableIndex: number
     }
 
 export interface ViewerDocumentPreviewPayload {

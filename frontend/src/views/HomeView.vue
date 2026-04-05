@@ -26,8 +26,8 @@ const signalPills = [
   'Viewer workspace',
   'Converter route',
   'Shared imaging layer',
-  'OOXML document adapters',
-  'Document UX polish',
+  'Full document coverage',
+  'Legacy + archive + database adapters',
   'Decode + encode + vector trace',
   'AVIF / ICO targets',
   'Preset profiles',
@@ -56,12 +56,12 @@ const toolCards: ToolCard[] = [
     label: '01 · File Viewer',
     title: 'Viewer',
     description:
-      'Рабочий маршрут для preview и анализа: image tooling, polished document search/navigation и OOXML-aware adapters внутри одного workspace.',
+      'Рабочий маршрут для preview и анализа: image tooling, polished document search/navigation и полный document stack внутри одного workspace.',
     detail:
-      'Viewer уже закрывает весь стартовый image-format set, а теперь ещё даёт PDF/TXT/CSV/HTML/RTF плюс DOCX/XLSX/PPTX previews с search, sheet tabs и slide deck UX.',
+      'Viewer уже закрывает весь стартовый image-format set, а document layer теперь поддерживает PDF/TXT/CSV/HTML/RTF, DOC/DOCX/ODT, XLS/XLSX, PPTX, EPUB и SQLite/DB-preview с search, tabs и schema-aware UX.',
     status: 'Active route',
     route: '/viewer',
-    accents: ['Images', 'Docs', 'OOXML', 'Search'],
+    accents: ['Images', 'Docs', 'Legacy', 'Search'],
     span: 'tool-card--wide',
   },
   {
@@ -149,8 +149,8 @@ const toolCards: ToolCard[] = [
         </h1>
         <p class="lead">
           Home сохраняет soft industrial foundation, но теперь работает как switchboard для двух
-          живых маршрутов: viewer отвечает за preview, analysis, PDF/text workflows и OOXML
-          document adapters, а converter закрывает первую волну image-конвертаций, vector/icon
+          живых маршрутов: viewer отвечает за preview, analysis, полный document stack от legacy до
+          SQLite и image tooling, а converter закрывает первую волну image-конвертаций, vector/icon
           targets, archive-friendly TIFF target и document-target через scenario registry, shared
           imaging и отдельные decode/encode стратегии.
         </p>

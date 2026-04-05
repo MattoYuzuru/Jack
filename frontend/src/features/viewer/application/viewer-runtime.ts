@@ -11,14 +11,20 @@ import type {
 } from './viewer-document'
 import {
   buildCsvDocumentPreview,
+  buildDocDocumentPreview,
+  buildEpubDocumentPreview,
   buildDocxDocumentPreview,
   buildHtmlDocumentPreview,
+  buildOdtDocumentPreview,
   buildPdfDocumentPreview,
   buildPptxDocumentPreview,
   buildRtfDocumentPreview,
+  buildSqliteDocumentPreview,
   buildTextDocumentPreview,
+  buildXlsDocumentPreview,
   buildXlsxDocumentPreview,
 } from './viewer-document-preview'
+import { ViewerDatabaseFormatError } from './viewer-document-database'
 import type { ViewerMetadataPayload } from './viewer-metadata'
 import {
   decodeHeicPreview,
@@ -115,13 +121,28 @@ export interface ViewerRuntimeDependencies {
   buildRtfDocument?: (
     context: PreviewStrategyContext,
   ) => Promise<ViewerDocumentPreviewPayload>
+  buildDocDocument?: (
+    context: PreviewStrategyContext,
+  ) => Promise<ViewerDocumentPreviewPayload>
   buildDocxDocument?: (
+    context: PreviewStrategyContext,
+  ) => Promise<ViewerDocumentPreviewPayload>
+  buildOdtDocument?: (
+    context: PreviewStrategyContext,
+  ) => Promise<ViewerDocumentPreviewPayload>
+  buildXlsDocument?: (
     context: PreviewStrategyContext,
   ) => Promise<ViewerDocumentPreviewPayload>
   buildXlsxDocument?: (
     context: PreviewStrategyContext,
   ) => Promise<ViewerDocumentPreviewPayload>
   buildPptxDocument?: (
+    context: PreviewStrategyContext,
+  ) => Promise<ViewerDocumentPreviewPayload>
+  buildEpubDocument?: (
+    context: PreviewStrategyContext,
+  ) => Promise<ViewerDocumentPreviewPayload>
+  buildSqliteDocument?: (
     context: PreviewStrategyContext,
   ) => Promise<ViewerDocumentPreviewPayload>
 }
@@ -149,9 +170,14 @@ const previewStrategies = (
   buildCsvDocument: (context: PreviewStrategyContext) => Promise<ViewerDocumentPreviewPayload>,
   buildHtmlDocument: (context: PreviewStrategyContext) => Promise<ViewerDocumentPreviewPayload>,
   buildRtfDocument: (context: PreviewStrategyContext) => Promise<ViewerDocumentPreviewPayload>,
+  buildDocDocument: (context: PreviewStrategyContext) => Promise<ViewerDocumentPreviewPayload>,
   buildDocxDocument: (context: PreviewStrategyContext) => Promise<ViewerDocumentPreviewPayload>,
+  buildOdtDocument: (context: PreviewStrategyContext) => Promise<ViewerDocumentPreviewPayload>,
+  buildXlsDocument: (context: PreviewStrategyContext) => Promise<ViewerDocumentPreviewPayload>,
   buildXlsxDocument: (context: PreviewStrategyContext) => Promise<ViewerDocumentPreviewPayload>,
   buildPptxDocument: (context: PreviewStrategyContext) => Promise<ViewerDocumentPreviewPayload>,
+  buildEpubDocument: (context: PreviewStrategyContext) => Promise<ViewerDocumentPreviewPayload>,
+  buildSqliteDocument: (context: PreviewStrategyContext) => Promise<ViewerDocumentPreviewPayload>,
 ): Record<PreviewStrategyId, PreviewStrategy<ViewerResolvedEntry>> => ({
   'native-image': {
     async resolve(context) {
@@ -224,9 +250,24 @@ const previewStrategies = (
       return buildDocumentSelection(await buildRtfDocument(context), context)
     },
   },
+  'doc-document': {
+    async resolve(context) {
+      return buildDocumentSelection(await buildDocDocument(context), context)
+    },
+  },
   'docx-document': {
     async resolve(context) {
       return buildDocumentSelection(await buildDocxDocument(context), context)
+    },
+  },
+  'odt-document': {
+    async resolve(context) {
+      return buildDocumentSelection(await buildOdtDocument(context), context)
+    },
+  },
+  'xls-document': {
+    async resolve(context) {
+      return buildDocumentSelection(await buildXlsDocument(context), context)
     },
   },
   'xlsx-document': {
@@ -239,9 +280,22 @@ const previewStrategies = (
       return buildDocumentSelection(await buildPptxDocument(context), context)
     },
   },
-  'planned-document': {
+  'epub-document': {
     async resolve(context) {
-      return buildPlannedDocumentSelection(context)
+      return buildDocumentSelection(await buildEpubDocument(context), context)
+    },
+  },
+  'sqlite-document': {
+    async resolve(context) {
+      try {
+        return buildDocumentSelection(await buildSqliteDocument(context), context)
+      } catch (error) {
+        if (error instanceof ViewerDatabaseFormatError) {
+          return buildDatabaseFallbackSelection(context, error)
+        }
+
+        throw error
+      }
     },
   },
 })
@@ -260,9 +314,14 @@ export function createViewerRuntime(dependencies: ViewerRuntimeDependencies = {}
     dependencies.buildCsvDocument ?? defaultBuildCsvDocument,
     dependencies.buildHtmlDocument ?? defaultBuildHtmlDocument,
     dependencies.buildRtfDocument ?? defaultBuildRtfDocument,
+    dependencies.buildDocDocument ?? defaultBuildDocDocument,
     dependencies.buildDocxDocument ?? defaultBuildDocxDocument,
+    dependencies.buildOdtDocument ?? defaultBuildOdtDocument,
+    dependencies.buildXlsDocument ?? defaultBuildXlsDocument,
     dependencies.buildXlsxDocument ?? defaultBuildXlsxDocument,
     dependencies.buildPptxDocument ?? defaultBuildPptxDocument,
+    dependencies.buildEpubDocument ?? defaultBuildEpubDocument,
+    dependencies.buildSqliteDocument ?? defaultBuildSqliteDocument,
   )
 
   return {
@@ -353,16 +412,18 @@ function buildDocumentSelection(
   }
 }
 
-function buildPlannedDocumentSelection(context: PreviewStrategyContext): ViewerResolvedUnknown {
+function buildDatabaseFallbackSelection(
+  context: PreviewStrategyContext,
+  error: ViewerDatabaseFormatError,
+): ViewerResolvedUnknown {
   return {
     kind: 'unknown',
     file: context.file,
     extension: context.extension,
-    headline: `${context.format.label} уже распознан в document registry, но preview ещё не поднят`,
-    detail:
-      'Foundation для формата уже есть: accept/mime/capability map готовы, но parser и render path для него пока не реализованы.',
+    headline: `${context.format.label} не удалось подтвердить как SQLite container`,
+    detail: error.message,
     nextStep:
-      'Нужно добавить format-specific document adapter поверх общего document contract, а не расширять UI вручную.',
+      'Если это другой DB-вариант, для него нужен отдельный adapter. Для SQLite-aware preview нужен файл с сигнатурой SQLite format 3.',
   }
 }
 
@@ -412,10 +473,28 @@ async function defaultBuildRtfDocument(
   return buildRtfDocumentPreview(context.file)
 }
 
+async function defaultBuildDocDocument(
+  context: PreviewStrategyContext,
+): Promise<ViewerDocumentPreviewPayload> {
+  return buildDocDocumentPreview(context.file)
+}
+
 async function defaultBuildDocxDocument(
   context: PreviewStrategyContext,
 ): Promise<ViewerDocumentPreviewPayload> {
   return buildDocxDocumentPreview(context.file)
+}
+
+async function defaultBuildOdtDocument(
+  context: PreviewStrategyContext,
+): Promise<ViewerDocumentPreviewPayload> {
+  return buildOdtDocumentPreview(context.file)
+}
+
+async function defaultBuildXlsDocument(
+  context: PreviewStrategyContext,
+): Promise<ViewerDocumentPreviewPayload> {
+  return buildXlsDocumentPreview(context.file)
 }
 
 async function defaultBuildXlsxDocument(
@@ -428,6 +507,18 @@ async function defaultBuildPptxDocument(
   context: PreviewStrategyContext,
 ): Promise<ViewerDocumentPreviewPayload> {
   return buildPptxDocumentPreview(context.file)
+}
+
+async function defaultBuildEpubDocument(
+  context: PreviewStrategyContext,
+): Promise<ViewerDocumentPreviewPayload> {
+  return buildEpubDocumentPreview(context.file)
+}
+
+async function defaultBuildSqliteDocument(
+  context: PreviewStrategyContext,
+): Promise<ViewerDocumentPreviewPayload> {
+  return buildSqliteDocumentPreview(context.file)
 }
 
 function defaultInspectNativeImage(objectUrl: string): Promise<{ width: number; height: number }> {
