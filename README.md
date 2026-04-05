@@ -162,15 +162,16 @@ text deck, `epub` как reflow reading layer, а `db/sqlite` как schema-awar
 - [x] Subtitle sidecars (`.vtt`, `.srt`) и session-level track switching
 - [x] Poster extraction из текущего кадра и gallery/export flow
 - [x] Более богатый metadata inspector: aspect ratio, orientation, estimated bitrate
-- [ ] Поддержка: `mp4`, `mov`, `avi`, `mkv`, `webm`, `wmv`, `flv`
+- [x] Поддержка: `mp4`, `mov`, `avi`, `mkv`, `webm`, `wmv`, `flv`
 
 Video layer теперь заводится тем же registry/strategy путём, что и image/document:
 `mp4`, `mov`, `webm` идут в browser-native playback path с metadata inspection, timeline, volume,
-speed, fullscreen и picture-in-picture. Поверх foundation viewer теперь даёт precision controls
-для frame-by-frame stepping с явной fps-assumption, loop/timestamp helpers, session-level subtitle
-sidecars для `.vtt/.srt`, poster capture rail и richer metadata inspector с aspect ratio,
-orientation и estimated bitrate. `avi`, `mkv`, `wmv`, `flv` по-прежнему описаны в capability map
-как planned media slots под будущий decode/transcode adapter.
+speed, fullscreen и picture-in-picture. `avi`, `mkv`, `wmv`, `flv` теперь тоже заведены в тот же
+workspace через legacy decode bridge на базе browser-side ffmpeg.wasm: viewer собирает
+browser-playable preview container и затем отдаёт его в тот же video contract без отдельной ветки UI.
+Поверх foundation viewer даёт precision controls для frame-by-frame stepping с явной fps-assumption,
+loop/timestamp helpers, session-level subtitle sidecars для `.vtt/.srt`, poster capture rail и
+richer metadata inspector с aspect ratio, orientation и estimated bitrate.
 
 #### 2.4 Audio Viewer
 

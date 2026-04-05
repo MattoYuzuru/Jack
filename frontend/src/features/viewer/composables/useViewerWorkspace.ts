@@ -1,4 +1,5 @@
 import { computed, onBeforeUnmount, ref, shallowRef } from 'vue'
+import { resolveViewerFormat } from '../domain/viewer-registry'
 import {
   createViewerRuntime,
   releaseViewerEntry,
@@ -11,6 +12,7 @@ export function useViewerWorkspace() {
   const selection = shallowRef<ViewerResolvedEntry | null>(null)
   const isLoading = ref(false)
   const errorMessage = ref('')
+  const loadingMessage = ref('Подготавливаю preview...')
   const zoom = ref(1)
   const rotation = ref(0)
 
@@ -28,6 +30,7 @@ export function useViewerWorkspace() {
     selection.value = null
     errorMessage.value = ''
     isLoading.value = true
+    loadingMessage.value = resolveLoadingMessage(file)
     resetViewportTransform()
 
     try {
@@ -47,6 +50,7 @@ export function useViewerWorkspace() {
     selection.value = null
     errorMessage.value = ''
     isLoading.value = false
+    loadingMessage.value = 'Подготавливаю preview...'
     resetViewportTransform()
   }
 
@@ -80,6 +84,7 @@ export function useViewerWorkspace() {
     selection,
     isLoading,
     errorMessage,
+    loadingMessage,
     zoom,
     rotation,
     viewportTransform,
@@ -91,4 +96,26 @@ export function useViewerWorkspace() {
     rotateRight,
     resetViewportTransform,
   }
+}
+
+function resolveLoadingMessage(file: File): string {
+  const format = resolveViewerFormat(file.name, file.type)
+
+  if (format?.previewStrategyId === 'legacy-video') {
+    return 'Подготавливаю video preview через legacy decode bridge. Для больших контейнеров это может занять больше времени, чем browser-native path.'
+  }
+
+  if (format?.family === 'document') {
+    return 'Подготавливаю document preview и searchable text layer...'
+  }
+
+  if (format?.family === 'image') {
+    return 'Подготавливаю image preview и metadata payload...'
+  }
+
+  if (format?.family === 'media') {
+    return 'Подготавливаю video preview и playback metadata...'
+  }
+
+  return 'Подготавливаю preview...'
 }

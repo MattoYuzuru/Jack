@@ -184,6 +184,44 @@ describe('viewer runtime', () => {
     expect(result.layout.width).toBe(1920)
   })
 
+  it('routes legacy video containers through the decode bridge', async () => {
+    const runtime = createViewerRuntime({
+      buildLegacyVideo: async () => ({
+        summary: [{ label: 'Runtime Container', value: 'MP4 transcode' }],
+        warnings: ['Legacy bridge used.'],
+        layout: {
+          mode: 'native',
+          objectUrl: 'blob:legacy-video-preview',
+          durationSeconds: 18,
+          width: 1280,
+          height: 720,
+          metadata: {
+            mimeType: 'video/x-matroska',
+            aspectRatio: '16:9',
+            orientation: 'Landscape',
+            estimatedBitrateBitsPerSecond: 3_600_000,
+            sizeBytes: 8_100_000,
+          },
+        },
+        previewLabel: 'Legacy decode bridge',
+      }),
+    })
+
+    const result = await runtime.resolve(
+      new File(['video'], 'archive.mkv', {
+        type: 'video/x-matroska',
+      }),
+    )
+
+    if (result.kind !== 'video') {
+      throw new Error('Expected a legacy video preview result.')
+    }
+
+    expect(result.previewLabel).toBe('Legacy decode bridge')
+    expect(result.format.extension).toBe('mkv')
+    expect(result.summary).toEqual([{ label: 'Runtime Container', value: 'MP4 transcode' }])
+  })
+
   it('routes xlsx files through the workbook document adapter', async () => {
     const runtime = createViewerRuntime({
       buildXlsxDocument: async () => ({
@@ -300,21 +338,4 @@ describe('viewer runtime', () => {
     expect(result.detail).toContain('not SQLite')
   })
 
-  it('routes planned media formats into a capability-aware placeholder', async () => {
-    const runtime = createViewerRuntime()
-    const result = await runtime.resolve(
-      new File(['video'], 'archive.mkv', {
-        type: 'video/x-matroska',
-      }),
-    )
-
-    expect(result.kind).toBe('unknown')
-
-    if (result.kind !== 'unknown') {
-      throw new Error('Expected a planned media placeholder.')
-    }
-
-    expect(result.headline).toContain('MKV')
-    expect(result.detail).toContain('playback path')
-  })
 })
