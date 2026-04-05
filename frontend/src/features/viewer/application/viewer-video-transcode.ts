@@ -1,9 +1,13 @@
 import { FFmpeg } from '@ffmpeg/ffmpeg'
-import type { FileData } from '@ffmpeg/ffmpeg'
-import ffmpegCoreUrl from '@ffmpeg/core?url'
-import ffmpegWasmUrl from '@ffmpeg/core/wasm?url'
 import type { ViewerFormatDefinition } from '../domain/viewer-registry'
 import type { ViewerVideoPreviewPayload } from './viewer-video'
+import {
+  createViewerFfmpegSessionId,
+  loadViewerFfmpeg,
+  normalizeViewerFfmpegBinary,
+  normalizeViewerFfmpegText,
+  safeDeleteViewerFfmpegFile,
+} from './viewer-ffmpeg'
 import { buildVideoPreviewFromBlob } from './viewer-video-preview'
 
 interface ViewerLegacyVideoProbe {
@@ -24,15 +28,12 @@ interface ViewerLegacyVideoProfile {
 
 const LEGACY_VIDEO_TIMEOUT_MS = 240_000
 
-let ffmpegInstance: FFmpeg | null = null
-let ffmpegLoadPromise: Promise<FFmpeg> | null = null
-
 export async function buildLegacyVideoPreview(
   file: File,
   format: ViewerFormatDefinition,
 ): Promise<ViewerVideoPreviewPayload> {
   const ffmpeg = await loadViewerFfmpeg()
-  const sessionId = createViewerLegacySessionId()
+  const sessionId = createViewerFfmpegSessionId('video')
   const inputPath = `/${sessionId}.${format.extension}`
   const probePath = `/${sessionId}.probe.json`
 
@@ -66,8 +67,8 @@ export async function buildLegacyVideoPreview(
       ],
     })
   } finally {
-    await safeDeleteViewerLegacyFile(ffmpeg, inputPath)
-    await safeDeleteViewerLegacyFile(ffmpeg, probePath)
+    await safeDeleteViewerFfmpegFile(ffmpeg, inputPath)
+    await safeDeleteViewerFfmpegFile(ffmpeg, probePath)
   }
 }
 
@@ -124,9 +125,9 @@ async function executeViewerLegacyProfile(
     }
 
     const data = await ffmpeg.readFile(profile.outputFileName)
-    return new Blob([normalizeViewerLegacyBinary(data)], { type: profile.outputMimeType })
+    return new Blob([normalizeViewerFfmpegBinary(data)], { type: profile.outputMimeType })
   } finally {
-    await safeDeleteViewerLegacyFile(ffmpeg, profile.outputFileName)
+    await safeDeleteViewerFfmpegFile(ffmpeg, profile.outputFileName)
   }
 }
 
@@ -164,7 +165,7 @@ async function probeViewerLegacyVideo(
   }
 
   const rawProbe = await ffmpeg.readFile(probePath, 'utf8')
-  const probe = JSON.parse(normalizeViewerLegacyText(rawProbe)) as {
+  const probe = JSON.parse(normalizeViewerFfmpegText(rawProbe)) as {
     format?: { duration?: string }
     streams?: Array<{ width?: number; height?: number; codec_name?: string }>
   }
@@ -176,29 +177,6 @@ async function probeViewerLegacyVideo(
     height: primaryStream?.height ?? null,
     codecName: primaryStream?.codec_name ?? null,
   }
-}
-
-async function loadViewerFfmpeg(): Promise<FFmpeg> {
-  if (ffmpegInstance?.loaded) {
-    return ffmpegInstance
-  }
-
-  if (!ffmpegLoadPromise) {
-    ffmpegLoadPromise = (async () => {
-      const ffmpeg = new FFmpeg()
-      await ffmpeg.load({
-        coreURL: ffmpegCoreUrl,
-        wasmURL: ffmpegWasmUrl,
-      })
-      ffmpegInstance = ffmpeg
-      return ffmpeg
-    })().catch((error) => {
-      ffmpegLoadPromise = null
-      throw error
-    })
-  }
-
-  return ffmpegLoadPromise
 }
 
 function createViewerLegacyProfiles(sessionId: string): ViewerLegacyVideoProfile[] {
@@ -289,39 +267,4 @@ function createViewerLegacyProfiles(sessionId: string): ViewerLegacyVideoProfile
       ],
     },
   ]
-}
-
-async function safeDeleteViewerLegacyFile(ffmpeg: FFmpeg, path: string) {
-  try {
-    await ffmpeg.deleteFile(path)
-  } catch {
-    // FFmpeg MEMFS может не содержать файл после неуспешного профиля, и это не
-    // должно ломать viewer cleanup-path.
-  }
-}
-
-function normalizeViewerLegacyBinary(data: FileData): ArrayBuffer {
-  if (typeof data === 'string') {
-    return new TextEncoder().encode(data).buffer
-  }
-
-  const copy = new Uint8Array(data.byteLength)
-  copy.set(data)
-  return copy.buffer
-}
-
-function normalizeViewerLegacyText(data: FileData): string {
-  if (typeof data === 'string') {
-    return data
-  }
-
-  return new TextDecoder().decode(data)
-}
-
-function createViewerLegacySessionId(): string {
-  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
-    return crypto.randomUUID()
-  }
-
-  return `legacy-${Date.now()}`
 }

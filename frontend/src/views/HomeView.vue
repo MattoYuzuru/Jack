@@ -28,6 +28,7 @@ const signalPills = [
   'Shared imaging layer',
   'Full document coverage',
   'Video tooling',
+  'Audio workbench',
   'Legacy + archive + database adapters',
   'Decode + encode + vector trace',
   'AVIF / ICO targets',
@@ -57,12 +58,12 @@ const toolCards: ToolCard[] = [
     label: '01 · File Viewer',
     title: 'Viewer',
     description:
-      'Рабочий маршрут для preview и анализа: image tooling, полный document stack и video workbench внутри одного workspace.',
+      'Рабочий маршрут для preview и анализа: image tooling, полный document stack, video workbench и audio viewer внутри одного workspace.',
     detail:
-      'Viewer уже закрывает весь стартовый image-format set, document layer и теперь закрывает video slice целиком: MP4/MOV/WebM через native path, AVI/MKV/WMV/FLV через legacy decode bridge, плюс frame stepping, subtitle sidecars, poster capture и rich playback tooling.',
+      'Viewer уже закрывает весь стартовый image-format set, document layer, video slice и audio slice целиком: MP4/MOV/WebM через native path, AVI/MKV/WMV/FLV через legacy decode bridge, MP3/WAV/OGG/OPUS через native audio path, AAC/FLAC/AIFF через audio bridge, плюс waveform, tag inspector, frame stepping, subtitle sidecars и poster tooling.',
     status: 'Active route',
     route: '/viewer',
-    accents: ['Images', 'Docs', 'Video', 'Search'],
+    accents: ['Images', 'Docs', 'Media', 'Search'],
     span: 'tool-card--wide',
   },
   {
@@ -151,7 +152,7 @@ const toolCards: ToolCard[] = [
         <p class="lead">
           Home сохраняет soft industrial foundation, но теперь работает как switchboard для двух
           живых маршрутов: viewer отвечает за preview, analysis, полный document stack, video
-          tooling и image tooling, а converter закрывает первую волну image-конвертаций,
+          tooling, audio workbench и image tooling, а converter закрывает первую волну image-конвертаций,
           vector/icon targets, archive-friendly TIFF target и document-target через scenario
           registry, shared imaging и отдельные decode/encode стратегии.
         </p>

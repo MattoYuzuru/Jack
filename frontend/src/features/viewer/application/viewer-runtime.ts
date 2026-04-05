@@ -33,6 +33,9 @@ import {
   loadStructuredMetadata,
   type ViewerBinaryPreview,
 } from './viewer-preview'
+import type { ViewerAudioFact, ViewerAudioLayout, ViewerAudioPreviewPayload } from './viewer-audio'
+import { buildLegacyAudioPreview } from './viewer-audio-transcode'
+import { buildNativeAudioPreview } from './viewer-audio-preview'
 import type { ViewerVideoFact, ViewerVideoLayout, ViewerVideoPreviewPayload } from './viewer-video'
 import { buildNativeVideoPreview } from './viewer-video-preview'
 import { buildLegacyVideoPreview } from './viewer-video-transcode'
@@ -74,6 +77,20 @@ export interface ViewerResolvedVideo {
   previewLabel: string
 }
 
+export interface ViewerResolvedAudio {
+  kind: 'audio'
+  file: File
+  extension: string
+  format: ViewerFormatDefinition
+  summary: ViewerAudioFact[]
+  warnings: string[]
+  searchableText: string
+  artworkDataUrl: string | null
+  metadataGroups: ViewerMetadataPayload['groups']
+  layout: ViewerAudioLayout
+  previewLabel: string
+}
+
 export interface ViewerResolvedUnknown {
   kind: 'unknown'
   file: File
@@ -87,6 +104,7 @@ export type ViewerResolvedEntry =
   | ViewerResolvedImage
   | ViewerResolvedDocument
   | ViewerResolvedVideo
+  | ViewerResolvedAudio
   | ViewerResolvedUnknown
 
 interface PreviewStrategyContext {
@@ -123,6 +141,8 @@ export interface ViewerRuntimeDependencies {
   ) => Promise<ViewerBinaryPreview>
   buildNativeVideo?: (context: PreviewStrategyContext) => Promise<ViewerVideoPreviewPayload>
   buildLegacyVideo?: (context: PreviewStrategyContext) => Promise<ViewerVideoPreviewPayload>
+  buildNativeAudio?: (context: PreviewStrategyContext) => Promise<ViewerAudioPreviewPayload>
+  buildLegacyAudio?: (context: PreviewStrategyContext) => Promise<ViewerAudioPreviewPayload>
   buildPdfDocument?: (
     context: PreviewStrategyContext,
   ) => Promise<ViewerDocumentPreviewPayload>
@@ -184,6 +204,8 @@ const previewStrategies = (
   ) => Promise<ViewerBinaryPreview>,
   buildNativeVideo: (context: PreviewStrategyContext) => Promise<ViewerVideoPreviewPayload>,
   buildLegacyVideo: (context: PreviewStrategyContext) => Promise<ViewerVideoPreviewPayload>,
+  buildNativeAudio: (context: PreviewStrategyContext) => Promise<ViewerAudioPreviewPayload>,
+  buildLegacyAudio: (context: PreviewStrategyContext) => Promise<ViewerAudioPreviewPayload>,
   buildPdfDocument: (context: PreviewStrategyContext) => Promise<ViewerDocumentPreviewPayload>,
   buildTextDocument: (context: PreviewStrategyContext) => Promise<ViewerDocumentPreviewPayload>,
   buildCsvDocument: (context: PreviewStrategyContext) => Promise<ViewerDocumentPreviewPayload>,
@@ -252,6 +274,16 @@ const previewStrategies = (
   'legacy-video': {
     async resolve(context) {
       return buildVideoSelection(await buildLegacyVideo(context), context)
+    },
+  },
+  'native-audio': {
+    async resolve(context) {
+      return buildAudioSelection(await buildNativeAudio(context), context)
+    },
+  },
+  'legacy-audio': {
+    async resolve(context) {
+      return buildAudioSelection(await buildLegacyAudio(context), context)
     },
   },
   'pdf-document': {
@@ -345,6 +377,8 @@ export function createViewerRuntime(dependencies: ViewerRuntimeDependencies = {}
     dependencies.decodeRawImage ?? defaultDecodeRawImage,
     dependencies.buildNativeVideo ?? defaultBuildNativeVideo,
     dependencies.buildLegacyVideo ?? defaultBuildLegacyVideo,
+    dependencies.buildNativeAudio ?? defaultBuildNativeAudio,
+    dependencies.buildLegacyAudio ?? defaultBuildLegacyAudio,
     dependencies.buildPdfDocument ?? defaultBuildPdfDocument,
     dependencies.buildTextDocument ?? defaultBuildTextDocument,
     dependencies.buildCsvDocument ?? defaultBuildCsvDocument,
@@ -398,6 +432,11 @@ export function releaseViewerEntry(entry: ViewerResolvedEntry | null) {
   }
 
   if (entry.kind === 'video') {
+    URL.revokeObjectURL(entry.layout.objectUrl)
+    return
+  }
+
+  if (entry.kind === 'audio') {
     URL.revokeObjectURL(entry.layout.objectUrl)
     return
   }
@@ -469,6 +508,25 @@ function buildVideoSelection(
   }
 }
 
+function buildAudioSelection(
+  preview: ViewerAudioPreviewPayload,
+  context: PreviewStrategyContext,
+): ViewerResolvedAudio {
+  return {
+    kind: 'audio',
+    file: context.file,
+    extension: context.extension,
+    format: context.format,
+    summary: preview.summary,
+    warnings: preview.warnings,
+    searchableText: preview.searchableText,
+    artworkDataUrl: preview.artworkDataUrl,
+    metadataGroups: preview.metadataGroups,
+    layout: preview.layout,
+    previewLabel: preview.previewLabel,
+  }
+}
+
 function buildDatabaseFallbackSelection(
   context: PreviewStrategyContext,
   error: ViewerDatabaseFormatError,
@@ -523,6 +581,18 @@ async function defaultBuildLegacyVideo(
   context: PreviewStrategyContext,
 ): Promise<ViewerVideoPreviewPayload> {
   return buildLegacyVideoPreview(context.file, context.format)
+}
+
+async function defaultBuildNativeAudio(
+  context: PreviewStrategyContext,
+): Promise<ViewerAudioPreviewPayload> {
+  return buildNativeAudioPreview(context.file, context.format)
+}
+
+async function defaultBuildLegacyAudio(
+  context: PreviewStrategyContext,
+): Promise<ViewerAudioPreviewPayload> {
+  return buildLegacyAudioPreview(context.file, context.format)
 }
 
 async function defaultBuildPdfDocument(
