@@ -301,6 +301,14 @@ Frontend отвечает за:
 
 Приоритет: `P1`
 
+Статус:
+
+- выполнено: backend поднял `METADATA_EXPORT` service с операциями `inspect-image`, `inspect-audio`, `export-image`
+- выполнено: image metadata read, audio tag read и image metadata export теперь идут через backend job pipeline
+- выполнено: backend валидирует supported editable fields и сам выбирает export mode: embedded JPEG EXIF там, где writer path безопасен, и sidecar JSON для остальных контейнеров
+- выполнено: frontend viewer переведён на server-assisted metadata flow и больше не тянет `exifreader`, `piexifjs`, `music-metadata-browser`, `utif2`
+- фазу считаем закрытой: на frontend остались формы, локальная фильтрация и download UX, а metadata parsing/mutation переехали в backend
+
 ### Phase 5. Server-Owned Capability Matrix
 
 Цель:
