@@ -15,6 +15,7 @@ export function useViewerWorkspace() {
   const loadingMessage = ref('Подготавливаю preview...')
   const zoom = ref(1)
   const rotation = ref(0)
+  let activeSelectionRequest = 0
 
   function releaseSelection() {
     releaseViewerEntry(selection.value)
@@ -26,6 +27,7 @@ export function useViewerWorkspace() {
   }
 
   async function selectFile(file: File) {
+    const selectionRequest = ++activeSelectionRequest
     releaseSelection()
     selection.value = null
     errorMessage.value = ''
@@ -34,18 +36,38 @@ export function useViewerWorkspace() {
     resetViewportTransform()
 
     try {
-      selection.value = await viewerRuntime.resolve(file)
+      const resolvedEntry = await viewerRuntime.resolve(file, {
+        onProgress(message) {
+          if (selectionRequest === activeSelectionRequest) {
+            loadingMessage.value = message
+          }
+        },
+      })
+
+      if (selectionRequest !== activeSelectionRequest) {
+        releaseViewerEntry(resolvedEntry)
+        return
+      }
+
+      selection.value = resolvedEntry
     } catch (error) {
+      if (selectionRequest !== activeSelectionRequest) {
+        return
+      }
+
       errorMessage.value =
         error instanceof Error
           ? error.message
           : 'Не удалось подготовить preview для выбранного файла.'
     } finally {
-      isLoading.value = false
+      if (selectionRequest === activeSelectionRequest) {
+        isLoading.value = false
+      }
     }
   }
 
   function clearSelection() {
+    activeSelectionRequest += 1
     releaseSelection()
     selection.value = null
     errorMessage.value = ''
@@ -102,11 +124,11 @@ function resolveLoadingMessage(file: File): string {
   const format = resolveViewerFormat(file.name, file.type)
 
   if (format?.previewStrategyId === 'legacy-video') {
-    return 'Подготавливаю video preview через legacy decode bridge. Для больших контейнеров это может занять больше времени, чем browser-native path.'
+    return 'Подготавливаю video preview через backend MEDIA_PREVIEW job. Для больших контейнеров upload и server transcode могут занять заметное время.'
   }
 
   if (format?.previewStrategyId === 'legacy-audio') {
-    return 'Подготавливаю audio preview через legacy transcode bridge. Для длинных lossless-треков это может занять больше времени, чем browser-native path.'
+    return 'Подготавливаю audio preview через backend MEDIA_PREVIEW job. Для длинных lossless-треков upload и server transcode могут занять заметное время.'
   }
 
   if (format?.family === 'document') {

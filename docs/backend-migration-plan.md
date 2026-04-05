@@ -146,8 +146,9 @@ Frontend отвечает за:
 
 Статус:
 
-- в работе: backend уже умеет запускать `MEDIA_PREVIEW` через `ffprobe` + `ffmpeg`, собирать manifest и binary artifact
-- следующий шаг этой фазы: перевести frontend viewer с browser-side `ffmpeg.wasm` на server-assisted flow и добавить artifact reuse/cache
+- выполнено: backend уже умеет запускать `MEDIA_PREVIEW` через `ffprobe` + `ffmpeg`, собирать manifest и binary artifact
+- выполнено: frontend viewer переведён на server-assisted flow, а `avi`, `mkv`, `wmv`, `flv`, `aac`, `flac`, `aiff` больше не тянут `ffmpeg.wasm` в браузер
+- фазу считаем закрытой: дальнейшие улучшения вроде artifact reuse/cache уходят в следующие platform-итерации, а не блокируют media migration
 
 ### Phase 2. Imaging Processing Service
 

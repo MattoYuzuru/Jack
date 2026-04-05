@@ -34,11 +34,10 @@ import {
   type ViewerBinaryPreview,
 } from './viewer-preview'
 import type { ViewerAudioFact, ViewerAudioLayout, ViewerAudioPreviewPayload } from './viewer-audio'
-import { buildLegacyAudioPreview } from './viewer-audio-transcode'
 import { buildNativeAudioPreview } from './viewer-audio-preview'
 import type { ViewerVideoFact, ViewerVideoLayout, ViewerVideoPreviewPayload } from './viewer-video'
 import { buildNativeVideoPreview } from './viewer-video-preview'
-import { buildLegacyVideoPreview } from './viewer-video-transcode'
+import { buildLegacyAudioPreview, buildLegacyVideoPreview } from './viewer-media-preview'
 
 export interface ViewerResolvedImage {
   kind: 'image'
@@ -111,6 +110,7 @@ interface PreviewStrategyContext {
   file: File
   extension: string
   format: ViewerFormatDefinition
+  reportProgress: (message: string) => void
 }
 
 interface PreviewStrategy<TResult extends ViewerResolvedEntry> {
@@ -118,7 +118,11 @@ interface PreviewStrategy<TResult extends ViewerResolvedEntry> {
 }
 
 export interface ViewerRuntime {
-  resolve(file: File): Promise<ViewerResolvedEntry>
+  resolve(file: File, options?: ViewerResolveOptions): Promise<ViewerResolvedEntry>
+}
+
+export interface ViewerResolveOptions {
+  onProgress?: (message: string) => void
 }
 
 export interface ViewerRuntimeDependencies {
@@ -143,45 +147,19 @@ export interface ViewerRuntimeDependencies {
   buildLegacyVideo?: (context: PreviewStrategyContext) => Promise<ViewerVideoPreviewPayload>
   buildNativeAudio?: (context: PreviewStrategyContext) => Promise<ViewerAudioPreviewPayload>
   buildLegacyAudio?: (context: PreviewStrategyContext) => Promise<ViewerAudioPreviewPayload>
-  buildPdfDocument?: (
-    context: PreviewStrategyContext,
-  ) => Promise<ViewerDocumentPreviewPayload>
-  buildTextDocument?: (
-    context: PreviewStrategyContext,
-  ) => Promise<ViewerDocumentPreviewPayload>
-  buildCsvDocument?: (
-    context: PreviewStrategyContext,
-  ) => Promise<ViewerDocumentPreviewPayload>
-  buildHtmlDocument?: (
-    context: PreviewStrategyContext,
-  ) => Promise<ViewerDocumentPreviewPayload>
-  buildRtfDocument?: (
-    context: PreviewStrategyContext,
-  ) => Promise<ViewerDocumentPreviewPayload>
-  buildDocDocument?: (
-    context: PreviewStrategyContext,
-  ) => Promise<ViewerDocumentPreviewPayload>
-  buildDocxDocument?: (
-    context: PreviewStrategyContext,
-  ) => Promise<ViewerDocumentPreviewPayload>
-  buildOdtDocument?: (
-    context: PreviewStrategyContext,
-  ) => Promise<ViewerDocumentPreviewPayload>
-  buildXlsDocument?: (
-    context: PreviewStrategyContext,
-  ) => Promise<ViewerDocumentPreviewPayload>
-  buildXlsxDocument?: (
-    context: PreviewStrategyContext,
-  ) => Promise<ViewerDocumentPreviewPayload>
-  buildPptxDocument?: (
-    context: PreviewStrategyContext,
-  ) => Promise<ViewerDocumentPreviewPayload>
-  buildEpubDocument?: (
-    context: PreviewStrategyContext,
-  ) => Promise<ViewerDocumentPreviewPayload>
-  buildSqliteDocument?: (
-    context: PreviewStrategyContext,
-  ) => Promise<ViewerDocumentPreviewPayload>
+  buildPdfDocument?: (context: PreviewStrategyContext) => Promise<ViewerDocumentPreviewPayload>
+  buildTextDocument?: (context: PreviewStrategyContext) => Promise<ViewerDocumentPreviewPayload>
+  buildCsvDocument?: (context: PreviewStrategyContext) => Promise<ViewerDocumentPreviewPayload>
+  buildHtmlDocument?: (context: PreviewStrategyContext) => Promise<ViewerDocumentPreviewPayload>
+  buildRtfDocument?: (context: PreviewStrategyContext) => Promise<ViewerDocumentPreviewPayload>
+  buildDocDocument?: (context: PreviewStrategyContext) => Promise<ViewerDocumentPreviewPayload>
+  buildDocxDocument?: (context: PreviewStrategyContext) => Promise<ViewerDocumentPreviewPayload>
+  buildOdtDocument?: (context: PreviewStrategyContext) => Promise<ViewerDocumentPreviewPayload>
+  buildXlsDocument?: (context: PreviewStrategyContext) => Promise<ViewerDocumentPreviewPayload>
+  buildXlsxDocument?: (context: PreviewStrategyContext) => Promise<ViewerDocumentPreviewPayload>
+  buildPptxDocument?: (context: PreviewStrategyContext) => Promise<ViewerDocumentPreviewPayload>
+  buildEpubDocument?: (context: PreviewStrategyContext) => Promise<ViewerDocumentPreviewPayload>
+  buildSqliteDocument?: (context: PreviewStrategyContext) => Promise<ViewerDocumentPreviewPayload>
 }
 
 const previewStrategies = (
@@ -395,7 +373,7 @@ export function createViewerRuntime(dependencies: ViewerRuntimeDependencies = {}
   )
 
   return {
-    async resolve(file) {
+    async resolve(file, options = {}) {
       const extension = detectFileExtension(file.name)
       const format = resolveViewerFormat(file.name, file.type)
 
@@ -416,6 +394,7 @@ export function createViewerRuntime(dependencies: ViewerRuntimeDependencies = {}
         file,
         extension,
         format,
+        reportProgress: options.onProgress ?? (() => undefined),
       })
     },
   }
@@ -580,7 +559,7 @@ async function defaultBuildNativeVideo(
 async function defaultBuildLegacyVideo(
   context: PreviewStrategyContext,
 ): Promise<ViewerVideoPreviewPayload> {
-  return buildLegacyVideoPreview(context.file, context.format)
+  return buildLegacyVideoPreview(context.file, context.format, context.reportProgress)
 }
 
 async function defaultBuildNativeAudio(
@@ -592,7 +571,7 @@ async function defaultBuildNativeAudio(
 async function defaultBuildLegacyAudio(
   context: PreviewStrategyContext,
 ): Promise<ViewerAudioPreviewPayload> {
-  return buildLegacyAudioPreview(context.file, context.format)
+  return buildLegacyAudioPreview(context.file, context.format, context.reportProgress)
 }
 
 async function defaultBuildPdfDocument(

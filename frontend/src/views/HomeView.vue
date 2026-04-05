@@ -60,7 +60,7 @@ const toolCards: ToolCard[] = [
     description:
       'Рабочий маршрут для preview и анализа: image tooling, полный document stack, video workbench и audio viewer внутри одного workspace.',
     detail:
-      'Viewer уже закрывает весь стартовый image-format set, document layer, video slice и audio slice целиком: MP4/MOV/WebM через native path, AVI/MKV/WMV/FLV через legacy decode bridge, MP3/WAV/OGG/OPUS через native audio path, AAC/FLAC/AIFF через audio bridge, плюс waveform, tag inspector, frame stepping, subtitle sidecars и poster tooling.',
+      'Viewer уже закрывает весь стартовый image-format set, document layer, video slice и audio slice целиком: MP4/MOV/WebM через native path, AVI/MKV/WMV/FLV через backend MEDIA_PREVIEW, MP3/WAV/OGG/OPUS через native audio path, AAC/FLAC/AIFF через server-assisted audio preview, плюс waveform, tag inspector, frame stepping, subtitle sidecars и poster tooling.',
     status: 'Active route',
     route: '/viewer',
     accents: ['Images', 'Docs', 'Media', 'Search'],
@@ -147,14 +147,15 @@ const toolCards: ToolCard[] = [
       <article class="panel-surface hero-copy">
         <p class="eyebrow">Iteration 03 · Viewer + Converter</p>
         <h1>
-          Главный экран Jack теперь ведёт сразу в viewer и converter с image-, document- и target-oriented runtime.
+          Главный экран Jack теперь ведёт сразу в viewer и converter с image-, document- и
+          target-oriented runtime.
         </h1>
         <p class="lead">
           Home сохраняет soft industrial foundation, но теперь работает как switchboard для двух
           живых маршрутов: viewer отвечает за preview, analysis, полный document stack, video
-          tooling, audio workbench и image tooling, а converter закрывает первую волну image-конвертаций,
-          vector/icon targets, archive-friendly TIFF target и document-target через scenario
-          registry, shared imaging и отдельные decode/encode стратегии.
+          tooling, audio workbench и image tooling, а converter закрывает первую волну
+          image-конвертаций, vector/icon targets, archive-friendly TIFF target и document-target
+          через scenario registry, shared imaging и отдельные decode/encode стратегии.
         </p>
 
         <div class="signal-row">
