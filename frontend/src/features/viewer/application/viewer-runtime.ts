@@ -512,8 +512,11 @@ function buildPlannedMediaSelection(context: PreviewStrategyContext): ViewerReso
   }
 }
 
-async function defaultLoadNativeMetadata(buffer: ArrayBuffer): Promise<ViewerMetadataPayload> {
-  return loadStructuredMetadata(buffer)
+async function defaultLoadNativeMetadata(
+  _buffer: ArrayBuffer,
+  context: PreviewStrategyContext,
+): Promise<ViewerMetadataPayload> {
+  return loadStructuredMetadata(context.file, context.reportProgress)
 }
 
 async function defaultDecodeHeicImage(

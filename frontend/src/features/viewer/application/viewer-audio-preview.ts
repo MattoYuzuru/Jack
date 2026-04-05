@@ -8,7 +8,7 @@ import {
   formatViewerChannelLayout,
   formatViewerSampleRate,
 } from './viewer-audio-tools'
-import { loadViewerAudioMetadata } from './viewer-audio-metadata'
+import { inspectViewerAudioMetadata } from './viewer-metadata-client'
 
 interface NativeAudioMetadata {
   durationSeconds: number
@@ -20,7 +20,7 @@ interface BuildAudioPreviewOptions {
   extraSummary?: ViewerAudioPreviewPayload['summary']
   playbackPathLabel?: string
   metadataMimeType?: string
-  metadataSource?: Blob
+  metadataSource?: File
 }
 
 export async function buildNativeAudioPreview(
@@ -45,7 +45,23 @@ export async function buildAudioPreviewFromBlob(
     const baseWarnings = [...(options.warnings ?? [])]
     const [{ payload: metadataPayload, warnings: metadataWarnings }, audioMetadata, waveform] =
       await Promise.all([
-        safeLoadViewerAudioMetadata(options.metadataSource ?? blob),
+        options.metadataSource
+          ? safeLoadViewerAudioMetadata(options.metadataSource)
+          : Promise.resolve({
+              payload: {
+                summary: [],
+                groups: [],
+                artworkDataUrl: null,
+                searchableText: '',
+                technical: {
+                  sampleRate: null,
+                  channelCount: null,
+                  codec: null,
+                  container: null,
+                },
+              } satisfies ViewerAudioMetadataPayload,
+              warnings: ['Metadata source file не передан в audio preview path.'],
+            }),
         inspectNativeAudio(objectUrl),
         decodeViewerAudioWaveform(blob),
       ])
@@ -120,13 +136,10 @@ export async function buildAudioPreviewFromBlob(
 }
 
 async function safeLoadViewerAudioMetadata(
-  file: Blob,
+  file: File,
 ): Promise<{ payload: ViewerAudioMetadataPayload; warnings: string[] }> {
   try {
-    return {
-      payload: await loadViewerAudioMetadata(file),
-      warnings: [],
-    }
+    return inspectViewerAudioMetadata(file)
   } catch {
     // Metadata parser не должен валить весь audio preview: теги в этой итерации
     // полезны, но playback и waveform важнее, чем идеальный tag coverage.

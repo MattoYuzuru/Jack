@@ -1,10 +1,19 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   canEmbedMetadata,
   exportViewerMetadata,
-  formatInputDateForExif,
-  withJsonSuffix,
 } from '../viewer-metadata-writer'
+
+const originalFetch = globalThis.fetch
+
+beforeEach(() => {
+  globalThis.fetch = vi.fn() as typeof fetch
+})
+
+afterEach(() => {
+  globalThis.fetch = originalFetch
+  vi.clearAllMocks()
+})
 
 describe('viewer metadata writer', () => {
   it('detects when metadata can be embedded directly into jpeg files', () => {
@@ -13,47 +22,101 @@ describe('viewer metadata writer', () => {
     expect(canEmbedMetadata('cover.png')).toBe(false)
   })
 
-  it('formats datetime-local values into EXIF datetime format', () => {
-    expect(formatInputDateForExif('2026-04-04T18:45')).toBe('2026:04:04 18:45:00')
-    expect(formatInputDateForExif('invalid')).toBe('')
-  })
+  it('exports metadata through backend artifacts', async () => {
+    const fetchMock = vi.mocked(globalThis.fetch)
 
-  it('adds the expected sidecar suffix', () => {
-    expect(withJsonSuffix('frame.tiff')).toBe('frame.tiff.jack-metadata.json')
-  })
-
-  it('exports non-jpeg metadata edits as a sidecar json payload', async () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(new Date('2026-04-04T12:30:00.000Z'))
-
-    try {
-      const result = await exportViewerMetadata(
-        new File(['png'], 'frame.png', { type: 'image/png' }),
-        {
-          description: 'Product render',
-          artist: 'Jack',
-          copyright: 'Jack Studio',
-          capturedAt: '2026-04-04T15:30',
-        },
+    fetchMock
+      .mockResolvedValueOnce(
+        createJsonResponse({
+          scope: 'viewer',
+          phase: 'metadata-service',
+          jobTypes: [
+            {
+              jobType: 'METADATA_EXPORT',
+              implemented: true,
+              detail: 'Backend metadata service is available.',
+            },
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(createJsonResponse({ id: 'upload-metadata' }, 201))
+      .mockResolvedValueOnce(createJsonResponse({ id: 'job-metadata' }, 202))
+      .mockResolvedValueOnce(
+        createJsonResponse({
+          id: 'job-metadata',
+          status: 'COMPLETED',
+          progressPercent: 100,
+          message: 'Metadata processing готов через backend Metadata export service.',
+          errorMessage: null,
+          artifacts: [
+            {
+              id: 'metadata-manifest',
+              kind: 'metadata-export-manifest',
+              fileName: 'metadata-export-manifest.json',
+              mediaType: 'application/json',
+              sizeBytes: 256,
+              createdAt: '2026-04-05T15:00:00Z',
+              downloadPath: '/api/jobs/job-metadata/artifacts/metadata-manifest',
+            },
+            {
+              id: 'metadata-binary',
+              kind: 'metadata-export-binary',
+              fileName: 'frame.png.jack-metadata.json',
+              mediaType: 'application/json',
+              sizeBytes: 512,
+              createdAt: '2026-04-05T15:00:00Z',
+              downloadPath: '/api/jobs/job-metadata/artifacts/metadata-binary',
+            },
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(
+        createJsonResponse({
+          mode: 'json-sidecar',
+          fileName: 'frame.png.jack-metadata.json',
+          warnings: [],
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response('metadata-sidecar', {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
       )
 
-      expect(result.mode).toBe('json-sidecar')
-      expect(result.fileName).toBe('frame.png.jack-metadata.json')
+    const result = await exportViewerMetadata(
+      new File(['png'], 'frame.png', { type: 'image/png' }),
+      {
+        description: 'Product render',
+        artist: 'Jack',
+        copyright: 'Jack Studio',
+        capturedAt: '2026-04-04T15:30',
+      },
+    )
 
-      const payload = JSON.parse(await result.blob.text())
+    expect(fetchMock).toHaveBeenCalledTimes(6)
+    expect(result.mode).toBe('json-sidecar')
+    expect(result.fileName).toBe('frame.png.jack-metadata.json')
+    expect(await result.blob.text()).toBe('metadata-sidecar')
 
-      expect(payload).toEqual({
-        fileName: 'frame.png',
-        exportedAt: '2026-04-04T12:30:00.000Z',
-        metadata: {
-          description: 'Product render',
-          artist: 'Jack',
-          copyright: 'Jack Studio',
-          capturedAt: '2026-04-04T15:30',
-        },
-      })
-    } finally {
-      vi.useRealTimers()
-    }
+    const jobPayload = JSON.parse(String(fetchMock.mock.calls[2]?.[1]?.body))
+    expect(jobPayload.parameters).toEqual({
+      operation: 'export-image',
+      metadata: {
+        description: 'Product render',
+        artist: 'Jack',
+        copyright: 'Jack Studio',
+        capturedAt: '2026-04-04T15:30',
+      },
+    })
   })
 })
+
+function createJsonResponse(payload: unknown, status = 200): Response {
+  return new Response(JSON.stringify(payload), {
+    status,
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  })
+}

@@ -1750,8 +1750,8 @@ onBeforeUnmount(() => {
             <p class="metadata-editor__mode">
               {{
                 metadataEmbeddingAvailable
-                  ? 'Для JPEG viewer соберёт новый файл с обновлёнными EXIF-полями.'
-                  : 'Для этого формата viewer соберёт sidecar JSON с metadata patch.'
+                  ? 'Для JPEG backend соберёт новый файл с обновлёнными EXIF-полями.'
+                  : 'Для этого формата backend соберёт sidecar JSON с metadata patch.'
               }}
             </p>
             <button
