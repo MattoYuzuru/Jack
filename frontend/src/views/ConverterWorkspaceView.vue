@@ -23,6 +23,7 @@ const {
   isLoading,
   isConverting,
   errorMessage,
+  processingMessage,
   selectedTargetExtension,
   selectedPresetId,
   quality,
@@ -109,7 +110,7 @@ function onDrop(event: DragEvent) {
       <div class="app-topbar__status">
         <RouterLink class="back-link" to="/">Back to Home</RouterLink>
         <span class="chip-pill">Image Conversion</span>
-        <span class="chip-pill chip-pill--accent">Browser-first pipeline</span>
+        <span class="chip-pill chip-pill--accent">Hybrid pipeline</span>
       </div>
     </header>
 
@@ -117,22 +118,23 @@ function onDrop(event: DragEvent) {
       <article class="panel-surface converter-hero-copy">
         <p class="eyebrow">Iteration 03 · Converter</p>
         <h1>
-          Конвертер уже умеет брать сложные image-source и собирать delivery, vector, icon, archive
-          и document targets.
+          Конвертер теперь держит быстрые browser-native ветки локально, а тяжелые imaging-сценарии
+          отправляет в backend processing pipeline.
         </h1>
         <p class="lead">
-          Модуль строится не как набор случайных кнопок, а как реестр сценариев поверх decode/encode
-          pipeline: source-стратегия подготавливает единый raster contract и source warnings,
-          target-стратегия кодирует его в итоговый формат, а UI остаётся thin-слоем над runtime.
+          Модуль строится не как набор случайных кнопок, а как реестр сценариев поверх capability
+          matrix: быстрые raster-конверсии остаются в браузере, а HEIC/TIFF/RAW/PSD/AI/EPS intake,
+          AVIF/TIFF/ICO/SVG/PDF targets и preset-driven resize теперь идут через backend
+          `IMAGE_CONVERT` jobs с preview/result artifacts.
         </p>
 
         <div class="converter-signal-row">
-          <span class="chip-pill">HEIC / TIFF / RAW / PSD decode</span>
-          <span class="chip-pill">AI / EPS illustration adapters</span>
-          <span class="chip-pill">JPG / PNG / WebP / AVIF / SVG / ICO / TIFF / PDF targets</span>
-          <span class="chip-pill">Preset-driven resize</span>
+          <span class="chip-pill">Browser-native JPG / PNG / WebP</span>
+          <span class="chip-pill">Server HEIC / TIFF / RAW / PSD / AI / EPS</span>
+          <span class="chip-pill">Server AVIF / SVG / ICO / TIFF / PDF targets</span>
+          <span class="chip-pill">Preset-driven resize contract</span>
           <span class="chip-pill">Scenario registry</span>
-          <span class="chip-pill">Shared imaging layer</span>
+          <span class="chip-pill">Backend IMAGE_CONVERT jobs</span>
         </div>
       </article>
 
@@ -200,18 +202,18 @@ function onDrop(event: DragEvent) {
             `eps`.
           </strong>
           <span>
-            Конвертер сам определит, какой decode-path нужен: нативный browser raster либо
-            heavy-format adapter, а затем соберёт image, traced SVG, ICO, archive-friendly TIFF
-            либо PDF target.
+            Конвертер сам определит, какой processing-path нужен: нативный browser raster либо
+            backend `IMAGE_CONVERT` job, а затем соберёт image, traced SVG, ICO,
+            archive-friendly TIFF либо PDF target.
           </span>
         </button>
 
         <p v-if="errorMessage" class="status-message status-message--error">{{ errorMessage }}</p>
         <p v-else-if="isLoading" class="status-message">
-          Подготавливаю source-сценарии для выбранного файла...
+          {{ processingMessage }}
         </p>
         <p v-else-if="isConverting" class="status-message">
-          Собираю итоговый target через encode pipeline...
+          {{ processingMessage }}
         </p>
 
         <div v-if="prepared" class="converter-stack">

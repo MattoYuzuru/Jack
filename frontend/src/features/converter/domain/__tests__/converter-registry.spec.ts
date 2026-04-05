@@ -19,7 +19,7 @@ describe('converter registry', () => {
     expect(resolveConverterSourceFormat('cover.eps')?.sourceStrategyId).toBe('illustration-raster')
   })
 
-  it('lists browser-first targets for supported sources', () => {
+  it('lists registered targets for supported sources', () => {
     const targets = listConverterTargetsForSource('poster.png')
 
     expect(targets.map((target) => target.extension)).toEqual([

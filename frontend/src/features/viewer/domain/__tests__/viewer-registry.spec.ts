@@ -19,15 +19,16 @@ describe('viewer registry', () => {
     expect(format?.previewPipeline).toBe('browser-native')
   })
 
-  it('maps decode-adapter formats including raw aliases', () => {
+  it('maps server-assisted image formats including raw aliases', () => {
     const formats = listViewerFormatsByFamily('image').filter(
-      (definition) => definition.previewPipeline === 'client-decode',
+      (definition) => definition.previewPipeline === 'server-assisted',
     )
 
     expect(formats.map((definition) => definition.extension)).toEqual(['heic', 'tiff', 'raw'])
 
     expect(resolveViewerFormat('shoot.NEF')?.extension).toBe('raw')
     expect(resolveViewerFormat('scan.tif')?.extension).toBe('tiff')
+    expect(resolveViewerFormat('capture.heic')?.previewPipeline).toBe('server-assisted')
   })
 
   it('exposes document formats with active capability states across legacy, archive and database layers', () => {

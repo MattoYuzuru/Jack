@@ -27,12 +27,14 @@ import {
 import { ViewerDatabaseFormatError } from './viewer-document-database'
 import type { ViewerMetadataPayload } from './viewer-metadata'
 import {
-  decodeHeicPreview,
-  decodeRawPreview,
-  decodeTiffPreview,
   loadStructuredMetadata,
   type ViewerBinaryPreview,
 } from './viewer-preview'
+import {
+  decodeHeicPreview,
+  decodeRawPreview,
+  decodeTiffPreview,
+} from './viewer-image-preview'
 import type { ViewerAudioFact, ViewerAudioLayout, ViewerAudioPreviewPayload } from './viewer-audio'
 import { buildNativeAudioPreview } from './viewer-audio-preview'
 import type { ViewerVideoFact, ViewerVideoLayout, ViewerVideoPreviewPayload } from './viewer-video'
@@ -386,7 +388,7 @@ export function createViewerRuntime(dependencies: ViewerRuntimeDependencies = {}
           detail:
             'Файл загружен, но для него ещё не описаны capability, маршрут preview и fallback-поведение.',
           nextStep:
-            'Нужно добавить definition в registry и назначить ему browser-native либо client-decode стратегию.',
+            'Нужно добавить definition в registry и назначить ему browser-native либо server-assisted стратегию.',
         }
       }
 
@@ -528,7 +530,7 @@ function buildPlannedMediaSelection(context: PreviewStrategyContext): ViewerReso
     extension: context.extension,
     headline: `${context.format.label} уже распознан в media registry, но playback adapter ещё не поднят`,
     detail:
-      'Foundation для контейнера уже есть: accept/mime/capability map готовы, но для него пока нет стабильного browser-native или client-decode playback path.',
+      'Foundation для контейнера уже есть: accept/mime/capability map готовы, но для него пока нет стабильного browser-native или server-assisted playback path.',
     nextStep:
       'Нужно добавить format-specific media adapter поверх общего video contract, а не расширять UI точечными fallback-ветками.',
   }
@@ -538,16 +540,25 @@ async function defaultLoadNativeMetadata(buffer: ArrayBuffer): Promise<ViewerMet
   return loadStructuredMetadata(buffer)
 }
 
-async function defaultDecodeHeicImage(buffer: ArrayBuffer): Promise<ViewerBinaryPreview> {
-  return decodeHeicPreview(buffer)
+async function defaultDecodeHeicImage(
+  buffer: ArrayBuffer,
+  context: PreviewStrategyContext,
+): Promise<ViewerBinaryPreview> {
+  return decodeHeicPreview(buffer, context)
 }
 
-async function defaultDecodeTiffImage(buffer: ArrayBuffer): Promise<ViewerBinaryPreview> {
-  return decodeTiffPreview(buffer)
+async function defaultDecodeTiffImage(
+  buffer: ArrayBuffer,
+  context: PreviewStrategyContext,
+): Promise<ViewerBinaryPreview> {
+  return decodeTiffPreview(buffer, context)
 }
 
-async function defaultDecodeRawImage(buffer: ArrayBuffer): Promise<ViewerBinaryPreview> {
-  return decodeRawPreview(buffer)
+async function defaultDecodeRawImage(
+  buffer: ArrayBuffer,
+  context: PreviewStrategyContext,
+): Promise<ViewerBinaryPreview> {
+  return decodeRawPreview(buffer, context)
 }
 
 async function defaultBuildNativeVideo(

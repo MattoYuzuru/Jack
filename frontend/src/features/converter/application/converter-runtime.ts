@@ -1,28 +1,13 @@
 import {
-  decodeHeicRaster,
-  decodeRawRaster,
-  decodeTiffRaster,
-  type BinaryImagePayload,
-} from '../../imaging/application/image-raster-codecs'
-import {
-  buildAvifFromRaster,
-  buildAvifPreviewFromRaster,
-} from '../../imaging/application/avif-image'
-import {
   encodeRasterFrame,
   rasterizeBlob,
   resizeRasterFrame,
   type RasterImageFrame,
 } from '../../imaging/application/browser-raster'
-import { buildIcoFromRaster, buildIcoPreviewFromRaster } from '../../imaging/application/ico-image'
-import { decodeIllustrationRaster } from '../../imaging/application/illustration-raster'
-import { buildSinglePagePdfFromRaster } from '../../imaging/application/pdf-document'
-import { decodePsdCompositeRaster } from '../../imaging/application/psd-raster'
 import {
-  buildTiffFromRaster,
-  buildTiffPreviewFromRaster,
-} from '../../imaging/application/tiff-image'
-import { buildVectorizedSvgFromRaster } from '../../imaging/application/vectorized-svg'
+  runServerImageConvert,
+  type ServerImageConvertResult,
+} from './converter-server-runtime'
 import { resolveConverterPreset, type ConverterPresetDefinition } from '../domain/converter-presets'
 import {
   detectConverterExtension,
@@ -71,6 +56,7 @@ export interface ConverterRuntime {
     presetId?: string
     quality?: number
     backgroundColor?: string
+    onProgress?: (message: string) => void
   }): Promise<ConverterResult>
 }
 
@@ -160,6 +146,18 @@ export interface ConverterRuntimeDependencies {
     quality?: number
     backgroundColor?: string
   }) => Promise<ConverterEncodedArtifact>
+  isServerScenario?: (
+    prepared: ConverterPreparedSource,
+    target: ConverterTargetFormatDefinition,
+  ) => boolean
+  convertServerScenario?: (input: {
+    prepared: ConverterPreparedSource
+    target: ConverterTargetFormatDefinition
+    preset: ConverterPresetDefinition
+    quality?: number
+    backgroundColor?: string
+    onProgress?: (message: string) => void
+  }) => Promise<ServerImageConvertResult>
 }
 
 interface RasterTransformArtifact {
@@ -173,6 +171,8 @@ export function createConverterRuntime(
   const sourceStrategies = createSourceStrategies(dependencies)
   const targetStrategies = createTargetStrategies(dependencies)
   const applyPreset = dependencies.resizeRaster ?? defaultApplyPreset
+  const isServerScenario = dependencies.isServerScenario ?? defaultIsServerScenario
+  const convertServerScenario = dependencies.convertServerScenario ?? defaultConvertServerScenario
 
   return {
     inspect(file) {
@@ -196,13 +196,46 @@ export function createConverterRuntime(
       }
     },
 
-    async convert({ prepared, targetExtension, presetId, quality, backgroundColor }) {
+    async convert({ prepared, targetExtension, presetId, quality, backgroundColor, onProgress }) {
       const target = resolveConverterTargetFormat(targetExtension)
       const scenario = resolveConverterScenario(prepared.source.extension, targetExtension)
       const preset = resolveConverterPreset(presetId)
 
       if (!target || !scenario) {
         throw new Error('Для выбранной пары source/target сценарий пока не зарегистрирован.')
+      }
+
+      if (isServerScenario(prepared, target)) {
+        const serverResult = await convertServerScenario({
+          prepared,
+          target,
+          preset,
+          quality: target.supportsQuality
+            ? (quality ?? preset.preferredQuality ?? target.defaultQuality ?? undefined)
+            : undefined,
+          backgroundColor: backgroundColor ?? preset.defaultBackgroundColor ?? undefined,
+          onProgress,
+        })
+
+        return {
+          kind: target.family === 'document' ? 'document' : 'image',
+          fileName: replaceExtension(prepared.file.name, target.extension),
+          blob: serverResult.resultBlob,
+          previewBlob: serverResult.previewBlob,
+          previewMimeType:
+            serverResult.manifest.previewMediaType ||
+            serverResult.previewBlob.type ||
+            target.mimeType,
+          preset,
+          source: prepared.source,
+          target,
+          scenario,
+          sourceWidth: serverResult.manifest.sourceWidth,
+          sourceHeight: serverResult.manifest.sourceHeight,
+          width: serverResult.manifest.width,
+          height: serverResult.manifest.height,
+          warnings: serverResult.manifest.warnings,
+        }
       }
 
       const decoded = await sourceStrategies[prepared.source.sourceStrategyId].decode(prepared)
@@ -312,42 +345,33 @@ async function defaultDecodeNativeRaster(
 }
 
 async function defaultDecodeHeicSource(
-  prepared: ConverterPreparedSource,
+  _prepared: ConverterPreparedSource,
 ): Promise<ConverterDecodedSourceArtifact> {
-  return {
-    raster: await rasterizeBinaryPayload(await decodeBinaryFile(prepared.file, decodeHeicRaster)),
-    warnings: [],
-  }
+  throw new Error('HEIC local fallback отключён: heavy imaging должен идти через backend IMAGE_CONVERT.')
 }
 
 async function defaultDecodeTiffSource(
-  prepared: ConverterPreparedSource,
+  _prepared: ConverterPreparedSource,
 ): Promise<ConverterDecodedSourceArtifact> {
-  return {
-    raster: await rasterizeBinaryPayload(await decodeBinaryFile(prepared.file, decodeTiffRaster)),
-    warnings: [],
-  }
+  throw new Error('TIFF local fallback отключён: heavy imaging должен идти через backend IMAGE_CONVERT.')
 }
 
 async function defaultDecodeRawSource(
-  prepared: ConverterPreparedSource,
+  _prepared: ConverterPreparedSource,
 ): Promise<ConverterDecodedSourceArtifact> {
-  return {
-    raster: await rasterizeBinaryPayload(await decodeBinaryFile(prepared.file, decodeRawRaster)),
-    warnings: [],
-  }
+  throw new Error('RAW local fallback отключён: heavy imaging должен идти через backend IMAGE_CONVERT.')
 }
 
 async function defaultDecodePsdSource(
-  prepared: ConverterPreparedSource,
+  _prepared: ConverterPreparedSource,
 ): Promise<ConverterDecodedSourceArtifact> {
-  return decodePsdCompositeRaster(prepared.file)
+  throw new Error('PSD local fallback отключён: heavy imaging должен идти через backend IMAGE_CONVERT.')
 }
 
 async function defaultDecodeIllustrationSource(
-  prepared: ConverterPreparedSource,
+  _prepared: ConverterPreparedSource,
 ): Promise<ConverterDecodedSourceArtifact> {
-  return decodeIllustrationRaster(prepared.file)
+  throw new Error('AI/EPS local fallback отключён: heavy imaging должен идти через backend IMAGE_CONVERT.')
 }
 
 async function defaultApplyPreset(
@@ -416,89 +440,71 @@ async function defaultEncodeWebp(input: {
   }
 }
 
-async function defaultEncodePdf(input: {
+async function defaultEncodePdf(_input: {
   raster: RasterImageFrame
   quality?: number
   backgroundColor?: string
 }): Promise<ConverterEncodedArtifact> {
-  return {
-    blob: await buildSinglePagePdfFromRaster(input.raster, {
-      quality: input.quality,
-      backgroundColor: input.backgroundColor,
-    }),
-    previewMimeType: 'application/pdf',
-    warnings: [
-      'PDF собран как single-page raster document без отдельного текстового или векторного слоя.',
-    ],
-  }
+  throw new Error('PDF local fallback отключён: heavy imaging должен идти через backend IMAGE_CONVERT.')
 }
 
-async function defaultEncodeTiff(input: {
+async function defaultEncodeTiff(_input: {
   raster: RasterImageFrame
 }): Promise<ConverterEncodedArtifact> {
-  return {
-    blob: await buildTiffFromRaster(input.raster),
-    previewBlob: await buildTiffPreviewFromRaster(input.raster),
-    previewMimeType: 'image/png',
-    warnings: [
-      'TIFF собран как single-frame RGBA image без multi-page контейнера и без исходных metadata-блоков.',
-    ],
-  }
+  throw new Error('TIFF local fallback отключён: heavy imaging должен идти через backend IMAGE_CONVERT.')
 }
 
-async function defaultEncodeAvif(input: {
+async function defaultEncodeAvif(_input: {
   raster: RasterImageFrame
   quality?: number
 }): Promise<ConverterEncodedArtifact> {
-  return {
-    blob: await buildAvifFromRaster(input.raster, {
-      quality: input.quality,
-    }),
-    previewBlob: await buildAvifPreviewFromRaster(input.raster),
-    previewMimeType: 'image/png',
-    warnings: [],
-  }
+  throw new Error('AVIF local fallback отключён: heavy imaging должен идти через backend IMAGE_CONVERT.')
 }
 
-async function defaultEncodeSvg(input: {
+async function defaultEncodeSvg(_input: {
   raster: RasterImageFrame
 }): Promise<ConverterEncodedArtifact> {
-  const blob = await buildVectorizedSvgFromRaster(input.raster)
-
-  return {
-    blob,
-    previewMimeType: 'image/svg+xml',
-    warnings: [
-      'SVG target собран через bitmap tracing, поэтому итог остаётся approximation, а не исходной векторной сценой.',
-    ],
-  }
+  throw new Error('SVG trace local fallback отключён: heavy imaging должен идти через backend IMAGE_CONVERT.')
 }
 
-async function defaultEncodeIco(input: {
+async function defaultEncodeIco(_input: {
   raster: RasterImageFrame
 }): Promise<ConverterEncodedArtifact> {
-  return {
-    blob: await buildIcoFromRaster(input.raster),
-    previewBlob: await buildIcoPreviewFromRaster(input.raster),
-    previewMimeType: 'image/png',
-    warnings:
-      input.raster.width === input.raster.height
-        ? []
-        : [
-            'ICO target собран на квадратных canvas-слоях: исходник центрирован с прозрачными полями.',
-          ],
-  }
+  throw new Error('ICO local fallback отключён: heavy imaging должен идти через backend IMAGE_CONVERT.')
 }
 
-async function decodeBinaryFile(
-  file: File,
-  decoder: (buffer: ArrayBuffer) => Promise<BinaryImagePayload>,
-): Promise<BinaryImagePayload> {
-  return decoder(await file.arrayBuffer())
+function defaultIsServerScenario(
+  prepared: ConverterPreparedSource,
+  target: ConverterTargetFormatDefinition,
+): boolean {
+  return (
+    prepared.source.sourceStrategyId !== 'native-raster' ||
+    target.targetStrategyId === 'pdf-document' ||
+    target.targetStrategyId === 'tiff-image' ||
+    target.targetStrategyId === 'avif-encoder' ||
+    target.targetStrategyId === 'svg-vectorizer' ||
+    target.targetStrategyId === 'ico-image'
+  )
 }
 
-async function rasterizeBinaryPayload(payload: BinaryImagePayload): Promise<RasterImageFrame> {
-  return rasterizeBlob(new Blob([toArrayBuffer(payload.bytes)], { type: payload.mimeType }))
+async function defaultConvertServerScenario(input: {
+  prepared: ConverterPreparedSource
+  target: ConverterTargetFormatDefinition
+  preset: ConverterPresetDefinition
+  quality?: number
+  backgroundColor?: string
+  onProgress?: (message: string) => void
+}): Promise<ServerImageConvertResult> {
+  return runServerImageConvert({
+    file: input.prepared.file,
+    targetExtension: input.target.extension,
+    maxWidth: input.preset.maxWidth,
+    maxHeight: input.preset.maxHeight,
+    quality: input.quality,
+    backgroundColor: input.backgroundColor,
+    presetLabel: input.preset.label,
+    reportProgress: input.onProgress,
+  })
 }
 
 function replaceExtension(fileName: string, targetExtension: string): string {
@@ -509,8 +515,4 @@ function replaceExtension(fileName: string, targetExtension: string): string {
   }
 
   return `${fileName.slice(0, lastDotIndex)}.${targetExtension}`
-}
-
-function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
-  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer
 }

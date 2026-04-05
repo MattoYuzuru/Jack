@@ -8,6 +8,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.ContentDisposition;
@@ -41,7 +42,7 @@ public class ProcessingJobController {
 			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Для создания job нужны uploadId и jobType.");
 		}
 
-		return toResponse(this.processingJobService.enqueue(request.uploadId(), request.jobType()));
+		return toResponse(this.processingJobService.enqueue(request.uploadId(), request.jobType(), request.parameters()));
 	}
 
 	@GetMapping("/{jobId}")
@@ -103,7 +104,8 @@ public class ProcessingJobController {
 
 	public record CreateJobRequest(
 		UUID uploadId,
-		ProcessingJobType jobType
+		ProcessingJobType jobType,
+		Map<String, Object> parameters
 	) {
 	}
 

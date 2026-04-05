@@ -40,6 +40,7 @@ describe('converter runtime', () => {
     let encoderCalls = 0
 
     const runtime = createConverterRuntime({
+      isServerScenario: () => false,
       decodeHeicSource: async () => {
         decoderCalls += 1
         return createDecodedSource()
@@ -100,6 +101,7 @@ describe('converter runtime', () => {
 
   it('builds document outputs through the pdf target strategy', async () => {
     const runtime = createConverterRuntime({
+      isServerScenario: () => false,
       decodeNativeRaster: async (_prepared: ConverterPreparedSource) => createDecodedSource(1280, 720, true),
       encodePdf: async () => ({
         blob: new Blob(['pdf'], { type: 'application/pdf' }),
@@ -181,6 +183,7 @@ describe('converter runtime', () => {
 
   it('returns a png preview layer for tiff targets while keeping the download blob as tiff', async () => {
     const runtime = createConverterRuntime({
+      isServerScenario: () => false,
       decodeRawSource: async (_prepared: ConverterPreparedSource) => createDecodedSource(2400, 1600, false),
       encodeTiff: async () => ({
         blob: new Blob(['tiff'], { type: 'image/tiff' }),
@@ -210,6 +213,7 @@ describe('converter runtime', () => {
 
   it('collects source warnings from illustration adapters before encode', async () => {
     const runtime = createConverterRuntime({
+      isServerScenario: () => false,
       decodeIllustrationSource: async () => ({
         raster: createRasterFrame(1800, 1200, false),
         warnings: ['AI/EPS сведен через PDF-compatible render path в единый raster-слой.'],
@@ -237,6 +241,7 @@ describe('converter runtime', () => {
 
   it('returns preview-safe blobs for avif and ico targets', async () => {
     const runtime = createConverterRuntime({
+      isServerScenario: () => false,
       decodeNativeRaster: async () => createDecodedSource(1024, 768, true),
       encodeAvif: async () => ({
         blob: new Blob(['avif'], { type: 'image/avif' }),
@@ -271,5 +276,60 @@ describe('converter runtime', () => {
     expect(avifResult.previewMimeType).toBe('image/png')
     expect(icoResult.blob.type).toBe('image/x-icon')
     expect(icoResult.previewMimeType).toBe('image/png')
+  })
+
+  it('routes heavy scenarios through the backend image convert client by default', async () => {
+    const runtime = createConverterRuntime({
+      convertServerScenario: async ({ target, preset, onProgress }) => {
+        onProgress?.('Backend IMAGE_CONVERT in progress...')
+
+        expect(target.extension).toBe('avif')
+        expect(preset.id).toBe('web-balanced')
+
+        return {
+          manifest: {
+            operation: 'convert',
+            sourceWidth: 3024,
+            sourceHeight: 4032,
+            width: 2560,
+            height: 3413,
+            resultMediaType: 'image/avif',
+            previewMediaType: 'image/png',
+            outputExtension: 'avif',
+            sourceAdapterLabel: 'HEIC server rasterization',
+            targetAdapterLabel: 'FFmpeg AVIF encode',
+            runtimeLabel: 'HEIC server rasterization -> FFmpeg AVIF encode',
+            warnings: ['Server-side resize уменьшил размерность: 3024x4032 -> 2560x3413.'],
+          },
+          resultBlob: new Blob(['avif'], { type: 'image/avif' }),
+          previewBlob: new Blob(['png-preview'], { type: 'image/png' }),
+        }
+      },
+    })
+
+    const prepared = runtime.inspect(new File(['image'], 'capture.heic', { type: 'image/heic' }))
+
+    if (!prepared) {
+      throw new Error('Expected a prepared source for HEIC.')
+    }
+
+    const progressMessages: string[] = []
+    const result = await runtime.convert({
+      prepared,
+      targetExtension: 'avif',
+      presetId: 'web-balanced',
+      onProgress(message) {
+        progressMessages.push(message)
+      },
+    })
+
+    expect(result.fileName).toBe('capture.avif')
+    expect(result.previewMimeType).toBe('image/png')
+    expect(result.sourceWidth).toBe(3024)
+    expect(result.width).toBe(2560)
+    expect(result.warnings).toEqual([
+      'Server-side resize уменьшил размерность: 3024x4032 -> 2560x3413.',
+    ])
+    expect(progressMessages).toContain('Backend IMAGE_CONVERT in progress...')
   })
 })

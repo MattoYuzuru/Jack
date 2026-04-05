@@ -11,6 +11,10 @@ public class ProcessingProperties {
 	private String ffmpegExecutable = "ffmpeg";
 	private String ffprobeExecutable = "ffprobe";
 	private long mediaPreviewTimeoutSeconds = 240L;
+	private String imageConvertExecutable = "convert";
+	private String potraceExecutable = "potrace";
+	private String rawPreviewExecutable = "dcraw_emu";
+	private long imageProcessingTimeoutSeconds = 240L;
 
 	public Path getStorageRoot() {
 		return this.storageRoot;
@@ -58,6 +62,38 @@ public class ProcessingProperties {
 
 	public void setMediaPreviewTimeoutSeconds(long mediaPreviewTimeoutSeconds) {
 		this.mediaPreviewTimeoutSeconds = mediaPreviewTimeoutSeconds;
+	}
+
+	public String getImageConvertExecutable() {
+		return this.imageConvertExecutable;
+	}
+
+	public void setImageConvertExecutable(String imageConvertExecutable) {
+		this.imageConvertExecutable = imageConvertExecutable;
+	}
+
+	public String getPotraceExecutable() {
+		return this.potraceExecutable;
+	}
+
+	public void setPotraceExecutable(String potraceExecutable) {
+		this.potraceExecutable = potraceExecutable;
+	}
+
+	public String getRawPreviewExecutable() {
+		return this.rawPreviewExecutable;
+	}
+
+	public void setRawPreviewExecutable(String rawPreviewExecutable) {
+		this.rawPreviewExecutable = rawPreviewExecutable;
+	}
+
+	public long getImageProcessingTimeoutSeconds() {
+		return this.imageProcessingTimeoutSeconds;
+	}
+
+	public void setImageProcessingTimeoutSeconds(long imageProcessingTimeoutSeconds) {
+		this.imageProcessingTimeoutSeconds = imageProcessingTimeoutSeconds;
 	}
 
 }

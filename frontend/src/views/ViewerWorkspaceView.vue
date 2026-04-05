@@ -78,8 +78,8 @@ const browserNativeFormats = computed(() =>
   imageFormats.filter((definition) => definition.previewPipeline === 'browser-native'),
 )
 
-const decodeFormats = computed(() =>
-  imageFormats.filter((definition) => definition.previewPipeline === 'client-decode'),
+const serverImageFormats = computed(() =>
+  imageFormats.filter((definition) => definition.previewPipeline === 'server-assisted'),
 )
 
 const activeDocumentFormats = computed(() =>
@@ -1789,7 +1789,7 @@ onBeforeUnmount(() => {
 
           <div class="format-grid">
             <article
-              v-for="format in decodeFormats"
+              v-for="format in serverImageFormats"
               :key="format.extension"
               class="format-card format-card--pipeline"
             >

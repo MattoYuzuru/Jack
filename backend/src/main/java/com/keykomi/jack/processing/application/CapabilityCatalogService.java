@@ -8,17 +8,23 @@ import org.springframework.stereotype.Service;
 public class CapabilityCatalogService {
 
 	private final MediaPreviewService mediaPreviewService;
+	private final ImageProcessingService imageProcessingService;
 
-	public CapabilityCatalogService(MediaPreviewService mediaPreviewService) {
+	public CapabilityCatalogService(
+		MediaPreviewService mediaPreviewService,
+		ImageProcessingService imageProcessingService
+	) {
 		this.mediaPreviewService = mediaPreviewService;
+		this.imageProcessingService = imageProcessingService;
 	}
 
 	public CapabilityScope viewerCapabilities() {
 		var mediaPreviewAvailable = this.mediaPreviewService.isAvailable();
+		var imageProcessingAvailable = this.imageProcessingService.isAvailable();
 
 		return new CapabilityScope(
 			"viewer",
-			"media-foundation",
+			"imaging-foundation",
 			List.of(
 				new JobTypeCapability(ProcessingJobType.UPLOAD_INTAKE_ANALYSIS, true, "Backend уже умеет принять файл, создать job и собрать manifest artifact."),
 				new JobTypeCapability(
@@ -28,25 +34,39 @@ public class CapabilityCatalogService {
 						? "Backend уже умеет собирать browser-friendly audio/video preview через ffmpeg/ffprobe."
 						: "Media preview service требует доступных ffmpeg/ffprobe binaries в backend окружении."
 				),
+				new JobTypeCapability(
+					ProcessingJobType.IMAGE_CONVERT,
+					imageProcessingAvailable,
+					imageProcessingAvailable
+						? "Backend уже умеет собирать HEIC/TIFF/RAW preview и heavy image conversion через convert/ffmpeg/potrace/libraw."
+						: "Image processing service требует доступных convert/ffmpeg/potrace/raw-preview binaries в backend окружении."
+				),
 				new JobTypeCapability(ProcessingJobType.DOCUMENT_PREVIEW, false, "Document intelligence ещё не перенесён с фронтенда на backend."),
 				new JobTypeCapability(ProcessingJobType.METADATA_EXPORT, false, "Metadata read/write пока остаётся на frontend runtime.")
 			),
 			List.of(
-				"Viewer ещё не переведён на backend-first resolve pipeline.",
-				"Foundation уже даёт upload/job/artifact flow без browser-side heavy processing."
+				"Viewer уже использует server-assisted preview для legacy media и heavy image decode.",
+				"Document parsing и metadata mutation всё ещё ждут следующих backend phase."
 			)
 		);
 	}
 
 	public CapabilityScope converterCapabilities() {
 		var mediaPreviewAvailable = this.mediaPreviewService.isAvailable();
+		var imageProcessingAvailable = this.imageProcessingService.isAvailable();
 
 		return new CapabilityScope(
 			"converter",
-			"media-foundation",
+			"imaging-foundation",
 			List.of(
 				new JobTypeCapability(ProcessingJobType.UPLOAD_INTAKE_ANALYSIS, true, "Можно использовать как preflight перед будущими heavy conversion jobs."),
-				new JobTypeCapability(ProcessingJobType.IMAGE_CONVERT, false, "Image convert service появится после foundation и ffmpeg/media base."),
+				new JobTypeCapability(
+					ProcessingJobType.IMAGE_CONVERT,
+					imageProcessingAvailable,
+					imageProcessingAvailable
+						? "Heavy imaging scenarios уже уходят в backend IMAGE_CONVERT jobs с preview/result artifacts."
+						: "Image processing service требует доступных convert/ffmpeg/potrace/raw-preview binaries и пока не активна в текущем окружении."
+				),
 				new JobTypeCapability(
 					ProcessingJobType.MEDIA_PREVIEW,
 					mediaPreviewAvailable,
@@ -57,8 +77,8 @@ public class CapabilityCatalogService {
 				new JobTypeCapability(ProcessingJobType.DOCUMENT_PREVIEW, false, "Document extract/preview contract пока живёт во frontend runtime.")
 			),
 			List.of(
-				"Converter route пока остаётся browser-first.",
-				"Backend foundation уже готовит capability matrix и artifact workflow для server-assisted flip."
+				"Converter route теперь hybrid: browser-native fast paths остаются локальными, heavy imaging идёт через backend job pipeline.",
+				"Следующая большая backend цель после imaging — document intelligence и metadata mutation."
 			)
 		);
 	}

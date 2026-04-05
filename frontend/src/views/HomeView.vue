@@ -25,15 +25,15 @@ const signalPills = [
   'Iteration 03',
   'Viewer workspace',
   'Converter route',
-  'Shared imaging layer',
+  'Processing API client',
   'Full document coverage',
   'Video tooling',
   'Audio workbench',
   'Legacy + archive + database adapters',
-  'Decode + encode + vector trace',
-  'AVIF / ICO targets',
+  'Server rasterization + artifacts',
+  'AVIF / ICO / PDF targets',
   'Preset profiles',
-  'PSD / AI / EPS intake',
+  'PSD / AI / EPS server intake',
 ]
 
 const foundationPillars: FoundationPillar[] = [
@@ -48,7 +48,7 @@ const foundationPillars: FoundationPillar[] = [
   {
     name: 'Архитектура',
     detail:
-      'Home, viewer и converter разведены по маршрутам, а тяжёлые image-path, PDF/vector/icon targets и preset transform-профили живут в shared imaging + registry/strategy-слоях.',
+      'Home, viewer и converter разведены по маршрутам, а тяжёлые image-path и delivery-targets уже идут через processing API, registry/strategy-слой и backend artifact jobs.',
   },
 ]
 
@@ -71,9 +71,9 @@ const toolCards: ToolCard[] = [
     label: '02 · Conversion',
     title: 'Converter',
     description:
-      'Browser-first converter уже поднимает image-, icon-, vector-, archive- и document-target сценарии через scenario registry, unified raster contract, preset transforms и decode/encode pipeline.',
+      'Hybrid converter держит быстрые raster-сценарии в браузере, а тяжёлые image-, icon-, vector-, archive- и document-target ветки отправляет в backend processing pipeline.',
     detail:
-      'Теперь закрыты HEIC, TIFF, RAW, PSD, AI/EPS-preview paths, AVIF/ICO/vector trace targets и single-page PDF output поверх preset-driven profiles.',
+      'HEIC, TIFF, RAW, PSD, AI/EPS intake, AVIF/ICO/vector trace targets и single-page PDF output теперь закрываются через backend IMAGE_CONVERT jobs и preview/result artifacts.',
     status: 'Active route',
     route: '/converter',
     accents: ['Image', 'AVIF', 'ICO', 'Presets'],
@@ -148,14 +148,15 @@ const toolCards: ToolCard[] = [
         <p class="eyebrow">Iteration 03 · Viewer + Converter</p>
         <h1>
           Главный экран Jack теперь ведёт сразу в viewer и converter с image-, document- и
-          target-oriented runtime.
+          processing-oriented runtime.
         </h1>
         <p class="lead">
           Home сохраняет soft industrial foundation, но теперь работает как switchboard для двух
           живых маршрутов: viewer отвечает за preview, analysis, полный document stack, video
           tooling, audio workbench и image tooling, а converter закрывает первую волну
           image-конвертаций, vector/icon targets, archive-friendly TIFF target и document-target
-          через scenario registry, shared imaging и отдельные decode/encode стратегии.
+          через scenario registry, processing API и разделение между browser-native и backend
+          job-сценариями.
         </p>
 
         <div class="signal-row">
@@ -177,8 +178,8 @@ const toolCards: ToolCard[] = [
           <article class="stats-card">
             <strong>7</strong>
             <span
-              >слоёв foundation: shared imaging, registry, adapters, metadata, workspace state,
-              color lab и media/document UX</span
+              >слоёв foundation: processing client, registry, adapters, metadata, workspace
+              state, color lab и media/document UX</span
             >
           </article>
         </div>

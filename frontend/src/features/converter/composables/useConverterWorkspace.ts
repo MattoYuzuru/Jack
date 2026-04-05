@@ -24,6 +24,7 @@ export function useConverterWorkspace() {
   const isLoading = ref(false)
   const isConverting = ref(false)
   const errorMessage = ref('')
+  const processingMessage = ref('')
   const selectedTargetExtension = ref('')
   const selectedPresetId = ref<ConverterPresetDefinition['id']>('original')
   const quality = ref(0.9)
@@ -58,15 +59,14 @@ export function useConverterWorkspace() {
     prepared.value = null
     result.value = null
     errorMessage.value = ''
+    processingMessage.value = 'Подготавливаю source-сценарии для выбранного файла...'
     isLoading.value = true
 
     try {
       const inspected = converterRuntime.inspect(file)
 
       if (!inspected || !inspected.targets.length) {
-        throw new Error(
-          'Для выбранного файла пока нет зарегистрированного browser-first сценария конвертации.',
-        )
+        throw new Error('Для выбранного файла пока нет зарегистрированного сценария конвертации.')
       }
 
       prepared.value = inspected
@@ -79,6 +79,9 @@ export function useConverterWorkspace() {
           : 'Не удалось подготовить конвертер к выбранному файлу.'
     } finally {
       isLoading.value = false
+      if (!prepared.value) {
+        processingMessage.value = ''
+      }
     }
   }
 
@@ -87,6 +90,7 @@ export function useConverterWorkspace() {
     prepared.value = null
     result.value = null
     errorMessage.value = ''
+    processingMessage.value = ''
     isLoading.value = false
     isConverting.value = false
     selectedTargetExtension.value = ''
@@ -101,6 +105,7 @@ export function useConverterWorkspace() {
     releaseResult()
     result.value = null
     errorMessage.value = ''
+    processingMessage.value = 'Собираю итоговый target через processing pipeline...'
     isConverting.value = true
 
     try {
@@ -110,6 +115,9 @@ export function useConverterWorkspace() {
         presetId: selectedPresetId.value,
         quality: quality.value,
         backgroundColor: backgroundColor.value,
+        onProgress(message) {
+          processingMessage.value = message
+        },
       })
 
       result.value = {
@@ -121,6 +129,9 @@ export function useConverterWorkspace() {
         error instanceof Error ? error.message : 'Не удалось выполнить конвертацию.'
     } finally {
       isConverting.value = false
+      if (!errorMessage.value) {
+        processingMessage.value = ''
+      }
     }
   }
 
@@ -151,6 +162,7 @@ export function useConverterWorkspace() {
     isLoading,
     isConverting,
     errorMessage,
+    processingMessage,
     selectedTargetExtension,
     selectedPresetId,
     quality,

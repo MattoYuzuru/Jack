@@ -2,15 +2,9 @@ import * as UTIF from 'utif2'
 import {
   createEmptyMetadataPayload,
   loadViewerMetadataPayload,
-  mergeMetadataPayload,
   type ViewerMetadataItem,
   type ViewerMetadataPayload,
 } from './viewer-metadata'
-import {
-  decodeHeicRaster,
-  decodeRawRaster,
-  decodeTiffRaster,
-} from '../../imaging/application/image-raster-codecs'
 
 export interface ViewerBinaryPreview {
   bytes: Uint8Array
@@ -39,53 +33,7 @@ export async function loadStructuredMetadata(buffer: ArrayBuffer): Promise<Viewe
   }
 }
 
-export async function decodeHeicPreview(buffer: ArrayBuffer): Promise<ViewerBinaryPreview> {
-  const { bytes, mimeType } = await decodeHeicRaster(buffer)
-
-  return {
-    bytes,
-    mimeType,
-    metadata: await loadStructuredMetadata(buffer),
-    previewLabel: 'HEIC decode adapter',
-  }
-}
-
-export async function decodeTiffPreview(buffer: ArrayBuffer): Promise<ViewerBinaryPreview> {
-  const metadata = await loadStructuredMetadata(buffer)
-  const raster = await decodeTiffRaster(buffer)
-
-  return {
-    ...raster,
-    metadata,
-    previewLabel: 'TIFF decode adapter',
-  }
-}
-
-export async function decodeRawPreview(buffer: ArrayBuffer): Promise<ViewerBinaryPreview> {
-  const raster = await decodeRawRaster(buffer)
-  const fallbackEntries = extractTiffTagMetadata(buffer)
-  const metadata = mergeMetadataPayload(
-    await loadStructuredMetadata(buffer),
-    fallbackEntries,
-    fallbackEntries.length
-      ? [
-          {
-            id: 'raw-fallback',
-            label: 'RAW Fallback',
-            entries: fallbackEntries,
-          },
-        ]
-      : [],
-  )
-
-  return {
-    ...raster,
-    metadata,
-    previewLabel: 'RAW preview extraction',
-  }
-}
-
-function extractTiffTagMetadata(buffer: ArrayBuffer): ViewerMetadataItem[] {
+export function extractRawFallbackMetadata(buffer: ArrayBuffer): ViewerMetadataItem[] {
   const ifd = UTIF.decode(buffer)[0]
   if (!ifd) {
     return []
