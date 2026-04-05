@@ -5,16 +5,24 @@ import {
   type BinaryImagePayload,
 } from '../../imaging/application/image-raster-codecs'
 import {
+  buildAvifFromRaster,
+  buildAvifPreviewFromRaster,
+} from '../../imaging/application/avif-image'
+import {
   encodeRasterFrame,
   rasterizeBlob,
   resizeRasterFrame,
   type RasterImageFrame,
 } from '../../imaging/application/browser-raster'
+import { buildIcoFromRaster, buildIcoPreviewFromRaster } from '../../imaging/application/ico-image'
+import { decodeIllustrationRaster } from '../../imaging/application/illustration-raster'
 import { buildSinglePagePdfFromRaster } from '../../imaging/application/pdf-document'
+import { decodePsdCompositeRaster } from '../../imaging/application/psd-raster'
 import {
   buildTiffFromRaster,
   buildTiffPreviewFromRaster,
 } from '../../imaging/application/tiff-image'
+import { buildVectorizedSvgFromRaster } from '../../imaging/application/vectorized-svg'
 import { resolveConverterPreset, type ConverterPresetDefinition } from '../domain/converter-presets'
 import {
   detectConverterExtension,
@@ -66,8 +74,13 @@ export interface ConverterRuntime {
   }): Promise<ConverterResult>
 }
 
+interface ConverterDecodedSourceArtifact {
+  raster: RasterImageFrame
+  warnings: string[]
+}
+
 interface ConverterSourceStrategy {
-  decode(prepared: ConverterPreparedSource): Promise<RasterImageFrame>
+  decode(prepared: ConverterPreparedSource): Promise<ConverterDecodedSourceArtifact>
 }
 
 interface ConverterTargetStrategy {
@@ -87,10 +100,14 @@ interface ConverterEncodedArtifact {
 }
 
 export interface ConverterRuntimeDependencies {
-  decodeNativeRaster?: (prepared: ConverterPreparedSource) => Promise<RasterImageFrame>
-  decodeHeicSource?: (prepared: ConverterPreparedSource) => Promise<RasterImageFrame>
-  decodeTiffSource?: (prepared: ConverterPreparedSource) => Promise<RasterImageFrame>
-  decodeRawSource?: (prepared: ConverterPreparedSource) => Promise<RasterImageFrame>
+  decodeNativeRaster?: (prepared: ConverterPreparedSource) => Promise<ConverterDecodedSourceArtifact>
+  decodeHeicSource?: (prepared: ConverterPreparedSource) => Promise<ConverterDecodedSourceArtifact>
+  decodeTiffSource?: (prepared: ConverterPreparedSource) => Promise<ConverterDecodedSourceArtifact>
+  decodeRawSource?: (prepared: ConverterPreparedSource) => Promise<ConverterDecodedSourceArtifact>
+  decodePsdSource?: (prepared: ConverterPreparedSource) => Promise<ConverterDecodedSourceArtifact>
+  decodeIllustrationSource?: (
+    prepared: ConverterPreparedSource,
+  ) => Promise<ConverterDecodedSourceArtifact>
   resizeRaster?: (
     raster: RasterImageFrame,
     preset: ConverterPresetDefinition,
@@ -120,6 +137,24 @@ export interface ConverterRuntimeDependencies {
     backgroundColor?: string
   }) => Promise<ConverterEncodedArtifact>
   encodeTiff?: (input: {
+    raster: RasterImageFrame
+    target: ConverterTargetFormatDefinition
+    quality?: number
+    backgroundColor?: string
+  }) => Promise<ConverterEncodedArtifact>
+  encodeAvif?: (input: {
+    raster: RasterImageFrame
+    target: ConverterTargetFormatDefinition
+    quality?: number
+    backgroundColor?: string
+  }) => Promise<ConverterEncodedArtifact>
+  encodeSvg?: (input: {
+    raster: RasterImageFrame
+    target: ConverterTargetFormatDefinition
+    quality?: number
+    backgroundColor?: string
+  }) => Promise<ConverterEncodedArtifact>
+  encodeIco?: (input: {
     raster: RasterImageFrame
     target: ConverterTargetFormatDefinition
     quality?: number
@@ -170,8 +205,8 @@ export function createConverterRuntime(
         throw new Error('Для выбранной пары source/target сценарий пока не зарегистрирован.')
       }
 
-      const sourceRaster = await sourceStrategies[prepared.source.sourceStrategyId].decode(prepared)
-      const transformed = await applyPreset(sourceRaster, preset)
+      const decoded = await sourceStrategies[prepared.source.sourceStrategyId].decode(prepared)
+      const transformed = await applyPreset(decoded.raster, preset)
       const encoded = await targetStrategies[target.targetStrategyId].encode({
         raster: transformed.raster,
         target,
@@ -181,7 +216,7 @@ export function createConverterRuntime(
         backgroundColor: backgroundColor ?? preset.defaultBackgroundColor ?? undefined,
       })
 
-      const warnings = [...transformed.warnings, ...encoded.warnings]
+      const warnings = [...decoded.warnings, ...transformed.warnings, ...encoded.warnings]
 
       if (!target.supportsTransparency && transformed.raster.hasTransparency) {
         warnings.unshift(
@@ -201,8 +236,8 @@ export function createConverterRuntime(
         source: prepared.source,
         target,
         scenario,
-        sourceWidth: sourceRaster.width,
-        sourceHeight: sourceRaster.height,
+        sourceWidth: decoded.raster.width,
+        sourceHeight: decoded.raster.height,
         width: transformed.raster.width,
         height: transformed.raster.height,
         warnings,
@@ -227,6 +262,12 @@ function createSourceStrategies(
     'raw-raster': {
       decode: dependencies.decodeRawSource ?? defaultDecodeRawSource,
     },
+    'psd-raster': {
+      decode: dependencies.decodePsdSource ?? defaultDecodePsdSource,
+    },
+    'illustration-raster': {
+      decode: dependencies.decodeIllustrationSource ?? defaultDecodeIllustrationSource,
+    },
   }
 }
 
@@ -249,31 +290,64 @@ function createTargetStrategies(
     'tiff-image': {
       encode: dependencies.encodeTiff ?? defaultEncodeTiff,
     },
+    'avif-encoder': {
+      encode: dependencies.encodeAvif ?? defaultEncodeAvif,
+    },
+    'svg-vectorizer': {
+      encode: dependencies.encodeSvg ?? defaultEncodeSvg,
+    },
+    'ico-image': {
+      encode: dependencies.encodeIco ?? defaultEncodeIco,
+    },
   }
 }
 
 async function defaultDecodeNativeRaster(
   prepared: ConverterPreparedSource,
-): Promise<RasterImageFrame> {
-  return rasterizeBlob(prepared.file)
+): Promise<ConverterDecodedSourceArtifact> {
+  return {
+    raster: await rasterizeBlob(prepared.file),
+    warnings: [],
+  }
 }
 
 async function defaultDecodeHeicSource(
   prepared: ConverterPreparedSource,
-): Promise<RasterImageFrame> {
-  return rasterizeBinaryPayload(await decodeBinaryFile(prepared.file, decodeHeicRaster))
+): Promise<ConverterDecodedSourceArtifact> {
+  return {
+    raster: await rasterizeBinaryPayload(await decodeBinaryFile(prepared.file, decodeHeicRaster)),
+    warnings: [],
+  }
 }
 
 async function defaultDecodeTiffSource(
   prepared: ConverterPreparedSource,
-): Promise<RasterImageFrame> {
-  return rasterizeBinaryPayload(await decodeBinaryFile(prepared.file, decodeTiffRaster))
+): Promise<ConverterDecodedSourceArtifact> {
+  return {
+    raster: await rasterizeBinaryPayload(await decodeBinaryFile(prepared.file, decodeTiffRaster)),
+    warnings: [],
+  }
 }
 
 async function defaultDecodeRawSource(
   prepared: ConverterPreparedSource,
-): Promise<RasterImageFrame> {
-  return rasterizeBinaryPayload(await decodeBinaryFile(prepared.file, decodeRawRaster))
+): Promise<ConverterDecodedSourceArtifact> {
+  return {
+    raster: await rasterizeBinaryPayload(await decodeBinaryFile(prepared.file, decodeRawRaster)),
+    warnings: [],
+  }
+}
+
+async function defaultDecodePsdSource(
+  prepared: ConverterPreparedSource,
+): Promise<ConverterDecodedSourceArtifact> {
+  return decodePsdCompositeRaster(prepared.file)
+}
+
+async function defaultDecodeIllustrationSource(
+  prepared: ConverterPreparedSource,
+): Promise<ConverterDecodedSourceArtifact> {
+  return decodeIllustrationRaster(prepared.file)
 }
 
 async function defaultApplyPreset(
@@ -372,6 +446,50 @@ async function defaultEncodeTiff(input: {
   }
 }
 
+async function defaultEncodeAvif(input: {
+  raster: RasterImageFrame
+  quality?: number
+}): Promise<ConverterEncodedArtifact> {
+  return {
+    blob: await buildAvifFromRaster(input.raster, {
+      quality: input.quality,
+    }),
+    previewBlob: await buildAvifPreviewFromRaster(input.raster),
+    previewMimeType: 'image/png',
+    warnings: [],
+  }
+}
+
+async function defaultEncodeSvg(input: {
+  raster: RasterImageFrame
+}): Promise<ConverterEncodedArtifact> {
+  const blob = await buildVectorizedSvgFromRaster(input.raster)
+
+  return {
+    blob,
+    previewMimeType: 'image/svg+xml',
+    warnings: [
+      'SVG target собран через bitmap tracing, поэтому итог остаётся approximation, а не исходной векторной сценой.',
+    ],
+  }
+}
+
+async function defaultEncodeIco(input: {
+  raster: RasterImageFrame
+}): Promise<ConverterEncodedArtifact> {
+  return {
+    blob: await buildIcoFromRaster(input.raster),
+    previewBlob: await buildIcoPreviewFromRaster(input.raster),
+    previewMimeType: 'image/png',
+    warnings:
+      input.raster.width === input.raster.height
+        ? []
+        : [
+            'ICO target собран на квадратных canvas-слоях: исходник центрирован с прозрачными полями.',
+          ],
+  }
+}
+
 async function decodeBinaryFile(
   file: File,
   decoder: (buffer: ArrayBuffer) => Promise<BinaryImagePayload>,
@@ -380,7 +498,7 @@ async function decodeBinaryFile(
 }
 
 async function rasterizeBinaryPayload(payload: BinaryImagePayload): Promise<RasterImageFrame> {
-  return rasterizeBlob(new Blob([payload.bytes.slice().buffer], { type: payload.mimeType }))
+  return rasterizeBlob(new Blob([toArrayBuffer(payload.bytes)], { type: payload.mimeType }))
 }
 
 function replaceExtension(fileName: string, targetExtension: string): string {
@@ -391,4 +509,8 @@ function replaceExtension(fileName: string, targetExtension: string): string {
   }
 
   return `${fileName.slice(0, lastDotIndex)}.${targetExtension}`
+}
+
+function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer
 }

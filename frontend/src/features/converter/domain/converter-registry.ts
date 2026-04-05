@@ -5,6 +5,8 @@ export type ConverterSourceStrategyId =
   | 'heic-raster'
   | 'tiff-raster'
   | 'raw-raster'
+  | 'psd-raster'
+  | 'illustration-raster'
 
 export type ConverterTargetStrategyId =
   | 'jpeg-encoder'
@@ -12,6 +14,9 @@ export type ConverterTargetStrategyId =
   | 'webp-encoder'
   | 'pdf-document'
   | 'tiff-image'
+  | 'avif-encoder'
+  | 'svg-vectorizer'
+  | 'ico-image'
 
 export interface ConverterSourceFormatDefinition {
   extension: string
@@ -107,6 +112,41 @@ const sourceFormatDefinitions: ConverterSourceFormatDefinition[] = [
     accents: ['Vector', 'Rasterize'],
   },
   {
+    extension: 'psd',
+    aliases: [],
+    label: 'PSD',
+    family: 'image',
+    mimeTypes: ['image/vnd.adobe.photoshop', 'application/vnd.adobe.photoshop'],
+    sourceStrategyId: 'psd-raster',
+    statusLabel: 'Composite adapter',
+    notes: 'Photoshop document читается по composite image и дальше живёт как единый raster contract.',
+    accents: ['Adobe', 'Composite'],
+  },
+  {
+    extension: 'ai',
+    aliases: [],
+    label: 'AI',
+    family: 'image',
+    mimeTypes: [],
+    sourceStrategyId: 'illustration-raster',
+    statusLabel: 'Illustration adapter',
+    notes:
+      'Illustrator source проходит через PDF-compatible render path либо embedded preview extraction.',
+    accents: ['Adobe', 'Illustration'],
+  },
+  {
+    extension: 'eps',
+    aliases: ['ps'],
+    label: 'EPS',
+    family: 'image',
+    mimeTypes: [],
+    sourceStrategyId: 'illustration-raster',
+    statusLabel: 'Preview-backed adapter',
+    notes:
+      'Encapsulated PostScript читается через PDF-compatible слой или встроенный preview, если он есть в файле.',
+    accents: ['PostScript', 'Preview'],
+  },
+  {
     extension: 'heic',
     aliases: ['heif'],
     label: 'HEIC',
@@ -182,6 +222,47 @@ const targetFormatDefinitions: ConverterTargetFormatDefinition[] = [
     accents: ['Modern', 'Compact'],
   },
   {
+    extension: 'avif',
+    label: 'AVIF',
+    family: 'image',
+    mimeType: 'image/avif',
+    targetStrategyId: 'avif-encoder',
+    supportsQuality: true,
+    supportsTransparency: true,
+    defaultQuality: 0.78,
+    statusLabel: 'WASM encode',
+    notes: 'Современный high-efficiency target через lazy AVIF encoder с PNG preview-слоем для UI.',
+    accents: ['Modern', 'WASM'],
+  },
+  {
+    extension: 'svg',
+    label: 'SVG',
+    family: 'image',
+    mimeType: 'image/svg+xml',
+    targetStrategyId: 'svg-vectorizer',
+    supportsQuality: false,
+    supportsTransparency: true,
+    defaultQuality: null,
+    statusLabel: 'Vector trace',
+    notes:
+      'Векторный target собирается через трассировку raster-кадра и подходит для простых flat-график, а не для pixel-perfect roundtrip.',
+    accents: ['Vector', 'Trace'],
+  },
+  {
+    extension: 'ico',
+    label: 'ICO',
+    family: 'image',
+    mimeType: 'image/x-icon',
+    targetStrategyId: 'ico-image',
+    supportsQuality: false,
+    supportsTransparency: true,
+    defaultQuality: null,
+    statusLabel: 'Icon pack',
+    notes:
+      'Icon target собирает multi-size ICO container из square PNG layers и держит PNG preview для workspace.',
+    accents: ['Icon', 'Multi-size'],
+  },
+  {
     extension: 'pdf',
     label: 'PDF',
     family: 'document',
@@ -213,19 +294,27 @@ const targetFormatDefinitions: ConverterTargetFormatDefinition[] = [
 
 const scenarioDefinitions: ConverterScenarioDefinition[] = [
   buildScenario('heic', 'jpg', 'HEIC decode -> JPG'),
+  buildScenario('heic', 'avif', 'HEIC -> AVIF'),
   buildScenario('heic', 'tiff', 'HEIC -> TIFF'),
   buildScenario('png', 'jpg', 'PNG -> JPG'),
+  buildScenario('png', 'webp', 'PNG -> WebP'),
+  buildScenario('png', 'avif', 'PNG -> AVIF'),
+  buildScenario('png', 'svg', 'PNG -> SVG trace'),
+  buildScenario('png', 'ico', 'PNG -> ICO'),
   buildScenario('png', 'tiff', 'PNG -> TIFF'),
   buildScenario('jpg', 'png', 'JPG -> PNG'),
-  buildScenario('jpg', 'tiff', 'JPG -> TIFF'),
   buildScenario('jpg', 'webp', 'JPG -> WebP'),
-  buildScenario('png', 'webp', 'PNG -> WebP'),
+  buildScenario('jpg', 'avif', 'JPG -> AVIF'),
+  buildScenario('jpg', 'tiff', 'JPG -> TIFF'),
   buildScenario('webp', 'jpg', 'WebP -> JPG'),
   buildScenario('webp', 'png', 'WebP -> PNG'),
   buildScenario('webp', 'tiff', 'WebP -> TIFF'),
   buildScenario('bmp', 'jpg', 'BMP -> JPG'),
   buildScenario('bmp', 'png', 'BMP -> PNG'),
   buildScenario('bmp', 'tiff', 'BMP -> TIFF'),
+  buildScenario('psd', 'jpg', 'PSD -> JPG'),
+  buildScenario('psd', 'png', 'PSD -> PNG'),
+  buildScenario('psd', 'webp', 'PSD -> WebP'),
   buildScenario('tiff', 'jpg', 'TIFF -> JPG'),
   buildScenario('tiff', 'pdf', 'TIFF -> PDF', 'document'),
   buildScenario('tiff', 'tiff', 'TIFF -> TIFF refresh'),
@@ -238,8 +327,13 @@ const scenarioDefinitions: ConverterScenarioDefinition[] = [
   buildScenario('bmp', 'pdf', 'BMP -> PDF', 'document'),
   buildScenario('heic', 'pdf', 'HEIC -> PDF', 'document'),
   buildScenario('svg', 'png', 'SVG -> PNG'),
+  buildScenario('svg', 'ico', 'SVG -> ICO'),
   buildScenario('svg', 'tiff', 'SVG -> TIFF'),
   buildScenario('svg', 'pdf', 'SVG -> PDF', 'document'),
+  buildScenario('ai', 'png', 'AI -> PNG'),
+  buildScenario('ai', 'pdf', 'AI -> PDF', 'document'),
+  buildScenario('eps', 'png', 'EPS -> PNG'),
+  buildScenario('eps', 'pdf', 'EPS -> PDF', 'document'),
 ]
 
 const sourceByExtension = new Map<string, ConverterSourceFormatDefinition>()

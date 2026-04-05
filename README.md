@@ -169,6 +169,9 @@ contract, без отдельной ветки UI и без дублирован
 дальнейшие batch- и delivery-сценарии не размазывались по UI-настройкам.
 Следующим шагом target-слой был расширен до single-frame `TIFF`, чтобы browser-first runtime закрывал
 не только delivery-форматы, но и archive/edit-friendly raster output.
+Текущий проход добирает оставшийся image-surface: lazy adapters для `AVIF`, `ICO`, traced `SVG`,
+`PSD` composite decode и illustration intake для `AI/EPS` через PDF-compatible render path либо
+embedded preview extraction.
 
 #### 3.1 Частые Сценарии Для Изображений
 
@@ -176,29 +179,36 @@ contract, без отдельной ветки UI и без дублирован
 - [x] `PNG -> JPG`
 - [x] `JPG -> PNG`
 - [x] `JPG/PNG -> WebP`
-- [ ] `JPG/PNG -> AVIF`
+- [x] `JPG/PNG -> AVIF`
 - [x] `WebP -> JPG/PNG`
 - [x] `BMP -> JPG/PNG`
 - [x] `TIFF -> JPG/PDF`
 - [x] `PNG <-> WebP`
 - [x] `SVG -> PNG`
-- [ ] `PNG -> SVG` через трассировку / векторизацию
+- [x] `PNG -> SVG` через трассировку / векторизацию
 - [x] `RAW -> JPG`
 - [x] `RAW -> TIFF`
-- [ ] `PSD -> JPG/PNG/WebP`
-- [ ] `AI/EPS/SVG -> PNG/PDF`
-- [ ] `PNG -> ICO`
-- [ ] `SVG -> ICO`
+- [x] `PSD -> JPG/PNG/WebP`
+- [x] `AI/EPS/SVG -> PNG/PDF`
+- [x] `PNG -> ICO`
+- [x] `SVG -> ICO`
 
-Сейчас в converter-роуте реально работают `jpg`, `png`, `webp`, `bmp`, `svg`, `heic`, `tiff` и
-`raw`/camera-alias family (`dng`, `cr2`, `cr3`, `nef`, `arw`, `raf`, `rw2`, `orf`, `pef`, `srw`).
-Для них уже есть practical outputs в `JPG`, `PNG`, `WebP`, single-frame `TIFF` и single-page `PDF`.
-PDF в этой итерации собирается как raster document без редактируемого текстового/векторного слоя, а
-TIFF идёт как single-frame RGBA image без multi-page контейнера и без переноса исходных metadata-блоков.
-На том же runtime это уже открывает `JPG/PNG/WebP/BMP/HEIC/SVG -> TIFF`, `RAW -> TIFF`,
-`TIFF -> TIFF refresh`, `JPG/PNG -> PDF`, `TIFF -> PDF`, `SVG -> PDF`, `HEIC -> PDF` и `RAW -> PDF`.
+Сейчас в converter-роуте реально работают `jpg`, `png`, `webp`, `bmp`, `svg`, `heic`, `tiff`,
+`psd`, `ai`, `eps` и `raw`/camera-alias family (`dng`, `cr2`, `cr3`, `nef`, `arw`, `raf`, `rw2`,
+`orf`, `pef`, `srw`).
+Для них уже есть practical outputs в `JPG`, `PNG`, `WebP`, `AVIF`, traced `SVG`, `ICO`,
+single-frame `TIFF` и single-page `PDF`.
+PDF в этой итерации собирается как raster document без редактируемого текстового/векторного слоя, TIFF
+идёт как single-frame RGBA image без multi-page контейнера и без переноса исходных metadata-блоков,
+а `PNG -> SVG` закрывается через bitmap tracing, а не через semantic vector reconstruction.
+На том же runtime это уже открывает `JPG/PNG -> AVIF`, `PNG -> SVG`, `PNG/SVG -> ICO`,
+`PSD -> JPG/PNG/WebP`, `AI/EPS -> PNG/PDF`, `JPG/PNG/WebP/BMP/HEIC/SVG -> TIFF`,
+`RAW -> TIFF`, `TIFF -> TIFF refresh`, `JPG/PNG -> PDF`, `TIFF -> PDF`, `SVG -> PDF`,
+`HEIC -> PDF` и `RAW -> PDF`.
 Поверх target-слоя уже заведены пресеты `Original`, `Web Balanced`, `Email Attachment` и `Thumbnail`,
 которые централизованно управляют размерностью и базовым quality-profile до encode-шага.
+Для `AI/EPS` есть честное ограничение: browser-first adapter сначала пробует PDF-compatible слой,
+а затем embedded preview. Полноценного PostScript/Illustrator interpreter в проекте пока нет.
 
 #### 3.2 Частые Сценарии Для Офисных Форматов
 

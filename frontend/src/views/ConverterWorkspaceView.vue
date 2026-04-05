@@ -117,18 +117,19 @@ function onDrop(event: DragEvent) {
       <article class="panel-surface converter-hero-copy">
         <p class="eyebrow">Iteration 03 · Converter</p>
         <h1>
-          Конвертер уже умеет брать сложные image-source и собирать delivery, archive и document
-          targets.
+          Конвертер уже умеет брать сложные image-source и собирать delivery, vector, icon, archive
+          и document targets.
         </h1>
         <p class="lead">
           Модуль строится не как набор случайных кнопок, а как реестр сценариев поверх decode/encode
-          pipeline: source-стратегия подготавливает единый raster contract, target-стратегия
-          кодирует его в итоговый формат, а UI остаётся thin-слоем над runtime.
+          pipeline: source-стратегия подготавливает единый raster contract и source warnings,
+          target-стратегия кодирует его в итоговый формат, а UI остаётся thin-слоем над runtime.
         </p>
 
         <div class="converter-signal-row">
-          <span class="chip-pill">HEIC / TIFF / RAW decode</span>
-          <span class="chip-pill">JPG / PNG / WebP / TIFF / PDF targets</span>
+          <span class="chip-pill">HEIC / TIFF / RAW / PSD decode</span>
+          <span class="chip-pill">AI / EPS illustration adapters</span>
+          <span class="chip-pill">JPG / PNG / WebP / AVIF / SVG / ICO / TIFF / PDF targets</span>
           <span class="chip-pill">Preset-driven resize</span>
           <span class="chip-pill">Scenario registry</span>
           <span class="chip-pill">Shared imaging layer</span>
@@ -137,7 +138,7 @@ function onDrop(event: DragEvent) {
 
       <article class="panel-surface converter-system-card">
         <p class="eyebrow">Current Matrix</p>
-        <h2>На старте закрыт browser-first набор частых image-конверсий.</h2>
+        <h2>Текущая матрица уже закрывает delivery, traced-vector и illustration scenarios.</h2>
 
         <div class="scenario-list" aria-label="Доступные сценарии конвертации">
           <article v-for="scenario in imageScenarios" :key="scenario.id" class="scenario-item">
@@ -194,10 +195,14 @@ function onDrop(event: DragEvent) {
           @drop="onDrop"
         >
           <span class="converter-dropzone__badge">Drop / Select</span>
-          <strong>Загрузи `jpg`, `png`, `webp`, `bmp`, `svg`, `heic`, `tiff` или `raw`.</strong>
+          <strong>
+            Загрузи `jpg`, `png`, `webp`, `bmp`, `svg`, `heic`, `tiff`, `raw`, `psd`, `ai` или
+            `eps`.
+          </strong>
           <span>
             Конвертер сам определит, какой decode-path нужен: нативный browser raster либо
-            heavy-format adapter, а затем соберёт image, archive-friendly TIFF либо PDF target.
+            heavy-format adapter, а затем соберёт image, traced SVG, ICO, archive-friendly TIFF
+            либо PDF target.
           </span>
         </button>
 
