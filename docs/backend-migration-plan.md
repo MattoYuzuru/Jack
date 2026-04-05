@@ -95,6 +95,10 @@ Frontend отвечает за:
 
 Приоритет: `P0`
 
+Статус:
+
+- выполнено: backend уже поднял upload/job/artifact/capability foundation и `UPLOAD_INTAKE_ANALYSIS`
+
 ### Phase 1. FFmpeg Service First
 
 Цель:
@@ -139,6 +143,11 @@ Frontend отвечает за:
 - AVI/MKV/WMV/FLV и AAC/FLAC/AIFF больше не требуют `ffmpeg.wasm` в браузере
 
 Приоритет: `P0`
+
+Статус:
+
+- в работе: backend уже умеет запускать `MEDIA_PREVIEW` через `ffprobe` + `ffmpeg`, собирать manifest и binary artifact
+- следующий шаг этой фазы: перевести frontend viewer с browser-side `ffmpeg.wasm` на server-assisted flow и добавить artifact reuse/cache
 
 ### Phase 2. Imaging Processing Service
 

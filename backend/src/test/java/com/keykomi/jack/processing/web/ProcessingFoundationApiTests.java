@@ -41,6 +41,8 @@ class ProcessingFoundationApiTests {
 	static void registerProperties(DynamicPropertyRegistry registry) {
 		registry.add("jack.processing.storage-root", () -> STORAGE_ROOT.toString());
 		registry.add("jack.processing.max-upload-size-bytes", () -> 1_048_576L);
+		registry.add("jack.processing.ffmpeg-executable", () -> STORAGE_ROOT.resolve("missing-ffmpeg").toString());
+		registry.add("jack.processing.ffprobe-executable", () -> STORAGE_ROOT.resolve("missing-ffprobe").toString());
 	}
 
 	@AfterAll
@@ -106,13 +108,15 @@ class ProcessingFoundationApiTests {
 		this.mockMvc.perform(get("/api/capabilities/viewer"))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.scope").value("viewer"))
-			.andExpect(jsonPath("$.phase").value("foundation"))
-			.andExpect(jsonPath("$.jobTypes[0].implemented").value(true));
+			.andExpect(jsonPath("$.phase").value("media-foundation"))
+			.andExpect(jsonPath("$.jobTypes[0].implemented").value(true))
+			.andExpect(jsonPath("$.jobTypes[1].implemented").value(false));
 
 		this.mockMvc.perform(get("/api/capabilities/converter"))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.scope").value("converter"))
-			.andExpect(jsonPath("$.jobTypes[1].implemented").value(false));
+			.andExpect(jsonPath("$.jobTypes[1].implemented").value(false))
+			.andExpect(jsonPath("$.jobTypes[2].implemented").value(false));
 	}
 
 	private JsonNode awaitJobCompletion(String jobId) throws Exception {

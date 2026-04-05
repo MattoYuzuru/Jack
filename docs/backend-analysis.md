@@ -15,13 +15,14 @@
 
 ### Backend
 
-Сейчас backend почти пустой:
+Сейчас backend уже перестал быть пустым bootstrap:
 
-- Spring Boot приложение стартует, но в `backend/src/main/java` есть только `JackApplication`
-- нет контроллеров, сервисов, доменных моделей, репозиториев и processing pipeline
-- из реального server-surface есть только health/info и datasource-конфиг
+- есть processing foundation с upload/job/artifact/capability API
+- есть первый async media job `MEDIA_PREVIEW` поверх `ffprobe`/`ffmpeg`
+- backend уже умеет сохранять source upload, считать `sha256`, отдавать artifacts и репортить capability state
+- из production-grade частей всё ещё отсутствуют постоянное хранилище, cleanup policy, retries, queueing и специализированные processing domains
 
-Вывод: backend пока не участник продукта, а только инфраструктурный bootstrap.
+Вывод: backend уже стал участником продукта, но пока покрывает только foundation и первый media-срез, а основная доменная глубина всё ещё находится на frontend runtime.
 
 ### Frontend
 

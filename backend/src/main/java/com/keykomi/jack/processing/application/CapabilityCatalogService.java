@@ -7,13 +7,27 @@ import org.springframework.stereotype.Service;
 @Service
 public class CapabilityCatalogService {
 
+	private final MediaPreviewService mediaPreviewService;
+
+	public CapabilityCatalogService(MediaPreviewService mediaPreviewService) {
+		this.mediaPreviewService = mediaPreviewService;
+	}
+
 	public CapabilityScope viewerCapabilities() {
+		var mediaPreviewAvailable = this.mediaPreviewService.isAvailable();
+
 		return new CapabilityScope(
 			"viewer",
-			"foundation",
+			"media-foundation",
 			List.of(
 				new JobTypeCapability(ProcessingJobType.UPLOAD_INTAKE_ANALYSIS, true, "Backend уже умеет принять файл, создать job и собрать manifest artifact."),
-				new JobTypeCapability(ProcessingJobType.MEDIA_PREVIEW, false, "Следующий backend-срез для legacy audio/video preview поверх ffmpeg/ffprobe."),
+				new JobTypeCapability(
+					ProcessingJobType.MEDIA_PREVIEW,
+					mediaPreviewAvailable,
+					mediaPreviewAvailable
+						? "Backend уже умеет собирать browser-friendly audio/video preview через ffmpeg/ffprobe."
+						: "Media preview service требует доступных ffmpeg/ffprobe binaries в backend окружении."
+				),
 				new JobTypeCapability(ProcessingJobType.DOCUMENT_PREVIEW, false, "Document intelligence ещё не перенесён с фронтенда на backend."),
 				new JobTypeCapability(ProcessingJobType.METADATA_EXPORT, false, "Metadata read/write пока остаётся на frontend runtime.")
 			),
@@ -25,13 +39,21 @@ public class CapabilityCatalogService {
 	}
 
 	public CapabilityScope converterCapabilities() {
+		var mediaPreviewAvailable = this.mediaPreviewService.isAvailable();
+
 		return new CapabilityScope(
 			"converter",
-			"foundation",
+			"media-foundation",
 			List.of(
 				new JobTypeCapability(ProcessingJobType.UPLOAD_INTAKE_ANALYSIS, true, "Можно использовать как preflight перед будущими heavy conversion jobs."),
 				new JobTypeCapability(ProcessingJobType.IMAGE_CONVERT, false, "Image convert service появится после foundation и ffmpeg/media base."),
-				new JobTypeCapability(ProcessingJobType.MEDIA_PREVIEW, false, "Media processing foundation ещё не заведена в backend."),
+				new JobTypeCapability(
+					ProcessingJobType.MEDIA_PREVIEW,
+					mediaPreviewAvailable,
+					mediaPreviewAvailable
+						? "Media preview foundation уже поднята и будет переиспользована для converter/compression flows."
+						: "Media preview foundation требует доступных ffmpeg/ffprobe binaries и пока не активна в текущем окружении."
+				),
 				new JobTypeCapability(ProcessingJobType.DOCUMENT_PREVIEW, false, "Document extract/preview contract пока живёт во frontend runtime.")
 			),
 			List.of(

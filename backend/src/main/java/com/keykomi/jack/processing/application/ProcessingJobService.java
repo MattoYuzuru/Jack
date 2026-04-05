@@ -24,16 +24,19 @@ public class ProcessingJobService {
 
 	private final UploadStorageService uploadStorageService;
 	private final ArtifactStorageService artifactStorageService;
+	private final MediaPreviewService mediaPreviewService;
 	private final ExecutorService processingExecutor;
 	private final Map<UUID, StoredProcessingJob> jobs = new ConcurrentHashMap<>();
 
 	public ProcessingJobService(
 		UploadStorageService uploadStorageService,
 		ArtifactStorageService artifactStorageService,
+		MediaPreviewService mediaPreviewService,
 		ExecutorService processingExecutor
 	) {
 		this.uploadStorageService = uploadStorageService;
 		this.artifactStorageService = artifactStorageService;
+		this.mediaPreviewService = mediaPreviewService;
 		this.processingExecutor = processingExecutor;
 	}
 
@@ -70,14 +73,14 @@ public class ProcessingJobService {
 
 	private void process(UUID jobId) {
 		try {
-			updateJob(jobId, job -> job.start(Instant.now(), "Начинаю intake-analysis для backend processing foundation."));
+			updateJob(jobId, job -> job.start(Instant.now(), startMessage(job.type())));
 
 			var job = getRequiredJob(jobId);
 			var upload = this.uploadStorageService.getRequiredUpload(job.uploadId());
 
-			updateJob(jobId, currentJob -> currentJob.updateProgress(45, "Собираю manifest и проверяю upload metadata."));
-			var artifact = switch (job.type()) {
-				case UPLOAD_INTAKE_ANALYSIS -> buildUploadIntakeArtifact(job.id(), upload);
+			var result = switch (job.type()) {
+				case UPLOAD_INTAKE_ANALYSIS -> processUploadIntakeAnalysis(job.id(), upload);
+				case MEDIA_PREVIEW -> processMediaPreview(job.id(), upload);
 				default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Для этого job type backend processor ещё не реализован.");
 			};
 
@@ -85,14 +88,35 @@ public class ProcessingJobService {
 				jobId,
 				currentJob -> currentJob.complete(
 					Instant.now(),
-					"Intake-analysis завершён, manifest artifact готов к скачиванию.",
-					List.of(artifact)
+					result.message(),
+					result.artifacts()
 				)
 			);
 		}
 		catch (Exception exception) {
 			updateJob(jobId, job -> job.fail(Instant.now(), resolveErrorMessage(exception)));
 		}
+	}
+
+	private JobProcessingResult processUploadIntakeAnalysis(UUID jobId, StoredUpload upload) {
+		updateJob(jobId, currentJob -> currentJob.updateProgress(45, "Собираю manifest и проверяю upload metadata."));
+		return new JobProcessingResult(
+			"Intake-analysis завершён, manifest artifact готов к скачиванию.",
+			List.of(buildUploadIntakeArtifact(jobId, upload))
+		);
+	}
+
+	private JobProcessingResult processMediaPreview(UUID jobId, StoredUpload upload) {
+		updateJob(jobId, currentJob -> currentJob.updateProgress(30, "Проверяю media container через ffprobe."));
+		var result = this.mediaPreviewService.buildPreview(jobId, upload);
+		updateJob(
+			jobId,
+			currentJob -> currentJob.updateProgress(85, "Media preview собран, сохраняю artifact и manifest.")
+		);
+		return new JobProcessingResult(
+			"Media preview готов через backend %s path.".formatted(result.runtimeLabel()),
+			result.artifacts()
+		);
 	}
 
 	private StoredArtifact buildUploadIntakeArtifact(UUID jobId, StoredUpload upload) {
@@ -106,7 +130,7 @@ public class ProcessingJobService {
 				upload.extension(),
 				upload.sizeBytes(),
 				upload.sha256(),
-				detectUploadFamily(upload),
+				ProcessingFileFamilyResolver.detectFamily(upload),
 				Files.probeContentType(upload.storagePath()),
 				upload.createdAt(),
 				List.of(
@@ -122,10 +146,17 @@ public class ProcessingJobService {
 	}
 
 	private void ensureJobTypeSupported(ProcessingJobType jobType) {
-		if (jobType != ProcessingJobType.UPLOAD_INTAKE_ANALYSIS) {
+		if (jobType != ProcessingJobType.UPLOAD_INTAKE_ANALYSIS && jobType != ProcessingJobType.MEDIA_PREVIEW) {
 			throw new ResponseStatusException(
 				HttpStatus.BAD_REQUEST,
 				"Этот job type уже описан в backend plan, но ещё не реализован в текущем foundation-срезе."
+			);
+		}
+
+		if (jobType == ProcessingJobType.MEDIA_PREVIEW && !this.mediaPreviewService.isAvailable()) {
+			throw new ResponseStatusException(
+				HttpStatus.SERVICE_UNAVAILABLE,
+				"MEDIA_PREVIEW job требует доступных ffmpeg/ffprobe binaries в backend окружении."
 			);
 		}
 	}
@@ -134,30 +165,20 @@ public class ProcessingJobService {
 		this.jobs.compute(jobId, (ignored, currentJob) -> currentJob == null ? null : mutation.apply(currentJob));
 	}
 
-	private String detectUploadFamily(StoredUpload upload) {
-		var mediaType = upload.mediaType().toLowerCase();
-		if (mediaType.startsWith("image/")) {
-			return "image";
-		}
-		if (mediaType.startsWith("video/")) {
-			return "media";
-		}
-		if (mediaType.startsWith("audio/")) {
-			return "audio";
-		}
-		if (mediaType.startsWith("text/") || List.of("pdf", "doc", "docx", "xls", "xlsx", "csv", "epub", "sqlite", "db").contains(upload.extension())) {
-			return "document";
-		}
-
-		return "unknown";
-	}
-
 	private String resolveErrorMessage(Exception exception) {
 		if (exception instanceof ResponseStatusException responseStatusException && responseStatusException.getReason() != null) {
 			return responseStatusException.getReason();
 		}
 
 		return exception.getMessage() != null ? exception.getMessage() : "Неизвестная ошибка processing job.";
+	}
+
+	private String startMessage(ProcessingJobType jobType) {
+		return switch (jobType) {
+			case UPLOAD_INTAKE_ANALYSIS -> "Начинаю intake-analysis для backend processing foundation.";
+			case MEDIA_PREVIEW -> "Запускаю backend media preview pipeline через ffprobe/ffmpeg.";
+			default -> "Запускаю backend processing job.";
+		};
 	}
 
 	public record UploadIntakeManifest(
@@ -171,6 +192,12 @@ public class ProcessingJobService {
 		String probedContentType,
 		Instant uploadedAt,
 		List<String> notes
+	) {
+	}
+
+	private record JobProcessingResult(
+		String message,
+		List<StoredArtifact> artifacts
 	) {
 	}
 
