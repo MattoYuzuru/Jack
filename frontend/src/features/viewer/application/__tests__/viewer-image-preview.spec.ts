@@ -1,14 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { resetProcessingCapabilityScopeCache } from '../../../processing/application/processing-client'
 
 import { decodeHeicPreview } from '../viewer-image-preview'
 
 const originalFetch = globalThis.fetch
 
 beforeEach(() => {
+  resetProcessingCapabilityScopeCache()
   globalThis.fetch = vi.fn() as typeof fetch
 })
 
 afterEach(() => {
+  resetProcessingCapabilityScopeCache()
   globalThis.fetch = originalFetch
   vi.clearAllMocks()
 })
@@ -22,12 +25,17 @@ describe('viewer image preview client', () => {
       .mockResolvedValueOnce(
         createJsonResponse({
           scope: 'viewer',
-          phase: 'metadata-service',
+          phase: 'server-capability-matrix',
           jobTypes: [
             {
               jobType: 'METADATA_EXPORT',
               implemented: true,
               detail: 'Backend metadata service is available.',
+            },
+            {
+              jobType: 'IMAGE_CONVERT',
+              implemented: true,
+              detail: 'Backend image convert service is available.',
             },
           ],
         }),
@@ -156,16 +164,19 @@ describe('viewer image preview client', () => {
     expect(fetchMock.mock.calls[0]?.[0]).toBe('http://localhost:8080/api/capabilities/viewer')
     expect(fetchMock.mock.calls[1]?.[0]).toBe('http://localhost:8080/api/uploads')
     expect(fetchMock.mock.calls[2]?.[0]).toBe('http://localhost:8080/api/jobs')
-    expect(fetchMock.mock.calls[5]?.[0]).toBe('http://localhost:8080/api/capabilities/viewer')
-    expect(fetchMock.mock.calls[6]?.[0]).toBe('http://localhost:8080/api/uploads')
-    expect(fetchMock.mock.calls[7]?.[0]).toBe('http://localhost:8080/api/jobs')
 
-    const metadataJobPayload = JSON.parse(String(fetchMock.mock.calls[2]?.[1]?.body))
+    const jobRequests = fetchMock.mock.calls.filter(
+      (call) => call[0] === 'http://localhost:8080/api/jobs' && call[1]?.method === 'POST',
+    )
+
+    expect(jobRequests).toHaveLength(2)
+
+    const metadataJobPayload = JSON.parse(String(jobRequests[0]?.[1]?.body))
     expect(metadataJobPayload.parameters).toEqual({
       operation: 'inspect-image',
     })
 
-    const imageJobPayload = JSON.parse(String(fetchMock.mock.calls[7]?.[1]?.body))
+    const imageJobPayload = JSON.parse(String(jobRequests[1]?.[1]?.body))
     expect(imageJobPayload.parameters).toMatchObject({
       operation: 'preview',
       maxWidth: 4096,

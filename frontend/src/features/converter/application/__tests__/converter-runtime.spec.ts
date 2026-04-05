@@ -1,4 +1,6 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createConverterCapabilityScopeFixture } from '../../../processing/application/__tests__/capability-matrix.fixtures'
+import { resetProcessingCapabilityScopeCache } from '../../../processing/application/processing-client'
 import { createConverterRuntime, type ConverterPreparedSource } from '../converter-runtime'
 import type { RasterImageFrame } from '../../../imaging/application/browser-raster'
 
@@ -18,10 +20,27 @@ function createDecodedSource(width = 1280, height = 720, hasTransparency = false
   }
 }
 
+const originalFetch = globalThis.fetch
+
 describe('converter runtime', () => {
-  it('inspects supported files and exposes available targets', () => {
+  beforeEach(() => {
+    resetProcessingCapabilityScopeCache()
+    globalThis.fetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(createConverterCapabilityScopeFixture()), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    ) as typeof fetch
+  })
+
+  afterEach(() => {
+    resetProcessingCapabilityScopeCache()
+    globalThis.fetch = originalFetch
+  })
+
+  it('inspects supported files and exposes available targets', async () => {
     const runtime = createConverterRuntime()
-    const prepared = runtime.inspect(new File(['image'], 'poster.png', { type: 'image/png' }))
+    const prepared = await runtime.inspect(new File(['image'], 'poster.png', { type: 'image/png' }))
 
     expect(prepared?.source.extension).toBe('png')
     expect(prepared?.targets.map((target) => target.extension)).toEqual([
@@ -54,7 +73,7 @@ describe('converter runtime', () => {
       },
     })
 
-    const prepared = runtime.inspect(new File(['image'], 'capture.heic', { type: 'image/heic' }))
+    const prepared = await runtime.inspect(new File(['image'], 'capture.heic', { type: 'image/heic' }))
 
     if (!prepared) {
       throw new Error('Expected a prepared source for HEIC.')
@@ -82,7 +101,7 @@ describe('converter runtime', () => {
       }),
     })
 
-    const prepared = runtime.inspect(new File(['image'], 'poster.png', { type: 'image/png' }))
+    const prepared = await runtime.inspect(new File(['image'], 'poster.png', { type: 'image/png' }))
 
     if (!prepared) {
       throw new Error('Expected a prepared source for PNG.')
@@ -109,7 +128,7 @@ describe('converter runtime', () => {
       }),
     })
 
-    const prepared = runtime.inspect(new File(['image'], 'sheet.png', { type: 'image/png' }))
+    const prepared = await runtime.inspect(new File(['image'], 'sheet.png', { type: 'image/png' }))
 
     if (!prepared) {
       throw new Error('Expected a prepared source for PNG.')
@@ -157,7 +176,7 @@ describe('converter runtime', () => {
       },
     })
 
-    const prepared = runtime.inspect(new File(['image'], 'hero.png', { type: 'image/png' }))
+    const prepared = await runtime.inspect(new File(['image'], 'hero.png', { type: 'image/png' }))
 
     if (!prepared) {
       throw new Error('Expected a prepared source for PNG.')
@@ -193,7 +212,7 @@ describe('converter runtime', () => {
       }),
     })
 
-    const prepared = runtime.inspect(new File(['raw'], 'capture.nef'))
+    const prepared = await runtime.inspect(new File(['raw'], 'capture.nef'))
 
     if (!prepared) {
       throw new Error('Expected a prepared source for RAW.')
@@ -224,7 +243,7 @@ describe('converter runtime', () => {
       }),
     })
 
-    const prepared = runtime.inspect(new File(['ai'], 'poster.ai'))
+    const prepared = await runtime.inspect(new File(['ai'], 'poster.ai'))
 
     if (!prepared) {
       throw new Error('Expected a prepared source for AI.')
@@ -257,7 +276,7 @@ describe('converter runtime', () => {
       }),
     })
 
-    const prepared = runtime.inspect(new File(['png'], 'badge.png', { type: 'image/png' }))
+    const prepared = await runtime.inspect(new File(['png'], 'badge.png', { type: 'image/png' }))
 
     if (!prepared) {
       throw new Error('Expected a prepared source for PNG.')
@@ -307,7 +326,7 @@ describe('converter runtime', () => {
       },
     })
 
-    const prepared = runtime.inspect(new File(['image'], 'capture.heic', { type: 'image/heic' }))
+    const prepared = await runtime.inspect(new File(['image'], 'capture.heic', { type: 'image/heic' }))
 
     if (!prepared) {
       throw new Error('Expected a prepared source for HEIC.')

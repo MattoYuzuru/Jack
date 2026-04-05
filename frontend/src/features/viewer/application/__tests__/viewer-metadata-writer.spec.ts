@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { resetProcessingCapabilityScopeCache } from '../../../processing/application/processing-client'
 import {
   canEmbedMetadata,
   exportViewerMetadata,
@@ -7,10 +8,12 @@ import {
 const originalFetch = globalThis.fetch
 
 beforeEach(() => {
+  resetProcessingCapabilityScopeCache()
   globalThis.fetch = vi.fn() as typeof fetch
 })
 
 afterEach(() => {
+  resetProcessingCapabilityScopeCache()
   globalThis.fetch = originalFetch
   vi.clearAllMocks()
 })

@@ -1,4 +1,6 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createViewerCapabilityScopeFixture } from '../../../processing/application/__tests__/capability-matrix.fixtures'
+import { resetProcessingCapabilityScopeCache } from '../../../processing/application/processing-client'
 import {
   detectFileExtension,
   listViewerFormatsByFamily,
@@ -6,33 +8,50 @@ import {
   resolveViewerFormat,
 } from '../viewer-registry'
 
+const originalFetch = globalThis.fetch
+
 describe('viewer registry', () => {
+  beforeEach(() => {
+    resetProcessingCapabilityScopeCache()
+    globalThis.fetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(createViewerCapabilityScopeFixture()), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    ) as typeof fetch
+  })
+
+  afterEach(() => {
+    resetProcessingCapabilityScopeCache()
+    globalThis.fetch = originalFetch
+  })
+
   it('normalizes extensions and detects them from file names', () => {
     expect(normalizeExtension('.JPEG')).toBe('jpeg')
     expect(detectFileExtension('summer.trip.avif')).toBe('avif')
   })
 
-  it('resolves a browser-native format by mime type and file name', () => {
-    const format = resolveViewerFormat('poster.unknown', 'image/webp')
+  it('resolves a browser-native format by mime type and file name', async () => {
+    const format = await resolveViewerFormat('poster.unknown', 'image/webp')
 
     expect(format?.extension).toBe('webp')
     expect(format?.previewPipeline).toBe('browser-native')
   })
 
-  it('maps server-assisted image formats including raw aliases', () => {
-    const formats = listViewerFormatsByFamily('image').filter(
+  it('maps server-assisted image formats including raw aliases', async () => {
+    const formats = (await listViewerFormatsByFamily('image')).filter(
       (definition) => definition.previewPipeline === 'server-assisted',
     )
 
     expect(formats.map((definition) => definition.extension)).toEqual(['heic', 'tiff', 'raw'])
 
-    expect(resolveViewerFormat('shoot.NEF')?.extension).toBe('raw')
-    expect(resolveViewerFormat('scan.tif')?.extension).toBe('tiff')
-    expect(resolveViewerFormat('capture.heic')?.previewPipeline).toBe('server-assisted')
+    expect((await resolveViewerFormat('shoot.NEF'))?.extension).toBe('raw')
+    expect((await resolveViewerFormat('scan.tif'))?.extension).toBe('tiff')
+    expect((await resolveViewerFormat('capture.heic'))?.previewPipeline).toBe('server-assisted')
   })
 
-  it('exposes document formats as server-assisted document intelligence routes', () => {
-    const documentFormats = listViewerFormatsByFamily('document')
+  it('exposes document formats as server-assisted document intelligence routes', async () => {
+    const documentFormats = await listViewerFormatsByFamily('document')
 
     expect(documentFormats.map((definition) => definition.extension)).toEqual([
       'pdf',
@@ -51,22 +70,22 @@ describe('viewer registry', () => {
       'sqlite',
     ])
 
-    expect(resolveViewerFormat('sheet.csv')?.previewStrategyId).toBe('csv-document')
-    expect(resolveViewerFormat('index.htm')?.extension).toBe('html')
-    expect(resolveViewerFormat('legacy.doc')?.previewStrategyId).toBe('doc-document')
-    expect(resolveViewerFormat('open.odt')?.previewStrategyId).toBe('odt-document')
-    expect(resolveViewerFormat('proposal.docx')?.previewStrategyId).toBe('docx-document')
-    expect(resolveViewerFormat('sheet.xls')?.previewStrategyId).toBe('xls-document')
-    expect(resolveViewerFormat('deck.pptx')?.previewStrategyId).toBe('pptx-document')
-    expect(resolveViewerFormat('report.pdf')?.previewPipeline).toBe('server-assisted')
-    expect(resolveViewerFormat('model.xlsx')?.previewPipeline).toBe('server-assisted')
-    expect(resolveViewerFormat('book.epub')?.previewStrategyId).toBe('epub-document')
-    expect(resolveViewerFormat('storage.sqlite')?.previewStrategyId).toBe('sqlite-document')
-    expect(resolveViewerFormat('storage.db')?.previewPipeline).toBe('server-assisted')
+    expect((await resolveViewerFormat('sheet.csv'))?.previewStrategyId).toBe('csv-document')
+    expect((await resolveViewerFormat('index.htm'))?.extension).toBe('html')
+    expect((await resolveViewerFormat('legacy.doc'))?.previewStrategyId).toBe('doc-document')
+    expect((await resolveViewerFormat('open.odt'))?.previewStrategyId).toBe('odt-document')
+    expect((await resolveViewerFormat('proposal.docx'))?.previewStrategyId).toBe('docx-document')
+    expect((await resolveViewerFormat('sheet.xls'))?.previewStrategyId).toBe('xls-document')
+    expect((await resolveViewerFormat('deck.pptx'))?.previewStrategyId).toBe('pptx-document')
+    expect((await resolveViewerFormat('report.pdf'))?.previewPipeline).toBe('server-assisted')
+    expect((await resolveViewerFormat('model.xlsx'))?.previewPipeline).toBe('server-assisted')
+    expect((await resolveViewerFormat('book.epub'))?.previewStrategyId).toBe('epub-document')
+    expect((await resolveViewerFormat('storage.sqlite'))?.previewStrategyId).toBe('sqlite-document')
+    expect((await resolveViewerFormat('storage.db'))?.previewPipeline).toBe('server-assisted')
   })
 
-  it('exposes media formats with native and server-assisted playback paths', () => {
-    const mediaFormats = listViewerFormatsByFamily('media')
+  it('exposes media formats with native and server-assisted playback paths', async () => {
+    const mediaFormats = await listViewerFormatsByFamily('media')
 
     expect(mediaFormats.map((definition) => definition.extension)).toEqual([
       'mp4',
@@ -78,11 +97,11 @@ describe('viewer registry', () => {
       'flv',
     ])
 
-    expect(resolveViewerFormat('clip.mp4')?.previewStrategyId).toBe('native-video')
-    expect(resolveViewerFormat('clip.mov')?.previewPipeline).toBe('browser-native')
-    expect(resolveViewerFormat('clip.mkv')?.previewStrategyId).toBe('legacy-video')
-    expect(resolveViewerFormat('clip.avi')?.previewPipeline).toBe('server-assisted')
-    expect(resolveViewerFormat('clip.wmv')?.previewPipeline).toBe('server-assisted')
-    expect(resolveViewerFormat('track.flac')?.previewPipeline).toBe('server-assisted')
+    expect((await resolveViewerFormat('clip.mp4'))?.previewStrategyId).toBe('native-video')
+    expect((await resolveViewerFormat('clip.mov'))?.previewPipeline).toBe('browser-native')
+    expect((await resolveViewerFormat('clip.mkv'))?.previewStrategyId).toBe('legacy-video')
+    expect((await resolveViewerFormat('clip.avi'))?.previewPipeline).toBe('server-assisted')
+    expect((await resolveViewerFormat('clip.wmv'))?.previewPipeline).toBe('server-assisted')
+    expect((await resolveViewerFormat('track.flac'))?.previewPipeline).toBe('server-assisted')
   })
 })

@@ -1,5 +1,9 @@
 import { computed, onBeforeUnmount, ref, shallowRef } from 'vue'
-import { resolveViewerFormat } from '../domain/viewer-registry'
+import {
+  getViewerCapabilityMatrix,
+  resolveViewerFormat,
+  type ViewerFormatDefinition,
+} from '../domain/viewer-registry'
 import {
   createViewerRuntime,
   releaseViewerEntry,
@@ -13,9 +17,38 @@ export function useViewerWorkspace() {
   const isLoading = ref(false)
   const errorMessage = ref('')
   const loadingMessage = ref('Подготавливаю preview...')
+  const viewerAcceptAttribute = ref('')
+  const imageFormats = ref<ViewerFormatDefinition[]>([])
+  const documentFormats = ref<ViewerFormatDefinition[]>([])
+  const mediaFormats = ref<ViewerFormatDefinition[]>([])
+  const audioFormats = ref<ViewerFormatDefinition[]>([])
   const zoom = ref(1)
   const rotation = ref(0)
   let activeSelectionRequest = 0
+  let capabilityMatrixRequest: Promise<void> | null = null
+
+  async function ensureCapabilityMatrix(): Promise<void> {
+    if (!capabilityMatrixRequest) {
+      capabilityMatrixRequest = loadCapabilityMatrix().catch((error) => {
+        capabilityMatrixRequest = null
+        throw error
+      })
+    }
+
+    return capabilityMatrixRequest
+  }
+
+  async function loadCapabilityMatrix(): Promise<void> {
+    const matrix = await getViewerCapabilityMatrix()
+
+    viewerAcceptAttribute.value = matrix.acceptAttribute
+    imageFormats.value = matrix.formats.filter((definition) => definition.family === 'image')
+    documentFormats.value = matrix.formats.filter((definition) => definition.family === 'document')
+    mediaFormats.value = matrix.formats.filter((definition) => definition.family === 'media')
+    audioFormats.value = matrix.formats.filter((definition) => definition.family === 'audio')
+  }
+
+  void ensureCapabilityMatrix().catch(() => undefined)
 
   function releaseSelection() {
     releaseViewerEntry(selection.value)
@@ -32,10 +65,19 @@ export function useViewerWorkspace() {
     selection.value = null
     errorMessage.value = ''
     isLoading.value = true
-    loadingMessage.value = resolveLoadingMessage(file)
+    loadingMessage.value = 'Подготавливаю preview...'
     resetViewportTransform()
 
+    void resolveLoadingMessage(file)
+      .then((message) => {
+        if (selectionRequest === activeSelectionRequest && isLoading.value) {
+          loadingMessage.value = message
+        }
+      })
+      .catch(() => undefined)
+
     try {
+      await ensureCapabilityMatrix()
       const resolvedEntry = await viewerRuntime.resolve(file, {
         onProgress(message) {
           if (selectionRequest === activeSelectionRequest) {
@@ -107,6 +149,11 @@ export function useViewerWorkspace() {
     isLoading,
     errorMessage,
     loadingMessage,
+    viewerAcceptAttribute,
+    imageFormats,
+    documentFormats,
+    mediaFormats,
+    audioFormats,
     zoom,
     rotation,
     viewportTransform,
@@ -120,8 +167,8 @@ export function useViewerWorkspace() {
   }
 }
 
-function resolveLoadingMessage(file: File): string {
-  const format = resolveViewerFormat(file.name, file.type)
+async function resolveLoadingMessage(file: File): Promise<string> {
+  const format = await resolveViewerFormat(file.name, file.type)
 
   if (
     format?.previewStrategyId === 'heic-image' ||

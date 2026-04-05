@@ -1,10 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
-import {
-  listViewerFormatsByFamily,
-  viewerAcceptAttribute,
-} from '../features/viewer/domain/viewer-registry'
 import { useViewerWorkspace } from '../features/viewer/composables/useViewerWorkspace'
 import { useViewerImageTools } from '../features/viewer/composables/useViewerImageTools'
 import {
@@ -50,10 +46,6 @@ const isSavingMetadata = ref(false)
 const metadataSaveMessage = ref('')
 const documentActionMessage = ref('')
 
-const imageFormats = listViewerFormatsByFamily('image')
-const documentFormats = listViewerFormatsByFamily('document')
-const mediaFormats = listViewerFormatsByFamily('media')
-const audioFormats = listViewerFormatsByFamily('audio')
 const videoPlaybackRates = [0.5, 0.75, 1, 1.25, 1.5, 2]
 const audioPlaybackRates = [0.75, 1, 1.25, 1.5, 2]
 const videoFrameRateOptions = [23.976, 24, 25, 29.97, 30, 50, 59.94, 60]
@@ -75,35 +67,35 @@ const audioShortcutHints = [
 ]
 
 const browserNativeFormats = computed(() =>
-  imageFormats.filter((definition) => definition.previewPipeline === 'browser-native'),
+  imageFormats.value.filter((definition) => definition.previewPipeline === 'browser-native'),
 )
 
 const serverImageFormats = computed(() =>
-  imageFormats.filter((definition) => definition.previewPipeline === 'server-assisted'),
+  imageFormats.value.filter((definition) => definition.previewPipeline === 'server-assisted'),
 )
 
 const activeDocumentFormats = computed(() =>
-  documentFormats.filter((definition) => definition.previewPipeline !== 'planned'),
+  documentFormats.value.filter((definition) => definition.previewPipeline !== 'planned'),
 )
 
 const plannedDocumentFormats = computed(() =>
-  documentFormats.filter((definition) => definition.previewPipeline === 'planned'),
+  documentFormats.value.filter((definition) => definition.previewPipeline === 'planned'),
 )
 
 const activeMediaFormats = computed(() =>
-  mediaFormats.filter((definition) => definition.previewPipeline !== 'planned'),
+  mediaFormats.value.filter((definition) => definition.previewPipeline !== 'planned'),
 )
 
 const plannedMediaFormats = computed(() =>
-  mediaFormats.filter((definition) => definition.previewPipeline === 'planned'),
+  mediaFormats.value.filter((definition) => definition.previewPipeline === 'planned'),
 )
 
 const activeAudioFormats = computed(() =>
-  audioFormats.filter((definition) => definition.previewPipeline !== 'planned'),
+  audioFormats.value.filter((definition) => definition.previewPipeline !== 'planned'),
 )
 
 const plannedAudioFormats = computed(() =>
-  audioFormats.filter((definition) => definition.previewPipeline === 'planned'),
+  audioFormats.value.filter((definition) => definition.previewPipeline === 'planned'),
 )
 
 const {
@@ -111,6 +103,11 @@ const {
   isLoading,
   errorMessage,
   loadingMessage,
+  viewerAcceptAttribute,
+  imageFormats,
+  documentFormats,
+  mediaFormats,
+  audioFormats,
   zoom,
   rotation,
   viewportTransform,

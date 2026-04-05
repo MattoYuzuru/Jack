@@ -13,6 +13,17 @@ export interface ProcessingCapabilityScope {
   phase: string
   jobTypes: ProcessingCapabilityJobType[]
   notes?: string[]
+  viewerMatrix?: {
+    acceptAttribute: string
+    formats: unknown[]
+  } | null
+  converterMatrix?: {
+    acceptAttribute: string
+    sourceFormats: unknown[]
+    targetFormats: unknown[]
+    scenarios: unknown[]
+    presets: unknown[]
+  } | null
 }
 
 export interface ProcessingUploadResponse {
@@ -54,14 +65,36 @@ interface RunProcessingJobOptions {
 const DEFAULT_API_BASE_URL = 'http://localhost:8080'
 const DEFAULT_MAX_ATTEMPTS = 300
 const DEFAULT_POLL_INTERVAL_MS = 1_000
+const capabilityScopeCache = new Map<RunProcessingJobOptions['scope'], Promise<ProcessingCapabilityScope>>()
+
+export function resetProcessingCapabilityScopeCache(): void {
+  capabilityScopeCache.clear()
+}
+
+export async function getProcessingCapabilityScope(
+  scope: RunProcessingJobOptions['scope'],
+): Promise<ProcessingCapabilityScope> {
+  const cachedScope = capabilityScopeCache.get(scope)
+  if (cachedScope) {
+    return cachedScope
+  }
+
+  const scopeRequest = requestProcessingJson<ProcessingCapabilityScope>(`/api/capabilities/${scope}`)
+  capabilityScopeCache.set(scope, scopeRequest)
+
+  try {
+    return await scopeRequest
+  } catch (error) {
+    capabilityScopeCache.delete(scope)
+    throw error
+  }
+}
 
 export async function ensureProcessingCapability(
   scope: RunProcessingJobOptions['scope'],
   jobType: string,
 ): Promise<ProcessingCapabilityJobType> {
-  const capabilityScope = await requestProcessingJson<ProcessingCapabilityScope>(
-    `/api/capabilities/${scope}`,
-  )
+  const capabilityScope = await getProcessingCapabilityScope(scope)
   const capability = capabilityScope.jobTypes.find((entry) => entry.jobType === jobType)
 
   if (!capability?.implemented) {
