@@ -175,9 +175,17 @@ richer metadata inspector с aspect ratio, orientation и estimated bitrate.
 
 #### 2.4 Audio Viewer
 
-- [ ] Работа с метаданными
-- [ ] Удобный аудиоплеер с нужной навигацией
-- [ ] Поддержка: `mp3`, `wav`, `aac`, `flac`, `ogg`, `opus`, `aiff`
+- [x] Работа с метаданными
+- [x] Удобный аудиоплеер с нужной навигацией
+- [x] Waveform, artwork preview, keyboard shortcuts и timestamp helpers
+- [x] Compatibility bridge для legacy/lossless контейнеров
+- [x] Поддержка: `mp3`, `wav`, `aac`, `flac`, `ogg`, `opus`, `aiff`
+
+Audio layer теперь поднимается тем же registry/strategy путём, что и остальные viewer-семьи:
+`mp3`, `wav`, `ogg`, `opus` идут в browser-native audio path, а `aac`, `flac`, `aiff` получают
+compatibility bridge через browser-side ffmpeg.wasm и затем сводятся к тому же audio contract.
+Поверх foundation viewer даёт waveform preview, cover-art display, tag inspector с common/native
+groups, timeline/volume/rate controls, loop и keyboard flow для быстрых playback-check сценариев.
 
 #### 2.5 Другие Форматы
 

@@ -11,9 +11,16 @@ import {
   useViewerVideoPlayback,
   viewerVideoSubtitleAcceptAttribute,
 } from '../features/viewer/composables/useViewerVideoPlayback'
+import { useViewerAudioPlayback } from '../features/viewer/composables/useViewerAudioPlayback'
 import { findViewerDocumentMatches } from '../features/viewer/application/viewer-document'
 import { formatViewerVideoDuration } from '../features/viewer/application/viewer-video'
 import { formatViewerVideoBitrate } from '../features/viewer/application/viewer-video-tools'
+import {
+  formatViewerAudioBitrate,
+  formatViewerAudioDuration,
+  formatViewerChannelLayout,
+  formatViewerSampleRate,
+} from '../features/viewer/application/viewer-audio-tools'
 import {
   createEmptyEditableMetadata,
   type ViewerEditableMetadata,
@@ -28,9 +35,11 @@ const subtitleInput = ref<HTMLInputElement | null>(null)
 const previewStage = ref<HTMLElement | null>(null)
 const previewImage = ref<HTMLImageElement | null>(null)
 const previewVideo = ref<HTMLVideoElement | null>(null)
+const previewAudio = ref<HTMLAudioElement | null>(null)
 const isDragActive = ref(false)
 const isFullscreen = ref(false)
 const metadataQuery = ref('')
+const audioMetadataQuery = ref('')
 const documentQuery = ref('')
 const documentSheetIndex = ref(0)
 const documentSlideIndex = ref(0)
@@ -44,7 +53,9 @@ const documentActionMessage = ref('')
 const imageFormats = listViewerFormatsByFamily('image')
 const documentFormats = listViewerFormatsByFamily('document')
 const mediaFormats = listViewerFormatsByFamily('media')
+const audioFormats = listViewerFormatsByFamily('audio')
 const videoPlaybackRates = [0.5, 0.75, 1, 1.25, 1.5, 2]
+const audioPlaybackRates = [0.75, 1, 1.25, 1.5, 2]
 const videoFrameRateOptions = [23.976, 24, 25, 29.97, 30, 50, 59.94, 60]
 const videoShortcutHints = [
   { keys: 'Space', description: 'Play / pause' },
@@ -53,6 +64,13 @@ const videoShortcutHints = [
   { keys: 'M', description: 'Mute / unmute' },
   { keys: 'L', description: 'Toggle loop' },
   { keys: 'P', description: 'Picture-in-picture' },
+  { keys: 'C', description: 'Copy current timestamp' },
+]
+const audioShortcutHints = [
+  { keys: 'Space', description: 'Play / pause' },
+  { keys: '← / →', description: 'Seek -10s / +10s' },
+  { keys: 'M', description: 'Mute / unmute' },
+  { keys: 'L', description: 'Toggle loop' },
   { keys: 'C', description: 'Copy current timestamp' },
 ]
 
@@ -78,6 +96,14 @@ const activeMediaFormats = computed(() =>
 
 const plannedMediaFormats = computed(() =>
   mediaFormats.filter((definition) => definition.previewPipeline === 'planned'),
+)
+
+const activeAudioFormats = computed(() =>
+  audioFormats.filter((definition) => definition.previewPipeline !== 'planned'),
+)
+
+const plannedAudioFormats = computed(() =>
+  audioFormats.filter((definition) => definition.previewPipeline === 'planned'),
 )
 
 const {
@@ -156,6 +182,29 @@ const {
   handleShortcutKeydown,
 } = useViewerVideoPlayback(selection, previewVideo)
 
+const {
+  isPlaying: isAudioPlaying,
+  isMuted: isAudioMuted,
+  volume: audioVolume,
+  playbackRate: audioPlaybackRate,
+  currentTime: audioCurrentTime,
+  durationSeconds: audioDurationSeconds,
+  progressPercent: audioProgressPercent,
+  currentTimeLabel: audioCurrentTimeLabel,
+  durationLabel: audioDurationLabel,
+  isLooping: isAudioLooping,
+  playbackMessage: audioPlaybackMessage,
+  togglePlayback: toggleAudioPlayback,
+  seekTo: seekAudioTo,
+  seekBy: seekAudioBy,
+  setVolume: setAudioVolume,
+  toggleMute: toggleAudioMute,
+  setPlaybackRate: setAudioPlaybackRate,
+  toggleLoop: toggleAudioLoop,
+  copyCurrentTimestamp: copyAudioTimestamp,
+  handleShortcutKeydown: handleAudioShortcutKeydown,
+} = useViewerAudioPlayback(selection, previewAudio)
+
 watch(
   () => (selection.value?.kind === 'image' ? selection.value.metadata.editable : null),
   (editableMetadata) => {
@@ -164,6 +213,13 @@ watch(
     metadataQuery.value = ''
   },
   { immediate: true },
+)
+
+watch(
+  () => selection.value?.file.name,
+  () => {
+    audioMetadataQuery.value = ''
+  },
 )
 
 watch(
@@ -214,6 +270,14 @@ const selectionFacts = computed(() => {
   }
 
   if (selection.value.kind === 'video') {
+    items.push({
+      label: 'Preview path',
+      value: selection.value.previewLabel,
+    })
+    items.push(...selection.value.summary)
+  }
+
+  if (selection.value.kind === 'audio') {
     items.push({
       label: 'Preview path',
       value: selection.value.previewLabel,
@@ -276,6 +340,8 @@ const documentWarnings = computed(() =>
 
 const videoWarnings = computed(() => (selection.value?.kind === 'video' ? selection.value.warnings : []))
 
+const audioWarnings = computed(() => (selection.value?.kind === 'audio' ? selection.value.warnings : []))
+
 const videoStageMetrics = computed(() => {
   if (selection.value?.kind !== 'video') {
     return []
@@ -320,6 +386,78 @@ const videoMetadataCards = computed(() => {
     {
       label: 'Poster Gallery',
       value: posterCaptures.value.length ? `${posterCaptures.value.length} captures` : 'Empty',
+    },
+  ]
+})
+
+const filteredAudioMetadataGroups = computed(() => {
+  if (selection.value?.kind !== 'audio') {
+    return []
+  }
+
+  const normalizedQuery = audioMetadataQuery.value.trim().toLowerCase()
+  const groups = selection.value.metadataGroups
+
+  if (!normalizedQuery) {
+    return groups
+  }
+
+  return groups
+    .map((group) => ({
+      ...group,
+      entries: group.entries.filter(
+        (entry) =>
+          entry.label.toLowerCase().includes(normalizedQuery) ||
+          entry.value.toLowerCase().includes(normalizedQuery),
+      ),
+    }))
+    .filter((group) => group.entries.length > 0)
+})
+
+const audioStageMetrics = computed(() => {
+  if (selection.value?.kind !== 'audio') {
+    return []
+  }
+
+  return [
+    `Duration: ${formatViewerAudioDuration(selection.value.layout.durationSeconds)}`,
+    `Rate: ${formatViewerSampleRate(selection.value.layout.metadata.sampleRate)}`,
+    `Channels: ${formatViewerChannelLayout(selection.value.layout.metadata.channelCount)}`,
+    selection.value.artworkDataUrl ? 'Artwork: embedded' : 'Artwork: none',
+  ]
+})
+
+const audioMetadataCards = computed(() => {
+  if (selection.value?.kind !== 'audio') {
+    return []
+  }
+
+  return [
+    {
+      label: 'Estimated Bitrate',
+      value: formatViewerAudioBitrate(selection.value.layout.metadata.estimatedBitrateBitsPerSecond),
+    },
+    {
+      label: 'Sample Rate',
+      value: formatViewerSampleRate(selection.value.layout.metadata.sampleRate),
+    },
+    {
+      label: 'Channels',
+      value: formatViewerChannelLayout(selection.value.layout.metadata.channelCount),
+    },
+    {
+      label: 'Codec',
+      value: selection.value.layout.metadata.codec ?? 'n/a',
+    },
+    {
+      label: 'Container',
+      value: selection.value.layout.metadata.container ?? 'n/a',
+    },
+    {
+      label: 'Waveform',
+      value: selection.value.layout.waveform.length
+        ? `${selection.value.layout.waveform.length} buckets`
+        : 'Unavailable',
     },
   ]
 })
@@ -607,6 +745,21 @@ function onVideoFrameRateChange(event: Event) {
   setAssumedFrameRate(Number(target.value))
 }
 
+function onAudioSeekInput(event: Event) {
+  const target = event.target as HTMLInputElement
+  seekAudioTo(Number(target.value))
+}
+
+function onAudioVolumeInput(event: Event) {
+  const target = event.target as HTMLInputElement
+  setAudioVolume(Number(target.value))
+}
+
+function onAudioRateChange(event: Event) {
+  const target = event.target as HTMLSelectElement
+  setAudioPlaybackRate(Number(target.value))
+}
+
 async function onSubtitleChange(event: Event) {
   const target = event.target as HTMLInputElement
   const files = target.files
@@ -619,14 +772,25 @@ async function onSubtitleChange(event: Event) {
   target.value = ''
 }
 
+function handleWorkspaceKeydown(event: KeyboardEvent) {
+  if (selection.value?.kind === 'video') {
+    handleShortcutKeydown(event)
+    return
+  }
+
+  if (selection.value?.kind === 'audio') {
+    handleAudioShortcutKeydown(event)
+  }
+}
+
 onMounted(() => {
   document.addEventListener('fullscreenchange', syncFullscreenState)
-  window.addEventListener('keydown', handleShortcutKeydown)
+  window.addEventListener('keydown', handleWorkspaceKeydown)
 })
 
 onBeforeUnmount(() => {
   document.removeEventListener('fullscreenchange', syncFullscreenState)
-  window.removeEventListener('keydown', handleShortcutKeydown)
+  window.removeEventListener('keydown', handleWorkspaceKeydown)
 })
 </script>
 
@@ -643,20 +807,20 @@ onBeforeUnmount(() => {
 
       <div class="app-topbar__status">
         <RouterLink class="back-link" to="/">Back to Home</RouterLink>
-        <span class="chip-pill">Images + Docs + Video</span>
-        <span class="chip-pill chip-pill--accent">Video Tooling</span>
+        <span class="chip-pill">Images + Docs + Media</span>
+        <span class="chip-pill chip-pill--accent">Audio Workbench</span>
       </div>
     </header>
 
     <section class="viewer-hero-grid">
       <article class="panel-surface viewer-intro">
         <p class="eyebrow">Iteration 03 · File Viewer</p>
-        <h1>Viewer углубляет video UX: точный playback, subtitle sidecars, poster capture и richer metadata.</h1>
+        <h1>Viewer теперь закрывает и audio slice: waveform, tag metadata и точный playback внутри того же workspace.</h1>
         <p class="lead">
-          Архитектура остаётся registry-driven: video family живёт в том же workspace, но поверх
-          foundation теперь получает отдельный tooling-layer. Precision controls, subtitle/session
-          state и frame-derived assets добавляются как composable state, а не как точечные ветки в
-          шаблоне.
+          Архитектура остаётся registry-driven: image, document, video и audio семьи живут в одном
+          маршруте, но каждая получает свой tooling-layer поверх общего stage/runtime. Для audio
+          это означает waveform, artwork, tag inspector и compatibility bridge для legacy
+          контейнеров без разрастания workspace в набор format-specific веток.
         </p>
 
         <div
@@ -685,10 +849,10 @@ onBeforeUnmount(() => {
           <div class="viewer-dropzone__copy">
             <strong>Загрузить файл в viewer</strong>
             <span>
-              Viewer уже держит image и document roadmap, а этот проход усиливает video-layer:
-              `mp4`, `mov`, `webm`, `avi`, `mkv`, `wmv`, `flv` сходятся в один video workspace
-              через native path или legacy decode bridge, а поверх этого работают frame stepping,
-              poster extraction, subtitle sidecars, keyboard flow и richer metadata inspector.
+              Viewer уже держит image и document roadmap, video workbench и теперь закрывает весь
+              audio slice: `mp3`, `wav`, `aac`, `flac`, `ogg`, `opus`, `aiff` сходятся в один
+              workspace через native path или legacy audio bridge, а поверх этого работают
+              waveform, artwork, keyboard flow и richer tag metadata inspector.
             </span>
           </div>
 
@@ -710,8 +874,8 @@ onBeforeUnmount(() => {
           <span class="chip-pill">Image tooling live</span>
           <span class="chip-pill">Document stack complete</span>
           <span class="chip-pill">Video precision controls</span>
-          <span class="chip-pill">Subtitle + poster tools</span>
-          <span class="chip-pill">Legacy containers covered</span>
+          <span class="chip-pill">Audio waveform + tags</span>
+          <span class="chip-pill">Legacy media covered</span>
         </div>
       </article>
 
@@ -943,6 +1107,129 @@ onBeforeUnmount(() => {
                   </span>
                   <span class="chip-pill chip-pill--compact chip-pill--accent">
                     {{ posterCaptures.length ? `${posterCaptures.length} posters` : 'Poster rail empty' }}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div v-else-if="selection?.kind === 'audio'" class="viewer-audio-frame">
+            <div class="video-stage-hud">
+              <div class="document-stage-hud__meta">
+                <span class="chip-pill chip-pill--compact chip-pill--accent">
+                  {{ selection.format.label }}
+                </span>
+                <span
+                  v-for="metric in audioStageMetrics"
+                  :key="metric"
+                  class="chip-pill chip-pill--compact"
+                >
+                  {{ metric }}
+                </span>
+              </div>
+
+              <div class="document-stage-hud__actions">
+                <button class="action-button" type="button" @click="toggleAudioPlayback">
+                  {{ isAudioPlaying ? 'Pause' : 'Play' }}
+                </button>
+                <button class="action-button" type="button" @click="seekAudioBy(-10)">-10s</button>
+                <button class="action-button" type="button" @click="seekAudioBy(10)">+10s</button>
+                <button class="action-button" type="button" @click="toggleAudioLoop">
+                  {{ isAudioLooping ? 'Loop On' : 'Loop Off' }}
+                </button>
+                <button class="action-button" type="button" @click="copyAudioTimestamp">
+                  Copy Time
+                </button>
+              </div>
+            </div>
+
+            <div class="audio-stage-shell">
+              <div class="audio-stage-summary">
+                <div v-if="selection.artworkDataUrl" class="audio-stage-artwork">
+                  <img :src="selection.artworkDataUrl" :alt="`${selection.file.name} artwork`" />
+                </div>
+                <div v-else class="audio-stage-artwork audio-stage-artwork--empty">
+                  <strong>{{ selection.format.label }}</strong>
+                  <span>No embedded cover art</span>
+                </div>
+
+                <div class="audio-stage-copy">
+                  <p class="eyebrow">Audio Stage</p>
+                  <h3>{{ selection.file.name }}</h3>
+                  <p>
+                    Browser-native player, waveform rail и metadata inspector живут в одном
+                    workspace, а legacy containers нормализуются в тот же контракт через ffmpeg
+                    bridge.
+                  </p>
+                </div>
+              </div>
+
+              <div class="audio-waveform" aria-label="Audio waveform preview">
+                <div
+                  v-for="(bucket, bucketIndex) in selection.layout.waveform"
+                  :key="`wave-${bucketIndex}`"
+                  class="audio-waveform__bar"
+                  :style="{ height: `${Math.max(bucket * 100, 8)}%` }"
+                ></div>
+              </div>
+
+              <audio
+                ref="previewAudio"
+                class="viewer-audio-frame__player"
+                :src="selection.layout.objectUrl"
+                :loop="isAudioLooping"
+                preload="metadata"
+              ></audio>
+
+              <div class="video-control-panel">
+                <label class="video-progress">
+                  <span>{{ audioCurrentTimeLabel }}</span>
+                  <input
+                    type="range"
+                    min="0"
+                    :max="audioDurationSeconds || selection.layout.durationSeconds || 0"
+                    step="0.1"
+                    :value="audioCurrentTime"
+                    @input="onAudioSeekInput"
+                  />
+                  <span>{{ audioDurationLabel }}</span>
+                </label>
+
+                <div v-if="audioPlaybackMessage" class="video-tool-message">
+                  {{ audioPlaybackMessage }}
+                </div>
+
+                <div class="video-control-row">
+                  <label class="video-slider">
+                    <span>Volume</span>
+                    <input
+                      type="range"
+                      min="0"
+                      max="1"
+                      step="0.01"
+                      :value="audioVolume"
+                      @input="onAudioVolumeInput"
+                    />
+                  </label>
+                  <button class="action-button" type="button" @click="toggleAudioMute">
+                    {{ isAudioMuted ? 'Unmute' : 'Mute' }}
+                  </button>
+                  <label class="video-rate">
+                    <span>Speed</span>
+                    <select :value="audioPlaybackRate" @change="onAudioRateChange">
+                      <option v-for="rate in audioPlaybackRates" :key="rate" :value="rate">
+                        {{ rate }}x
+                      </option>
+                    </select>
+                  </label>
+                  <span class="chip-pill chip-pill--compact">
+                    {{ audioProgressPercent.toFixed(0) }}%
+                  </span>
+                  <span class="chip-pill chip-pill--compact">
+                    {{ isAudioLooping ? 'Looping' : 'Loop once' }}
+                  </span>
+                  <span class="chip-pill chip-pill--compact chip-pill--accent">
+                    {{ selection.layout.waveform.length ? 'Waveform ready' : 'Waveform unavailable' }}
                   </span>
                 </div>
               </div>
@@ -1198,8 +1485,9 @@ onBeforeUnmount(() => {
           <div v-else class="viewer-empty-state">
             <strong>Viewer готов к первой загрузке</strong>
             <span>
-              Сейчас уже работают image formats, весь document roadmap и video workbench для
-              `mp4`, `mov`, `webm`, `avi`, `mkv`, `wmv`, `flv` с subtitle/poster tooling.
+              Сейчас уже работают image formats, весь document roadmap, video workbench и audio
+              viewer для `mp3`, `wav`, `aac`, `flac`, `ogg`, `opus`, `aiff` с waveform и tag
+              metadata.
             </span>
           </div>
         </div>
@@ -1212,7 +1500,7 @@ onBeforeUnmount(() => {
             Rotation: {{ rotation }}deg
           </span>
           <span
-            v-if="selection?.kind === 'image' || selection?.kind === 'document' || selection?.kind === 'video'"
+            v-if="selection?.kind === 'image' || selection?.kind === 'document' || selection?.kind === 'video' || selection?.kind === 'audio'"
             class="chip-pill chip-pill--compact chip-pill--accent"
           >
             {{ selection.previewLabel }}
@@ -1631,6 +1919,141 @@ onBeforeUnmount(() => {
       </article>
     </section>
 
+    <section v-else-if="selection?.kind === 'audio'" class="viewer-detail-grid">
+      <article class="panel-surface viewer-panel">
+        <p class="eyebrow">Audio Summary</p>
+        <h2>Playback facts, warnings и technical metadata</h2>
+        <div class="document-summary-row">
+          <span class="chip-pill chip-pill--compact chip-pill--accent">{{ selection.format.label }}</span>
+          <span class="chip-pill chip-pill--compact">{{ audioCurrentTimeLabel }} / {{ audioDurationLabel }}</span>
+          <span class="chip-pill chip-pill--compact">{{ isAudioPlaying ? 'Playing' : 'Paused' }}</span>
+          <span class="chip-pill chip-pill--compact">{{ isAudioLooping ? 'Loop On' : 'Loop Off' }}</span>
+        </div>
+        <dl class="facts-grid">
+          <template v-for="fact in selectionFacts" :key="fact.label">
+            <dt>{{ fact.label }}</dt>
+            <dd>{{ fact.value }}</dd>
+          </template>
+        </dl>
+        <div v-if="audioWarnings.length" class="warning-stack">
+          <article v-for="warning in audioWarnings" :key="warning" class="warning-card">
+            {{ warning }}
+          </article>
+        </div>
+      </article>
+
+      <article class="panel-surface viewer-panel">
+        <p class="eyebrow">Playback</p>
+        <h2>Waveform, speed control и session flow</h2>
+        <div class="outline-stack">
+          <article v-for="card in audioMetadataCards" :key="card.label" class="outline-card">
+            <strong>{{ card.label }}</strong>
+            <span>{{ card.value }}</span>
+          </article>
+        </div>
+      </article>
+
+      <article class="panel-surface viewer-panel">
+        <p class="eyebrow">Metadata</p>
+        <h2>Artwork, tags и quick filter</h2>
+
+        <div class="audio-metadata-hero">
+          <div v-if="selection.artworkDataUrl" class="audio-metadata-hero__artwork">
+            <img :src="selection.artworkDataUrl" :alt="`${selection.file.name} artwork`" />
+          </div>
+          <div v-else class="audio-metadata-hero__artwork audio-metadata-hero__artwork--empty">
+            <strong>{{ selection.format.label }}</strong>
+            <span>No cover art</span>
+          </div>
+
+          <div class="audio-metadata-hero__copy">
+            <span class="chip-pill chip-pill--compact chip-pill--accent">
+              {{ filteredAudioMetadataGroups.length }} groups
+            </span>
+            <p>
+              Viewer поднимает common tags, technical summary и native tag groups без отдельного
+              backend round-trip.
+            </p>
+          </div>
+        </div>
+
+        <label class="metadata-search">
+          <span>Filter tags</span>
+          <input v-model="audioMetadataQuery" type="text" placeholder="artist, album, codec..." />
+        </label>
+
+        <div class="metadata-group-stack">
+          <article v-for="group in filteredAudioMetadataGroups" :key="group.id" class="metadata-group">
+            <div class="metadata-group__header">
+              <strong>{{ group.label }}</strong>
+              <span class="chip-pill chip-pill--compact">{{ group.entries.length }} tags</span>
+            </div>
+            <dl class="metadata-group__list">
+              <template v-for="entry in group.entries" :key="`${group.id}-${entry.label}`">
+                <dt>{{ entry.label }}</dt>
+                <dd>{{ entry.value }}</dd>
+              </template>
+            </dl>
+          </article>
+        </div>
+
+        <p v-if="!filteredAudioMetadataGroups.length" class="viewer-panel__empty">
+          По этому фильтру ничего не найдено.
+        </p>
+      </article>
+
+      <article class="panel-surface viewer-panel">
+        <p class="eyebrow">Shortcuts</p>
+        <h2>Keyboard flow для аудио-навигации</h2>
+        <div class="outline-stack">
+          <article v-for="shortcut in audioShortcutHints" :key="shortcut.keys" class="outline-card">
+            <strong>{{ shortcut.keys }}</strong>
+            <span>{{ shortcut.description }}</span>
+          </article>
+        </div>
+      </article>
+
+      <article class="panel-surface viewer-panel viewer-panel--wide">
+        <p class="eyebrow">Capability Map</p>
+        <h2>Audio runtime и текущие playback paths</h2>
+        <div class="capability-columns">
+          <div class="format-grid">
+            <article
+              v-for="format in activeAudioFormats"
+              :key="format.extension"
+              class="format-card format-card--pipeline"
+            >
+              <div class="format-card__meta">
+                <strong>{{ format.label }}</strong>
+                <span class="chip-pill chip-pill--compact chip-pill--accent">
+                  {{ format.statusLabel }}
+                </span>
+              </div>
+              <p>{{ format.notes }}</p>
+            </article>
+          </div>
+
+          <div class="format-grid">
+            <article
+              v-for="format in plannedAudioFormats"
+              :key="format.extension"
+              class="format-card format-card--planned"
+            >
+              <div class="format-card__meta">
+                <strong>{{ format.label }}</strong>
+                <span class="chip-pill chip-pill--compact">{{ format.statusLabel }}</span>
+              </div>
+              <p>{{ format.notes }}</p>
+            </article>
+          </div>
+        </div>
+        <p v-if="!plannedAudioFormats.length" class="viewer-panel__empty">
+          Для audio roadmap в этой итерации больше нет planned-only слотов: все заявленные форматы
+          теперь идут через реальные playback strategies.
+        </p>
+      </article>
+    </section>
+
     <section v-else-if="selection?.kind === 'document'" class="viewer-detail-grid">
       <article class="panel-surface viewer-panel">
         <p class="eyebrow">Document Summary</p>
@@ -1984,7 +2407,8 @@ h2 {
 
 .viewer-image-frame,
 .viewer-document-frame,
-.viewer-video-frame {
+.viewer-video-frame,
+.viewer-audio-frame {
   display: grid;
   width: 100%;
   min-height: 480px;
@@ -1997,6 +2421,10 @@ h2 {
 }
 
 .viewer-video-frame {
+  gap: 16px;
+}
+
+.viewer-audio-frame {
   gap: 16px;
 }
 
@@ -2020,6 +2448,110 @@ h2 {
   box-shadow:
     0 22px 46px rgba(20, 48, 45, 0.24),
     0 2px 0 rgba(255, 255, 255, 0.32);
+}
+
+.viewer-audio-frame__player {
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.audio-stage-shell,
+.audio-stage-summary,
+.audio-metadata-hero {
+  display: grid;
+  gap: 16px;
+}
+
+.audio-stage-shell {
+  width: min(100%, 980px);
+  padding: 22px;
+  border-radius: 28px;
+  background:
+    radial-gradient(circle at top left, rgba(255, 203, 148, 0.22), transparent 28%),
+    linear-gradient(145deg, rgba(255, 251, 245, 0.94), rgba(230, 220, 205, 0.94));
+  box-shadow: var(--shadow-pressed);
+}
+
+.audio-stage-summary,
+.audio-metadata-hero {
+  grid-template-columns: minmax(180px, 220px) minmax(0, 1fr);
+  align-items: center;
+}
+
+.audio-stage-artwork,
+.audio-metadata-hero__artwork {
+  display: grid;
+  place-items: center;
+  min-height: 180px;
+  padding: 18px;
+  border-radius: 24px;
+  background: rgba(255, 250, 242, 0.84);
+  box-shadow: var(--shadow-pressed);
+  overflow: hidden;
+}
+
+.audio-stage-artwork img,
+.audio-metadata-hero__artwork img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 18px;
+  box-shadow:
+    0 18px 32px rgba(20, 48, 45, 0.18),
+    0 2px 0 rgba(255, 255, 255, 0.52);
+}
+
+.audio-stage-artwork--empty,
+.audio-metadata-hero__artwork--empty {
+  align-content: center;
+  justify-items: center;
+  text-align: center;
+  color: var(--text-soft);
+}
+
+.audio-stage-copy,
+.audio-metadata-hero__copy {
+  display: grid;
+  gap: 12px;
+}
+
+.audio-stage-copy h3 {
+  margin: 0;
+  color: var(--text-strong);
+  font-size: clamp(1.4rem, 2.4vw, 2rem);
+  letter-spacing: -0.03em;
+}
+
+.audio-stage-copy p,
+.audio-metadata-hero__copy p {
+  margin: 0;
+  color: var(--text-soft);
+  line-height: 1.6;
+}
+
+.audio-waveform {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(8px, 1fr));
+  align-items: end;
+  gap: 6px;
+  min-height: 140px;
+  padding: 18px;
+  border-radius: 22px;
+  background:
+    linear-gradient(180deg, rgba(29, 92, 85, 0.08), rgba(255, 203, 148, 0.12)),
+    rgba(255, 250, 242, 0.88);
+  box-shadow: var(--shadow-pressed);
+}
+
+.audio-waveform__bar {
+  border-radius: 999px;
+  background:
+    linear-gradient(180deg, rgba(255, 157, 97, 0.98), rgba(29, 92, 85, 0.92));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.32),
+    0 12px 24px rgba(20, 48, 45, 0.12);
 }
 
 .viewer-document-frame__embed {
@@ -2721,6 +3253,8 @@ h2 {
   .viewer-stage-card__header,
   .color-lab__hero,
   .color-lab__loupe-row,
+  .audio-stage-summary,
+  .audio-metadata-hero,
   .metadata-group__header,
   .format-card__meta,
   .metadata-editor__footer,
@@ -2732,6 +3266,11 @@ h2 {
 
   .viewer-panel {
     grid-column: span 12;
+  }
+
+  .audio-stage-summary,
+  .audio-metadata-hero {
+    grid-template-columns: 1fr;
   }
 
   .facts-grid,
@@ -2752,12 +3291,20 @@ h2 {
   }
 
   .viewer-image-frame,
-  .viewer-document-frame {
+  .viewer-document-frame,
+  .viewer-video-frame,
+  .viewer-audio-frame {
     min-height: 340px;
   }
 
   .viewer-document-frame__embed {
     min-height: 56vh;
+  }
+
+  .audio-waveform {
+    grid-template-columns: repeat(auto-fit, minmax(6px, 1fr));
+    gap: 4px;
+    min-height: 110px;
   }
 
   .color-lab__swatch,

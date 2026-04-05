@@ -105,6 +105,10 @@ function resolveLoadingMessage(file: File): string {
     return 'Подготавливаю video preview через legacy decode bridge. Для больших контейнеров это может занять больше времени, чем browser-native path.'
   }
 
+  if (format?.previewStrategyId === 'legacy-audio') {
+    return 'Подготавливаю audio preview через legacy transcode bridge. Для длинных lossless-треков это может занять больше времени, чем browser-native path.'
+  }
+
   if (format?.family === 'document') {
     return 'Подготавливаю document preview и searchable text layer...'
   }
@@ -115,6 +119,10 @@ function resolveLoadingMessage(file: File): string {
 
   if (format?.family === 'media') {
     return 'Подготавливаю video preview и playback metadata...'
+  }
+
+  if (format?.family === 'audio') {
+    return 'Подготавливаю audio preview, waveform и tag metadata...'
   }
 
   return 'Подготавливаю preview...'

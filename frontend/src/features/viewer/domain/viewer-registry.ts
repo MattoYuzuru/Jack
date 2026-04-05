@@ -1,4 +1,4 @@
-export type ViewerFormatFamily = 'image' | 'document' | 'media' | 'data'
+export type ViewerFormatFamily = 'image' | 'document' | 'media' | 'audio' | 'data'
 
 export type ViewerPreviewPipeline = 'browser-native' | 'client-decode' | 'planned'
 
@@ -9,6 +9,8 @@ export type PreviewStrategyId =
   | 'raw-image'
   | 'native-video'
   | 'legacy-video'
+  | 'native-audio'
+  | 'legacy-audio'
   | 'pdf-document'
   | 'text-document'
   | 'csv-document'
@@ -465,7 +467,106 @@ const mediaFormatDefinitions: ViewerFormatDefinition[] = [
   },
 ]
 
-const registry = [...imageFormatDefinitions, ...documentFormatDefinitions, ...mediaFormatDefinitions]
+const audioFormatDefinitions: ViewerFormatDefinition[] = [
+  {
+    extension: 'mp3',
+    aliases: [],
+    label: 'MP3',
+    family: 'audio',
+    mimeTypes: ['audio/mpeg'],
+    previewPipeline: 'browser-native',
+    previewStrategyId: 'native-audio',
+    statusLabel: 'Browser audio',
+    notes:
+      'Основной audio fast path: MP3 открывается напрямую в browser-native audio element и получает waveform, tag inspector и playback tooling.',
+    accents: ['Audio', 'Native'],
+  },
+  {
+    extension: 'wav',
+    aliases: [],
+    label: 'WAV',
+    family: 'audio',
+    mimeTypes: ['audio/wav', 'audio/wave', 'audio/x-wav'],
+    previewPipeline: 'browser-native',
+    previewStrategyId: 'native-audio',
+    statusLabel: 'Browser audio',
+    notes:
+      'WAV идёт через нативный playback path и удобен для точной проверки длительности, формы сигнала и базовых technical metadata.',
+    accents: ['Audio', 'Lossless'],
+  },
+  {
+    extension: 'ogg',
+    aliases: [],
+    label: 'OGG',
+    family: 'audio',
+    mimeTypes: ['audio/ogg'],
+    previewPipeline: 'browser-native',
+    previewStrategyId: 'native-audio',
+    statusLabel: 'Browser audio',
+    notes:
+      'OGG-контейнер воспроизводится напрямую и получает тот же audio workspace без отдельной ветки UI.',
+    accents: ['Audio', 'Open'],
+  },
+  {
+    extension: 'opus',
+    aliases: [],
+    label: 'OPUS',
+    family: 'audio',
+    mimeTypes: ['audio/opus', 'audio/ogg; codecs=opus'],
+    previewPipeline: 'browser-native',
+    previewStrategyId: 'native-audio',
+    statusLabel: 'Browser audio',
+    notes:
+      'OPUS использует browser-native path там, где контейнер уже совместим с audio element и Web Audio decode pipeline.',
+    accents: ['Audio', 'Speech'],
+  },
+  {
+    extension: 'aac',
+    aliases: [],
+    label: 'AAC',
+    family: 'audio',
+    mimeTypes: ['audio/aac'],
+    previewPipeline: 'client-decode',
+    previewStrategyId: 'legacy-audio',
+    statusLabel: 'Legacy audio bridge',
+    notes:
+      'AAC закрывается через transcode bridge, чтобы viewer не зависел от platform-specific поддержки контейнера и профиля кодека.',
+    accents: ['Audio', 'Bridge'],
+  },
+  {
+    extension: 'flac',
+    aliases: [],
+    label: 'FLAC',
+    family: 'audio',
+    mimeTypes: ['audio/flac', 'audio/x-flac'],
+    previewPipeline: 'client-decode',
+    previewStrategyId: 'legacy-audio',
+    statusLabel: 'Legacy audio bridge',
+    notes:
+      'FLAC проходит через compatibility bridge и получает browser-friendly playback blob вместе с waveform и metadata inspector.',
+    accents: ['Audio', 'Lossless'],
+  },
+  {
+    extension: 'aiff',
+    aliases: ['aif'],
+    label: 'AIFF',
+    family: 'audio',
+    mimeTypes: ['audio/aiff', 'audio/x-aiff'],
+    previewPipeline: 'client-decode',
+    previewStrategyId: 'legacy-audio',
+    statusLabel: 'Legacy audio bridge',
+    notes:
+      'AIFF идёт через client-side transcode bridge: контейнер нормализуется в browser-playable runtime path без отдельного renderer.',
+    accents: ['Audio', 'Archive'],
+  },
+]
+
+const registry = [
+  ...imageFormatDefinitions,
+  ...documentFormatDefinitions,
+  ...mediaFormatDefinitions,
+  ...audioFormatDefinitions,
+]
 
 const formatByExtension = new Map<string, ViewerFormatDefinition>()
 const formatByMime = new Map<string, ViewerFormatDefinition>()
