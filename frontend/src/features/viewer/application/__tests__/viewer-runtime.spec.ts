@@ -150,6 +150,33 @@ describe('viewer runtime', () => {
     expect(revokeObjectUrl).toHaveBeenCalledWith('blob:pdf-preview')
   })
 
+  it('builds a video preview for browser-native formats', async () => {
+    const runtime = createViewerRuntime({
+      buildNativeVideo: async () => ({
+        summary: [{ label: 'Длительность', value: '00:12' }],
+        warnings: [],
+        layout: {
+          mode: 'native',
+          objectUrl: 'blob:video-preview',
+          durationSeconds: 12,
+          width: 1920,
+          height: 1080,
+        },
+        previewLabel: 'Browser video',
+      }),
+    })
+
+    const result = await runtime.resolve(new File(['video'], 'clip.mp4', { type: 'video/mp4' }))
+
+    if (result.kind !== 'video') {
+      throw new Error('Expected a video preview result.')
+    }
+
+    expect(result.previewLabel).toBe('Browser video')
+    expect(result.layout.durationSeconds).toBe(12)
+    expect(result.layout.width).toBe(1920)
+  })
+
   it('routes xlsx files through the workbook document adapter', async () => {
     const runtime = createViewerRuntime({
       buildXlsxDocument: async () => ({
@@ -264,5 +291,23 @@ describe('viewer runtime', () => {
 
     expect(result.headline).toContain('DB')
     expect(result.detail).toContain('not SQLite')
+  })
+
+  it('routes planned media formats into a capability-aware placeholder', async () => {
+    const runtime = createViewerRuntime()
+    const result = await runtime.resolve(
+      new File(['video'], 'archive.mkv', {
+        type: 'video/x-matroska',
+      }),
+    )
+
+    expect(result.kind).toBe('unknown')
+
+    if (result.kind !== 'unknown') {
+      throw new Error('Expected a planned media placeholder.')
+    }
+
+    expect(result.headline).toContain('MKV')
+    expect(result.detail).toContain('playback path')
   })
 })

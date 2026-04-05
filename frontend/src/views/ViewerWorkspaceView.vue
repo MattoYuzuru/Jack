@@ -7,7 +7,9 @@ import {
 } from '../features/viewer/domain/viewer-registry'
 import { useViewerWorkspace } from '../features/viewer/composables/useViewerWorkspace'
 import { useViewerImageTools } from '../features/viewer/composables/useViewerImageTools'
+import { useViewerVideoPlayback } from '../features/viewer/composables/useViewerVideoPlayback'
 import { findViewerDocumentMatches } from '../features/viewer/application/viewer-document'
+import { formatViewerVideoDuration } from '../features/viewer/application/viewer-video'
 import {
   createEmptyEditableMetadata,
   type ViewerEditableMetadata,
@@ -20,6 +22,7 @@ import {
 const fileInput = ref<HTMLInputElement | null>(null)
 const previewStage = ref<HTMLElement | null>(null)
 const previewImage = ref<HTMLImageElement | null>(null)
+const previewVideo = ref<HTMLVideoElement | null>(null)
 const isDragActive = ref(false)
 const isFullscreen = ref(false)
 const metadataQuery = ref('')
@@ -35,6 +38,8 @@ const documentActionMessage = ref('')
 
 const imageFormats = listViewerFormatsByFamily('image')
 const documentFormats = listViewerFormatsByFamily('document')
+const mediaFormats = listViewerFormatsByFamily('media')
+const videoPlaybackRates = [0.5, 0.75, 1, 1.25, 1.5, 2]
 
 const browserNativeFormats = computed(() =>
   imageFormats.filter((definition) => definition.previewPipeline === 'browser-native'),
@@ -50,6 +55,14 @@ const activeDocumentFormats = computed(() =>
 
 const plannedDocumentFormats = computed(() =>
   documentFormats.filter((definition) => definition.previewPipeline === 'planned'),
+)
+
+const activeMediaFormats = computed(() =>
+  mediaFormats.filter((definition) => definition.previewPipeline !== 'planned'),
+)
+
+const plannedMediaFormats = computed(() =>
+  mediaFormats.filter((definition) => definition.previewPipeline === 'planned'),
 )
 
 const {
@@ -81,6 +94,27 @@ const {
   copyActiveSample,
   toggleTransparencyGrid,
 } = useViewerImageTools(selection, previewImage)
+
+const {
+  isPlaying: isVideoPlaying,
+  isMuted: isVideoMuted,
+  volume: videoVolume,
+  playbackRate: videoPlaybackRate,
+  currentTime: videoCurrentTime,
+  durationSeconds: videoDurationSeconds,
+  progressPercent: videoProgressPercent,
+  currentTimeLabel: videoCurrentTimeLabel,
+  durationLabel: videoDurationLabel,
+  canUsePictureInPicture,
+  isPictureInPictureActive,
+  togglePlayback,
+  seekTo,
+  seekBy,
+  setVolume,
+  toggleMute,
+  setPlaybackRate,
+  togglePictureInPicture,
+} = useViewerVideoPlayback(selection, previewVideo)
 
 watch(
   () => (selection.value?.kind === 'image' ? selection.value.metadata.editable : null),
@@ -132,6 +166,14 @@ const selectionFacts = computed(() => {
   }
 
   if (selection.value.kind === 'document') {
+    items.push({
+      label: 'Preview path',
+      value: selection.value.previewLabel,
+    })
+    items.push(...selection.value.summary)
+  }
+
+  if (selection.value.kind === 'video') {
     items.push({
       label: 'Preview path',
       value: selection.value.previewLabel,
@@ -191,6 +233,19 @@ watch(documentMatches, (matches) => {
 const documentWarnings = computed(() =>
   selection.value?.kind === 'document' ? selection.value.warnings : [],
 )
+
+const videoWarnings = computed(() => (selection.value?.kind === 'video' ? selection.value.warnings : []))
+
+const videoStageMetrics = computed(() => {
+  if (selection.value?.kind !== 'video') {
+    return []
+  }
+
+  return [
+    `Duration: ${formatViewerVideoDuration(selection.value.layout.durationSeconds)}`,
+    `Frame: ${selection.value.layout.width} x ${selection.value.layout.height}`,
+  ]
+})
 
 const documentOutline = computed(() => {
   if (selection.value?.kind !== 'document' || selection.value.layout.mode !== 'html') {
@@ -451,6 +506,21 @@ function selectDocumentDatabaseTable(index: number) {
   documentDatabaseTableIndex.value = index
 }
 
+function onVideoSeekInput(event: Event) {
+  const target = event.target as HTMLInputElement
+  seekTo(Number(target.value))
+}
+
+function onVideoVolumeInput(event: Event) {
+  const target = event.target as HTMLInputElement
+  setVolume(Number(target.value))
+}
+
+function onVideoRateChange(event: Event) {
+  const target = event.target as HTMLSelectElement
+  setPlaybackRate(Number(target.value))
+}
+
 onMounted(() => {
   document.addEventListener('fullscreenchange', syncFullscreenState)
 })
@@ -473,19 +543,19 @@ onBeforeUnmount(() => {
 
       <div class="app-topbar__status">
         <RouterLink class="back-link" to="/">Back to Home</RouterLink>
-        <span class="chip-pill">Images + Docs</span>
-        <span class="chip-pill chip-pill--accent">Remaining Document Formats</span>
+        <span class="chip-pill">Images + Docs + Video</span>
+        <span class="chip-pill chip-pill--accent">Video Foundation</span>
       </div>
     </header>
 
     <section class="viewer-hero-grid">
       <article class="panel-surface viewer-intro">
         <p class="eyebrow">Iteration 03 · File Viewer</p>
-        <h1>Viewer закрыл document roadmap целиком и теперь держит legacy, archive и database paths.</h1>
+        <h1>Viewer начинает следующий слой: video foundation с player UX и format-aware capability map.</h1>
         <p class="lead">
           Архитектура остаётся registry-driven: image и document форматы идут через общий workspace,
-          а поверх document runtime теперь есть search, быстрые actions, sheet/slide/database
-          navigation и более внятные preview states для каждого поддержанного режима.
+          а video family теперь заводится тем же способом: media registry, runtime strategies и
+          отдельный playback state поверх одного viewer route.
         </p>
 
         <div
@@ -506,9 +576,9 @@ onBeforeUnmount(() => {
           <div class="viewer-dropzone__copy">
             <strong>Загрузить файл в viewer</strong>
             <span>
-              На этом проходе viewer уже умеет работать не только с изображениями, но и со всем
-              document-набором roadmap: `doc`, `docx`, `pdf`, `txt`, `rtf`, `odt`, `xls`, `xlsx`,
-              `csv`, `pptx`, `html`, `epub`, `db`, `sqlite`.
+              Viewer уже держит image и document roadmap, а на этой итерации поднимает video
+              foundation: `mp4`, `mov`, `webm` через browser-native player и честные planned slots
+              для `avi`, `mkv`, `wmv`, `flv`.
             </span>
           </div>
 
@@ -528,9 +598,9 @@ onBeforeUnmount(() => {
 
         <div class="signal-row">
           <span class="chip-pill">Image tooling live</span>
-          <span class="chip-pill">Legacy + archive + database</span>
-          <span class="chip-pill">Search layer</span>
-          <span class="chip-pill">Sheets + slides + tables + quick actions</span>
+          <span class="chip-pill">Document stack complete</span>
+          <span class="chip-pill">Video player foundation</span>
+          <span class="chip-pill">Timeline + speed + PiP</span>
         </div>
       </article>
 
@@ -605,6 +675,93 @@ onBeforeUnmount(() => {
               @pointerleave="handlePointerLeave"
               @click="storeActiveSwatch"
             />
+          </div>
+
+          <div v-else-if="selection?.kind === 'video'" class="viewer-video-frame">
+            <div class="video-stage-hud">
+              <div class="document-stage-hud__meta">
+                <span class="chip-pill chip-pill--compact chip-pill--accent">
+                  {{ selection.format.label }}
+                </span>
+                <span
+                  v-for="metric in videoStageMetrics"
+                  :key="metric"
+                  class="chip-pill chip-pill--compact"
+                >
+                  {{ metric }}
+                </span>
+              </div>
+
+              <div class="document-stage-hud__actions">
+                <button class="action-button" type="button" @click="togglePlayback">
+                  {{ isVideoPlaying ? 'Pause' : 'Play' }}
+                </button>
+                <button class="action-button" type="button" @click="seekBy(-5)">-5s</button>
+                <button class="action-button" type="button" @click="seekBy(5)">+5s</button>
+                <button
+                  class="action-button"
+                  type="button"
+                  :disabled="!canUsePictureInPicture"
+                  @click="togglePictureInPicture"
+                >
+                  {{ isPictureInPictureActive ? 'Exit PiP' : 'PiP' }}
+                </button>
+              </div>
+            </div>
+
+            <video
+              ref="previewVideo"
+              class="viewer-video-frame__player"
+              :src="selection.layout.objectUrl"
+              preload="metadata"
+              playsinline
+            ></video>
+
+            <div class="video-control-panel">
+              <label class="video-progress">
+                <span>{{ videoCurrentTimeLabel }}</span>
+                <input
+                  type="range"
+                  min="0"
+                  :max="videoDurationSeconds || selection.layout.durationSeconds || 0"
+                  step="0.1"
+                  :value="videoCurrentTime"
+                  @input="onVideoSeekInput"
+                />
+                <span>{{ videoDurationLabel }}</span>
+              </label>
+
+              <div class="video-control-row">
+                <label class="video-slider">
+                  <span>Volume</span>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    :value="videoVolume"
+                    @input="onVideoVolumeInput"
+                  />
+                </label>
+                <button class="action-button" type="button" @click="toggleMute">
+                  {{ isVideoMuted ? 'Unmute' : 'Mute' }}
+                </button>
+                <label class="video-rate">
+                  <span>Speed</span>
+                  <select
+                    :value="videoPlaybackRate"
+                    @change="onVideoRateChange"
+                  >
+                    <option v-for="rate in videoPlaybackRates" :key="rate" :value="rate">
+                      {{ rate }}x
+                    </option>
+                  </select>
+                </label>
+                <span class="chip-pill chip-pill--compact">
+                  {{ videoProgressPercent.toFixed(0) }}%
+                </span>
+              </div>
+            </div>
           </div>
 
           <div v-else-if="selection?.kind === 'document'" class="viewer-document-frame">
@@ -856,8 +1013,8 @@ onBeforeUnmount(() => {
           <div v-else class="viewer-empty-state">
             <strong>Viewer готов к первой загрузке</strong>
             <span>
-              Сейчас уже работают image formats и весь document roadmap: от `doc/xls/odt/epub`
-              до `sqlite/db`.
+              Сейчас уже работают image formats, весь document roadmap и первый video layer для
+              `mp4`, `mov`, `webm`.
             </span>
           </div>
         </div>
@@ -870,7 +1027,7 @@ onBeforeUnmount(() => {
             Rotation: {{ rotation }}deg
           </span>
           <span
-            v-if="selection?.kind === 'image' || selection?.kind === 'document'"
+            v-if="selection?.kind === 'image' || selection?.kind === 'document' || selection?.kind === 'video'"
             class="chip-pill chip-pill--compact chip-pill--accent"
           >
             {{ selection.previewLabel }}
@@ -1112,6 +1269,84 @@ onBeforeUnmount(() => {
                 <span class="chip-pill chip-pill--compact chip-pill--accent">
                   {{ format.statusLabel }}
                 </span>
+              </div>
+              <p>{{ format.notes }}</p>
+            </article>
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <section v-else-if="selection?.kind === 'video'" class="viewer-detail-grid">
+      <article class="panel-surface viewer-panel">
+        <p class="eyebrow">Video Summary</p>
+        <h2>Playback facts, warnings и browser-native metadata</h2>
+        <div class="document-summary-row">
+          <span class="chip-pill chip-pill--compact chip-pill--accent">{{ selection.format.label }}</span>
+          <span class="chip-pill chip-pill--compact">{{ videoCurrentTimeLabel }} / {{ videoDurationLabel }}</span>
+          <span class="chip-pill chip-pill--compact">{{ isVideoPlaying ? 'Playing' : 'Paused' }}</span>
+        </div>
+        <dl class="facts-grid">
+          <template v-for="fact in selectionFacts" :key="fact.label">
+            <dt>{{ fact.label }}</dt>
+            <dd>{{ fact.value }}</dd>
+          </template>
+        </dl>
+        <div v-if="videoWarnings.length" class="warning-stack">
+          <article v-for="warning in videoWarnings" :key="warning" class="warning-card">
+            {{ warning }}
+          </article>
+        </div>
+      </article>
+
+      <article class="panel-surface viewer-panel">
+        <p class="eyebrow">Playback</p>
+        <h2>Scrubbing, speed и стандартные video controls</h2>
+        <div class="outline-stack">
+          <article class="outline-card">
+            <strong>Seek</strong>
+            <span>Timeline, `-5s/+5s`, fullscreen и picture-in-picture доступны прямо в stage.</span>
+          </article>
+          <article class="outline-card">
+            <strong>Speed</strong>
+            <span>Foundation уже держит rates от `0.5x` до `2x` через единый playback state.</span>
+          </article>
+          <article class="outline-card">
+            <strong>Audio</strong>
+            <span>Mute и volume slider живут в том же control contract, чтобы дальше без боли добавить audio viewer.</span>
+          </article>
+        </div>
+      </article>
+
+      <article class="panel-surface viewer-panel viewer-panel--wide">
+        <p class="eyebrow">Capability Map</p>
+        <h2>Video foundation и текущие playback paths</h2>
+        <div class="capability-columns">
+          <div class="format-grid">
+            <article
+              v-for="format in activeMediaFormats"
+              :key="format.extension"
+              class="format-card format-card--pipeline"
+            >
+              <div class="format-card__meta">
+                <strong>{{ format.label }}</strong>
+                <span class="chip-pill chip-pill--compact chip-pill--accent">
+                  {{ format.statusLabel }}
+                </span>
+              </div>
+              <p>{{ format.notes }}</p>
+            </article>
+          </div>
+
+          <div class="format-grid">
+            <article
+              v-for="format in plannedMediaFormats"
+              :key="format.extension"
+              class="format-card format-card--planned"
+            >
+              <div class="format-card__meta">
+                <strong>{{ format.label }}</strong>
+                <span class="chip-pill chip-pill--compact">{{ format.statusLabel }}</span>
               </div>
               <p>{{ format.notes }}</p>
             </article>
@@ -1472,7 +1707,8 @@ h2 {
 }
 
 .viewer-image-frame,
-.viewer-document-frame {
+.viewer-document-frame,
+.viewer-video-frame {
   display: grid;
   width: 100%;
   min-height: 480px;
@@ -1482,6 +1718,10 @@ h2 {
 
 .viewer-image-frame {
   place-items: center;
+}
+
+.viewer-video-frame {
+  gap: 16px;
 }
 
 .viewer-image-frame__image {
@@ -1494,6 +1734,16 @@ h2 {
     0 2px 0 rgba(255, 255, 255, 0.6);
   transform-origin: center center;
   transition: transform 180ms ease;
+}
+
+.viewer-video-frame__player {
+  width: min(100%, 980px);
+  max-height: 68vh;
+  border-radius: 24px;
+  background: rgba(17, 27, 28, 0.94);
+  box-shadow:
+    0 22px 46px rgba(20, 48, 45, 0.24),
+    0 2px 0 rgba(255, 255, 255, 0.32);
 }
 
 .viewer-document-frame__embed {
@@ -1510,7 +1760,10 @@ h2 {
 .document-stage-hud__actions,
 .document-summary-row,
 .document-search-toolbar,
-.document-slide-rail {
+.document-slide-rail,
+.video-stage-hud,
+.video-control-row,
+.video-progress {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
@@ -1537,6 +1790,68 @@ h2 {
   padding: 14px 16px;
   border-radius: 18px;
   background: linear-gradient(145deg, rgba(255, 246, 232, 0.9), rgba(229, 218, 201, 0.94));
+  box-shadow: var(--shadow-pressed);
+  color: var(--text-main);
+}
+
+.video-stage-hud {
+  width: 100%;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.video-control-panel {
+  display: grid;
+  gap: 12px;
+  width: min(100%, 980px);
+  padding: 18px;
+  border-radius: var(--radius-xl);
+  background:
+    radial-gradient(circle at top left, rgba(255, 203, 148, 0.18), transparent 28%),
+    rgba(255, 250, 242, 0.9);
+  box-shadow: var(--shadow-pressed);
+}
+
+.video-progress,
+.video-slider,
+.video-rate {
+  align-items: center;
+}
+
+.video-progress {
+  width: 100%;
+}
+
+.video-progress span:first-child,
+.video-progress span:last-child {
+  min-width: 64px;
+  color: var(--text-soft);
+  font-weight: 700;
+}
+
+.video-progress input,
+.video-slider input {
+  width: 100%;
+}
+
+.video-control-row {
+  align-items: center;
+  justify-content: space-between;
+}
+
+.video-slider,
+.video-rate {
+  display: flex;
+  gap: 10px;
+  color: var(--text-main);
+}
+
+.video-rate select {
+  min-height: 38px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 14px;
+  background: rgba(255, 250, 242, 0.84);
   box-shadow: var(--shadow-pressed);
   color: var(--text-main);
 }

@@ -27,6 +27,7 @@ const signalPills = [
   'Converter route',
   'Shared imaging layer',
   'Full document coverage',
+  'Video foundation',
   'Legacy + archive + database adapters',
   'Decode + encode + vector trace',
   'AVIF / ICO targets',
@@ -56,12 +57,12 @@ const toolCards: ToolCard[] = [
     label: '01 · File Viewer',
     title: 'Viewer',
     description:
-      'Рабочий маршрут для preview и анализа: image tooling, polished document search/navigation и полный document stack внутри одного workspace.',
+      'Рабочий маршрут для preview и анализа: image tooling, полный document stack и первый video layer внутри одного workspace.',
     detail:
-      'Viewer уже закрывает весь стартовый image-format set, а document layer теперь поддерживает PDF/TXT/CSV/HTML/RTF, DOC/DOCX/ODT, XLS/XLSX, PPTX, EPUB и SQLite/DB-preview с search, tabs и schema-aware UX.',
+      'Viewer уже закрывает весь стартовый image-format set, document layer и теперь поднимает video foundation: browser-native playback для MP4/MOV/WebM, timeline/speed/volume/PiP controls и capability map для legacy контейнеров.',
     status: 'Active route',
     route: '/viewer',
-    accents: ['Images', 'Docs', 'Legacy', 'Search'],
+    accents: ['Images', 'Docs', 'Video', 'Search'],
     span: 'tool-card--wide',
   },
   {
@@ -149,10 +150,10 @@ const toolCards: ToolCard[] = [
         </h1>
         <p class="lead">
           Home сохраняет soft industrial foundation, но теперь работает как switchboard для двух
-          живых маршрутов: viewer отвечает за preview, analysis, полный document stack от legacy до
-          SQLite и image tooling, а converter закрывает первую волну image-конвертаций, vector/icon
-          targets, archive-friendly TIFF target и document-target через scenario registry, shared
-          imaging и отдельные decode/encode стратегии.
+          живых маршрутов: viewer отвечает за preview, analysis, полный document stack, video
+          foundation и image tooling, а converter закрывает первую волну image-конвертаций,
+          vector/icon targets, archive-friendly TIFF target и document-target через scenario
+          registry, shared imaging и отдельные decode/encode стратегии.
         </p>
 
         <div class="signal-row">
@@ -175,7 +176,7 @@ const toolCards: ToolCard[] = [
             <strong>7</strong>
             <span
               >слоёв foundation: shared imaging, registry, adapters, metadata, workspace state,
-              color lab, document search</span
+              color lab и media/document UX</span
             >
           </article>
         </div>

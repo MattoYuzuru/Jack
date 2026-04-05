@@ -33,6 +33,8 @@ import {
   loadStructuredMetadata,
   type ViewerBinaryPreview,
 } from './viewer-preview'
+import type { ViewerVideoFact, ViewerVideoLayout, ViewerVideoPreviewPayload } from './viewer-video'
+import { buildNativeVideoPreview } from './viewer-video-preview'
 
 export interface ViewerResolvedImage {
   kind: 'image'
@@ -60,6 +62,17 @@ export interface ViewerResolvedDocument {
   previewLabel: string
 }
 
+export interface ViewerResolvedVideo {
+  kind: 'video'
+  file: File
+  extension: string
+  format: ViewerFormatDefinition
+  summary: ViewerVideoFact[]
+  warnings: string[]
+  layout: ViewerVideoLayout
+  previewLabel: string
+}
+
 export interface ViewerResolvedUnknown {
   kind: 'unknown'
   file: File
@@ -72,6 +85,7 @@ export interface ViewerResolvedUnknown {
 export type ViewerResolvedEntry =
   | ViewerResolvedImage
   | ViewerResolvedDocument
+  | ViewerResolvedVideo
   | ViewerResolvedUnknown
 
 interface PreviewStrategyContext {
@@ -106,6 +120,7 @@ export interface ViewerRuntimeDependencies {
     buffer: ArrayBuffer,
     context: PreviewStrategyContext,
   ) => Promise<ViewerBinaryPreview>
+  buildNativeVideo?: (context: PreviewStrategyContext) => Promise<ViewerVideoPreviewPayload>
   buildPdfDocument?: (
     context: PreviewStrategyContext,
   ) => Promise<ViewerDocumentPreviewPayload>
@@ -165,6 +180,7 @@ const previewStrategies = (
     buffer: ArrayBuffer,
     context: PreviewStrategyContext,
   ) => Promise<ViewerBinaryPreview>,
+  buildNativeVideo: (context: PreviewStrategyContext) => Promise<ViewerVideoPreviewPayload>,
   buildPdfDocument: (context: PreviewStrategyContext) => Promise<ViewerDocumentPreviewPayload>,
   buildTextDocument: (context: PreviewStrategyContext) => Promise<ViewerDocumentPreviewPayload>,
   buildCsvDocument: (context: PreviewStrategyContext) => Promise<ViewerDocumentPreviewPayload>,
@@ -223,6 +239,11 @@ const previewStrategies = (
       const buffer = await context.file.arrayBuffer()
       const preview = await decodeRawImage(buffer, context)
       return buildDecodedImageSelection(preview, context, inspectNativeImage)
+    },
+  },
+  'native-video': {
+    async resolve(context) {
+      return buildVideoSelection(await buildNativeVideo(context), context)
     },
   },
   'pdf-document': {
@@ -298,6 +319,11 @@ const previewStrategies = (
       }
     },
   },
+  'planned-media': {
+    async resolve(context) {
+      return buildPlannedMediaSelection(context)
+    },
+  },
 })
 
 export function createViewerRuntime(dependencies: ViewerRuntimeDependencies = {}): ViewerRuntime {
@@ -309,6 +335,7 @@ export function createViewerRuntime(dependencies: ViewerRuntimeDependencies = {}
     dependencies.decodeHeicImage ?? defaultDecodeHeicImage,
     dependencies.decodeTiffImage ?? defaultDecodeTiffImage,
     dependencies.decodeRawImage ?? defaultDecodeRawImage,
+    dependencies.buildNativeVideo ?? defaultBuildNativeVideo,
     dependencies.buildPdfDocument ?? defaultBuildPdfDocument,
     dependencies.buildTextDocument ?? defaultBuildTextDocument,
     dependencies.buildCsvDocument ?? defaultBuildCsvDocument,
@@ -358,6 +385,11 @@ export function releaseViewerEntry(entry: ViewerResolvedEntry | null) {
 
   if (entry.kind === 'image') {
     URL.revokeObjectURL(entry.objectUrl)
+    return
+  }
+
+  if (entry.kind === 'video') {
+    URL.revokeObjectURL(entry.layout.objectUrl)
     return
   }
 
@@ -412,6 +444,22 @@ function buildDocumentSelection(
   }
 }
 
+function buildVideoSelection(
+  preview: ViewerVideoPreviewPayload,
+  context: PreviewStrategyContext,
+): ViewerResolvedVideo {
+  return {
+    kind: 'video',
+    file: context.file,
+    extension: context.extension,
+    format: context.format,
+    summary: preview.summary,
+    warnings: preview.warnings,
+    layout: preview.layout,
+    previewLabel: preview.previewLabel,
+  }
+}
+
 function buildDatabaseFallbackSelection(
   context: PreviewStrategyContext,
   error: ViewerDatabaseFormatError,
@@ -424,6 +472,19 @@ function buildDatabaseFallbackSelection(
     detail: error.message,
     nextStep:
       'Если это другой DB-вариант, для него нужен отдельный adapter. Для SQLite-aware preview нужен файл с сигнатурой SQLite format 3.',
+  }
+}
+
+function buildPlannedMediaSelection(context: PreviewStrategyContext): ViewerResolvedUnknown {
+  return {
+    kind: 'unknown',
+    file: context.file,
+    extension: context.extension,
+    headline: `${context.format.label} уже распознан в media registry, но playback adapter ещё не поднят`,
+    detail:
+      'Foundation для контейнера уже есть: accept/mime/capability map готовы, но для него пока нет стабильного browser-native или client-decode playback path.',
+    nextStep:
+      'Нужно добавить format-specific media adapter поверх общего video contract, а не расширять UI точечными fallback-ветками.',
   }
 }
 
@@ -441,6 +502,12 @@ async function defaultDecodeTiffImage(buffer: ArrayBuffer): Promise<ViewerBinary
 
 async function defaultDecodeRawImage(buffer: ArrayBuffer): Promise<ViewerBinaryPreview> {
   return decodeRawPreview(buffer)
+}
+
+async function defaultBuildNativeVideo(
+  context: PreviewStrategyContext,
+): Promise<ViewerVideoPreviewPayload> {
+  return buildNativeVideoPreview(context.file, context.format)
 }
 
 async function defaultBuildPdfDocument(
