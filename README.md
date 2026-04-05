@@ -136,14 +136,17 @@ Viewer уже даёт browser-native preview для `jpg`, `jpeg`, `png`, `webp
 - [x] Foundation для document runtime, capability map и единого workspace-контракта
 - [x] Первый рабочий preview и удобная навигация для `pdf`, `txt`, `csv`, `html`, `rtf`
 - [x] Search layer, outline/table preview и format-specific summary для поддержанных форматов
+- [x] OOXML adapters для `docx`, `xlsx`, `pptx` с preview поверх общего document contract
 - [ ] Частичное редактирование содержимого там, где формат это позволяет
 - [ ] Поддержка: `doc`, `docx`, `pdf`, `txt`, `rtf`, `odt`, `xls`, `xlsx`, `csv`, `pptx`, `html`, `epub`, `db`, `sqlite`
 
 Document viewer теперь использует тот же registry/strategy foundation, что и image layer, но сводит
-`pdf`, `txt`, `csv`, `html`, `rtf` к общему document contract: `summary + search layer + layout mode + warnings`.
+`pdf`, `txt`, `csv`, `html`, `rtf`, `docx`, `xlsx`, `pptx` к общему document contract:
+`summary + search layer + layout mode + warnings`.
 `pdf` открывается в browser embed и дополнительно поднимает page/search stats, `csv` получает table preview,
-`html` рендерится через sandbox `srcdoc`, а `rtf` пока честно идёт через text extraction path.
-`doc`, `docx`, `odt`, `xls`, `xlsx`, `pptx`, `epub`, `db`, `sqlite` уже заведены в capability map как foundation-only,
+`html` рендерится через sandbox `srcdoc`, `rtf` идёт через text extraction path, `docx` собирается как
+structured document HTML, `xlsx` как workbook/sheet preview, а `pptx` как slide text deck.
+`doc`, `odt`, `xls`, `epub`, `db`, `sqlite` уже заведены в capability map как foundation-only,
 но для них parser/render adapters ещё не реализованы.
 
 #### 2.3 Video Viewer
