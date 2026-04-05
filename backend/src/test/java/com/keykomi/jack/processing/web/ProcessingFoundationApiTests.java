@@ -111,16 +111,19 @@ class ProcessingFoundationApiTests {
 		this.mockMvc.perform(get("/api/capabilities/viewer"))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.scope").value("viewer"))
-			.andExpect(jsonPath("$.phase").value("imaging-foundation"))
+			.andExpect(jsonPath("$.phase").value("document-intelligence"))
 			.andExpect(jsonPath("$.jobTypes[0].implemented").value(true))
 			.andExpect(jsonPath("$.jobTypes[1].implemented").value(false))
-			.andExpect(jsonPath("$.jobTypes[2].implemented").value(false));
+			.andExpect(jsonPath("$.jobTypes[2].implemented").value(false))
+			.andExpect(jsonPath("$.jobTypes[3].implemented").value(true))
+			.andExpect(jsonPath("$.jobTypes[4].implemented").value(false));
 
 		this.mockMvc.perform(get("/api/capabilities/converter"))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.scope").value("converter"))
 			.andExpect(jsonPath("$.jobTypes[1].implemented").value(false))
-			.andExpect(jsonPath("$.jobTypes[2].implemented").value(false));
+			.andExpect(jsonPath("$.jobTypes[2].implemented").value(false))
+			.andExpect(jsonPath("$.jobTypes[3].implemented").value(true));
 	}
 
 	private JsonNode awaitJobCompletion(String jobId) throws Exception {
