@@ -184,11 +184,11 @@ describe('viewer runtime', () => {
     expect(result.layout.width).toBe(1920)
   })
 
-  it('routes legacy video containers through the decode bridge', async () => {
+  it('routes legacy video containers through the server media preview path', async () => {
     const runtime = createViewerRuntime({
       buildLegacyVideo: async () => ({
         summary: [{ label: 'Runtime Container', value: 'MP4 transcode' }],
-        warnings: ['Legacy bridge used.'],
+        warnings: ['Server preview used.'],
         layout: {
           mode: 'native',
           objectUrl: 'blob:legacy-video-preview',
@@ -203,7 +203,7 @@ describe('viewer runtime', () => {
             sizeBytes: 8_100_000,
           },
         },
-        previewLabel: 'Legacy decode bridge',
+        previewLabel: 'Server media preview',
       }),
     })
 
@@ -217,7 +217,7 @@ describe('viewer runtime', () => {
       throw new Error('Expected a legacy video preview result.')
     }
 
-    expect(result.previewLabel).toBe('Legacy decode bridge')
+    expect(result.previewLabel).toBe('Server media preview')
     expect(result.format.extension).toBe('mkv')
     expect(result.summary).toEqual([{ label: 'Runtime Container', value: 'MP4 transcode' }])
   })
@@ -271,11 +271,11 @@ describe('viewer runtime', () => {
     expect(revokeObjectUrl).toHaveBeenCalledWith('blob:audio-preview')
   })
 
-  it('routes legacy audio containers through the compatibility bridge', async () => {
+  it('routes legacy audio containers through the server media preview path', async () => {
     const runtime = createViewerRuntime({
       buildLegacyAudio: async () => ({
         summary: [{ label: 'Runtime Container', value: 'MP3 transcode' }],
-        warnings: ['Legacy bridge used.'],
+        warnings: ['Server preview used.'],
         searchableText: 'Lossless archive',
         artworkDataUrl: null,
         metadataGroups: [],
@@ -294,17 +294,19 @@ describe('viewer runtime', () => {
             sizeBytes: 18_000_000,
           },
         },
-        previewLabel: 'Legacy audio bridge',
+        previewLabel: 'Server audio preview',
       }),
     })
 
-    const result = await runtime.resolve(new File(['audio'], 'archive.flac', { type: 'audio/flac' }))
+    const result = await runtime.resolve(
+      new File(['audio'], 'archive.flac', { type: 'audio/flac' }),
+    )
 
     if (result.kind !== 'audio') {
       throw new Error('Expected a legacy audio preview result.')
     }
 
-    expect(result.previewLabel).toBe('Legacy audio bridge')
+    expect(result.previewLabel).toBe('Server audio preview')
     expect(result.format.extension).toBe('flac')
     expect(result.summary).toEqual([{ label: 'Runtime Container', value: 'MP3 transcode' }])
   })
@@ -366,7 +368,9 @@ describe('viewer runtime', () => {
       }),
     })
 
-    const result = await runtime.resolve(new File(['doc'], 'legacy.doc', { type: 'application/msword' }))
+    const result = await runtime.resolve(
+      new File(['doc'], 'legacy.doc', { type: 'application/msword' }),
+    )
 
     if (result.kind !== 'document') {
       throw new Error('Expected a DOC document preview result.')
@@ -424,5 +428,4 @@ describe('viewer runtime', () => {
     expect(result.headline).toContain('DB')
     expect(result.detail).toContain('not SQLite')
   })
-
 })

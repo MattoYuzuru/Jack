@@ -1,6 +1,10 @@
 export type ViewerFormatFamily = 'image' | 'document' | 'media' | 'audio' | 'data'
 
-export type ViewerPreviewPipeline = 'browser-native' | 'client-decode' | 'planned'
+export type ViewerPreviewPipeline =
+  | 'browser-native'
+  | 'client-decode'
+  | 'server-assisted'
+  | 'planned'
 
 export type PreviewStrategyId =
   | 'native-image'
@@ -212,7 +216,8 @@ const documentFormatDefinitions: ViewerFormatDefinition[] = [
     previewPipeline: 'client-decode',
     previewStrategyId: 'text-document',
     statusLabel: 'Text decode',
-    notes: 'Plain text читается прямо в клиенте и получает search-панель без отдельного viewer-слоя.',
+    notes:
+      'Plain text читается прямо в клиенте и получает search-панель без отдельного viewer-слоя.',
     accents: ['Text', 'Search'],
   },
   {
@@ -419,11 +424,11 @@ const mediaFormatDefinitions: ViewerFormatDefinition[] = [
     label: 'AVI',
     family: 'media',
     mimeTypes: ['video/x-msvideo'],
-    previewPipeline: 'client-decode',
+    previewPipeline: 'server-assisted',
     previewStrategyId: 'legacy-video',
-    statusLabel: 'Legacy decode bridge',
+    statusLabel: 'Server media preview',
     notes:
-      'AVI идёт через client-side transcode bridge: viewer поднимает browser-friendly preview container и сохраняет тот же video workspace contract.',
+      'AVI идёт через backend MEDIA_PREVIEW job: сервер собирает browser-friendly preview artifact и возвращает его в тот же video workspace contract.',
     accents: ['Video', 'Legacy'],
   },
   {
@@ -432,11 +437,11 @@ const mediaFormatDefinitions: ViewerFormatDefinition[] = [
     label: 'MKV',
     family: 'media',
     mimeTypes: ['video/x-matroska'],
-    previewPipeline: 'client-decode',
+    previewPipeline: 'server-assisted',
     previewStrategyId: 'legacy-video',
-    statusLabel: 'Legacy decode bridge',
+    statusLabel: 'Server media preview',
     notes:
-      'Matroska идёт через legacy media adapter: контейнер декодируется или транскодируется в browser-playable preview path внутри viewer runtime.',
+      'Matroska идёт через backend media adapter: контейнер нормализуется server-side и затем воспроизводится в том же browser-native player path.',
     accents: ['Video', 'Container'],
   },
   {
@@ -445,11 +450,11 @@ const mediaFormatDefinitions: ViewerFormatDefinition[] = [
     label: 'WMV',
     family: 'media',
     mimeTypes: ['video/x-ms-wmv'],
-    previewPipeline: 'client-decode',
+    previewPipeline: 'server-assisted',
     previewStrategyId: 'legacy-video',
-    statusLabel: 'Legacy decode bridge',
+    statusLabel: 'Server media preview',
     notes:
-      'WMV проходит через compatibility bridge и получает browser-oriented preview, чтобы workspace не зависел от platform codec support.',
+      'WMV проходит через backend compatibility bridge и получает browser-oriented preview, чтобы workspace не зависел от platform codec support.',
     accents: ['Video', 'Windows'],
   },
   {
@@ -458,11 +463,11 @@ const mediaFormatDefinitions: ViewerFormatDefinition[] = [
     label: 'FLV',
     family: 'media',
     mimeTypes: ['video/x-flv'],
-    previewPipeline: 'client-decode',
+    previewPipeline: 'server-assisted',
     previewStrategyId: 'legacy-video',
-    statusLabel: 'Legacy decode bridge',
+    statusLabel: 'Server media preview',
     notes:
-      'FLV идёт через transcode bridge, потому что Flash-era контейнер сам по себе не подходит для современного browser playback path.',
+      'FLV идёт через backend transcode bridge, потому что Flash-era контейнер сам по себе не подходит для современного browser playback path.',
     accents: ['Video', 'Archive'],
   },
 ]
@@ -526,11 +531,11 @@ const audioFormatDefinitions: ViewerFormatDefinition[] = [
     label: 'AAC',
     family: 'audio',
     mimeTypes: ['audio/aac'],
-    previewPipeline: 'client-decode',
+    previewPipeline: 'server-assisted',
     previewStrategyId: 'legacy-audio',
-    statusLabel: 'Legacy audio bridge',
+    statusLabel: 'Server audio preview',
     notes:
-      'AAC закрывается через transcode bridge, чтобы viewer не зависел от platform-specific поддержки контейнера и профиля кодека.',
+      'AAC закрывается через backend MEDIA_PREVIEW job, чтобы viewer не зависел от platform-specific поддержки контейнера и профиля кодека.',
     accents: ['Audio', 'Bridge'],
   },
   {
@@ -539,11 +544,11 @@ const audioFormatDefinitions: ViewerFormatDefinition[] = [
     label: 'FLAC',
     family: 'audio',
     mimeTypes: ['audio/flac', 'audio/x-flac'],
-    previewPipeline: 'client-decode',
+    previewPipeline: 'server-assisted',
     previewStrategyId: 'legacy-audio',
-    statusLabel: 'Legacy audio bridge',
+    statusLabel: 'Server audio preview',
     notes:
-      'FLAC проходит через compatibility bridge и получает browser-friendly playback blob вместе с waveform и metadata inspector.',
+      'FLAC проходит через backend compatibility bridge и получает browser-friendly playback artifact вместе с waveform и metadata inspector.',
     accents: ['Audio', 'Lossless'],
   },
   {
@@ -552,11 +557,11 @@ const audioFormatDefinitions: ViewerFormatDefinition[] = [
     label: 'AIFF',
     family: 'audio',
     mimeTypes: ['audio/aiff', 'audio/x-aiff'],
-    previewPipeline: 'client-decode',
+    previewPipeline: 'server-assisted',
     previewStrategyId: 'legacy-audio',
-    statusLabel: 'Legacy audio bridge',
+    statusLabel: 'Server audio preview',
     notes:
-      'AIFF идёт через client-side transcode bridge: контейнер нормализуется в browser-playable runtime path без отдельного renderer.',
+      'AIFF идёт через backend transcode bridge: контейнер нормализуется в browser-playable runtime path без отдельного renderer.',
     accents: ['Audio', 'Archive'],
   },
 ]

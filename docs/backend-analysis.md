@@ -30,13 +30,12 @@ Frontend уже выполняет роль mini-backend:
 
 - сам определяет capability map и стратегии форматов через registry/runtime
 - сам парсит документы, архивы, изображения, аудио и видео
-- сам делает heavy decode/encode/transcode в браузере
+- сам делает heavy decode/encode в браузере для image/document-heavy веток
 - сам редактирует metadata и собирает export-артефакты
-- почти не общается с API
+- для legacy media уже общается с backend processing API, но остальные тяжёлые домены всё ещё живут локально
 
 Это видно по зависимостям и runtime-слою:
 
-- `ffmpeg.wasm` для legacy audio/video preview
 - `pdfjs-dist` для PDF/illustration parsing
 - `sql.js` для SQLite introspection
 - `heic2any`, `utif2`, `ag-psd`, `imagetracerjs`, `@jsquash/avif`
@@ -46,13 +45,15 @@ Frontend уже выполняет роль mini-backend:
 
 ### 1. Media Transcode Bridge
 
-Во viewer legacy video/audio контейнеры нормализуются прямо в браузере через `ffmpeg.wasm`.
+Статус: закрыто в `Phase 1`.
+
+Во viewer legacy video/audio контейнеры уже больше не нормализуются в браузере. Теперь frontend
+идёт в backend `MEDIA_PREVIEW` flow и получает готовый browser-friendly artifact.
 
 Файлы:
 
-- `frontend/src/features/viewer/application/viewer-video-transcode.ts`
-- `frontend/src/features/viewer/application/viewer-audio-transcode.ts`
-- `frontend/src/features/viewer/application/viewer-ffmpeg.ts`
+- `frontend/src/features/viewer/application/viewer-media-preview.ts`
+- `backend/src/main/java/com/keykomi/jack/processing/application/MediaPreviewService.java`
 
 Почему это кандидат на backend:
 
@@ -64,7 +65,7 @@ Frontend уже выполняет роль mini-backend:
 
 Решение:
 
-- перенести transcode/normalize-preview на backend как job-based media service
+- перенесено: transcode/normalize-preview теперь работает как backend job-based media service
 - фронтенду оставить playback UI, poster capture, local subtitles и session state
 
 Приоритет: `P0`
@@ -218,9 +219,9 @@ Frontend уже выполняет роль mini-backend:
 
 ### Performance
 
-Продакшн-сборка фронтенда уже показывает тяжёлые браузерные артефакты:
+После закрытия `Phase 1` frontend уже перестал тащить `ffmpeg-core` wasm, но в браузере всё ещё
+остаются тяжёлые артефакты:
 
-- `ffmpeg-core` wasm примерно `32 MB`
 - `heic2any` bundle больше `1.3 MB`
 - `pdf.worker` больше `2.1 MB`
 - `avif` wasm-ассеты по нескольку мегабайт

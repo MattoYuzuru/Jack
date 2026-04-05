@@ -72,6 +72,7 @@ docker compose down -v
 - `JACK_DB_USERNAME`
 - `JACK_DB_PASSWORD`
 - `JACK_API_BASE_URL`
+- `JACK_WEB_ALLOWED_ORIGINS`
 - `JACK_PROCESSING_STORAGE_ROOT`
 - `JACK_PROCESSING_MAX_UPLOAD_SIZE_BYTES`
 - `JACK_PROCESSING_FFMPEG_EXECUTABLE`
@@ -96,6 +97,7 @@ docker compose down -v
 - `MEDIA_PREVIEW` — через `ffprobe` и `ffmpeg` собирает browser-friendly preview для legacy video/audio контейнеров и кладёт в artifacts и binary preview, и manifest
 
 Для `MEDIA_PREVIEW` backend-окружение должно видеть исполняемые `ffmpeg` и `ffprobe`. Текущий `backend/Dockerfile` их ещё не включает, поэтому в контейнерном режиме эта фаза требует отдельной подготовки образа или внешних бинарей.
+Frontend viewer уже использует этот backend path для `avi`, `mkv`, `wmv`, `flv`, `aac`, `flac`, `aiff`, поэтому для локальной разработки backend также должен разрешать origin из `JACK_WEB_ALLOWED_ORIGINS`.
 
 ## Локальный Запуск Без Docker
 
@@ -192,8 +194,8 @@ text deck, `epub` как reflow reading layer, а `db/sqlite` как schema-awar
 Video layer теперь заводится тем же registry/strategy путём, что и image/document:
 `mp4`, `mov`, `webm` идут в browser-native playback path с metadata inspection, timeline, volume,
 speed, fullscreen и picture-in-picture. `avi`, `mkv`, `wmv`, `flv` теперь тоже заведены в тот же
-workspace через legacy decode bridge на базе browser-side ffmpeg.wasm: viewer собирает
-browser-playable preview container и затем отдаёт его в тот же video contract без отдельной ветки UI.
+workspace через backend `MEDIA_PREVIEW`: viewer отправляет исходный контейнер на backend,
+получает browser-playable preview artifact и затем отдаёт его в тот же video contract без отдельной ветки UI.
 Поверх foundation viewer даёт precision controls для frame-by-frame stepping с явной fps-assumption,
 loop/timestamp helpers, session-level subtitle sidecars для `.vtt/.srt`, poster capture rail и
 richer metadata inspector с aspect ratio, orientation и estimated bitrate.
@@ -208,7 +210,7 @@ richer metadata inspector с aspect ratio, orientation и estimated bitrate.
 
 Audio layer теперь поднимается тем же registry/strategy путём, что и остальные viewer-семьи:
 `mp3`, `wav`, `ogg`, `opus` идут в browser-native audio path, а `aac`, `flac`, `aiff` получают
-compatibility bridge через browser-side ffmpeg.wasm и затем сводятся к тому же audio contract.
+server-assisted preview через backend `MEDIA_PREVIEW` и затем сводятся к тому же audio contract.
 Поверх foundation viewer даёт waveform preview, cover-art display, tag inspector с common/native
 groups, timeline/volume/rate controls, loop и keyboard flow для быстрых playback-check сценариев.
 

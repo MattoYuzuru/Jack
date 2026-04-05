@@ -338,9 +338,13 @@ const documentWarnings = computed(() =>
   selection.value?.kind === 'document' ? selection.value.warnings : [],
 )
 
-const videoWarnings = computed(() => (selection.value?.kind === 'video' ? selection.value.warnings : []))
+const videoWarnings = computed(() =>
+  selection.value?.kind === 'video' ? selection.value.warnings : [],
+)
 
-const audioWarnings = computed(() => (selection.value?.kind === 'audio' ? selection.value.warnings : []))
+const audioWarnings = computed(() =>
+  selection.value?.kind === 'audio' ? selection.value.warnings : [],
+)
 
 const videoStageMetrics = computed(() => {
   if (selection.value?.kind !== 'video') {
@@ -371,7 +375,9 @@ const videoMetadataCards = computed(() => {
     },
     {
       label: 'Estimated Bitrate',
-      value: formatViewerVideoBitrate(selection.value.layout.metadata.estimatedBitrateBitsPerSecond),
+      value: formatViewerVideoBitrate(
+        selection.value.layout.metadata.estimatedBitrateBitsPerSecond,
+      ),
     },
     {
       label: 'Approx Frame',
@@ -435,7 +441,9 @@ const audioMetadataCards = computed(() => {
   return [
     {
       label: 'Estimated Bitrate',
-      value: formatViewerAudioBitrate(selection.value.layout.metadata.estimatedBitrateBitsPerSecond),
+      value: formatViewerAudioBitrate(
+        selection.value.layout.metadata.estimatedBitrateBitsPerSecond,
+      ),
     },
     {
       label: 'Sample Rate',
@@ -578,7 +586,9 @@ const documentSearchPlaceholder = computed(() => {
   return placeholderMap[selection.value.layout.mode] ?? 'Search document...'
 })
 
-const activeDocumentMatch = computed(() => documentMatches.value[activeDocumentMatchIndex.value] ?? null)
+const activeDocumentMatch = computed(
+  () => documentMatches.value[activeDocumentMatchIndex.value] ?? null,
+)
 
 function openFilePicker() {
   fileInput.value?.click()
@@ -695,7 +705,9 @@ function downloadDocumentText() {
 
   const extensionIndex = selection.value.file.name.lastIndexOf('.')
   const baseName =
-    extensionIndex > 0 ? selection.value.file.name.slice(0, extensionIndex) : selection.value.file.name
+    extensionIndex > 0
+      ? selection.value.file.name.slice(0, extensionIndex)
+      : selection.value.file.name
 
   downloadBlob(
     new Blob([selection.value.searchableText], { type: 'text/plain;charset=utf-8' }),
@@ -815,12 +827,15 @@ onBeforeUnmount(() => {
     <section class="viewer-hero-grid">
       <article class="panel-surface viewer-intro">
         <p class="eyebrow">Iteration 03 · File Viewer</p>
-        <h1>Viewer теперь закрывает и audio slice: waveform, tag metadata и точный playback внутри того же workspace.</h1>
+        <h1>
+          Viewer теперь закрывает и audio slice: waveform, tag metadata и точный playback внутри
+          того же workspace.
+        </h1>
         <p class="lead">
           Архитектура остаётся registry-driven: image, document, video и audio семьи живут в одном
-          маршруте, но каждая получает свой tooling-layer поверх общего stage/runtime. Для audio
-          это означает waveform, artwork, tag inspector и compatibility bridge для legacy
-          контейнеров без разрастания workspace в набор format-specific веток.
+          маршруте, но каждая получает свой tooling-layer поверх общего stage/runtime. Для audio это
+          означает waveform, artwork, tag inspector и compatibility bridge для legacy контейнеров
+          без разрастания workspace в набор format-specific веток.
         </p>
 
         <div
@@ -851,7 +866,7 @@ onBeforeUnmount(() => {
             <span>
               Viewer уже держит image и document roadmap, video workbench и теперь закрывает весь
               audio slice: `mp3`, `wav`, `aac`, `flac`, `ogg`, `opus`, `aiff` сходятся в один
-              workspace через native path или legacy audio bridge, а поверх этого работают
+              workspace через native path или server-assisted audio preview, а поверх этого работают
               waveform, artwork, keyboard flow и richer tag metadata inspector.
             </span>
           </div>
@@ -864,7 +879,12 @@ onBeforeUnmount(() => {
             >
               Pick File
             </button>
-            <button class="action-button" type="button" :disabled="!selection" @click="clearSelection">
+            <button
+              class="action-button"
+              type="button"
+              :disabled="!selection"
+              @click="clearSelection"
+            >
               Clear
             </button>
           </div>
@@ -887,16 +907,36 @@ onBeforeUnmount(() => {
           </div>
 
           <div class="viewer-toolbar">
-            <button class="icon-button" type="button" :disabled="selection?.kind !== 'image'" @click="zoomOut">
+            <button
+              class="icon-button"
+              type="button"
+              :disabled="selection?.kind !== 'image'"
+              @click="zoomOut"
+            >
               -
             </button>
-            <button class="icon-button" type="button" :disabled="selection?.kind !== 'image'" @click="zoomIn">
+            <button
+              class="icon-button"
+              type="button"
+              :disabled="selection?.kind !== 'image'"
+              @click="zoomIn"
+            >
               +
             </button>
-            <button class="icon-button" type="button" :disabled="selection?.kind !== 'image'" @click="rotateLeft">
+            <button
+              class="icon-button"
+              type="button"
+              :disabled="selection?.kind !== 'image'"
+              @click="rotateLeft"
+            >
               Left
             </button>
-            <button class="icon-button" type="button" :disabled="selection?.kind !== 'image'" @click="rotateRight">
+            <button
+              class="icon-button"
+              type="button"
+              :disabled="selection?.kind !== 'image'"
+              @click="rotateRight"
+            >
               Right
             </button>
             <button
@@ -907,7 +947,12 @@ onBeforeUnmount(() => {
             >
               Reset
             </button>
-            <button class="icon-button" type="button" :disabled="!selection" @click="toggleFullscreen">
+            <button
+              class="icon-button"
+              type="button"
+              :disabled="!selection"
+              @click="toggleFullscreen"
+            >
               {{ isFullscreen ? 'Exit FS' : 'Fullscreen' }}
             </button>
             <button
@@ -924,7 +969,9 @@ onBeforeUnmount(() => {
         <div
           ref="previewStage"
           class="viewer-stage"
-          :class="{ 'viewer-stage--checker': selection?.kind === 'image' && isTransparencyGridVisible }"
+          :class="{
+            'viewer-stage--checker': selection?.kind === 'image' && isTransparencyGridVisible,
+          }"
         >
           <div v-if="isLoading" class="viewer-empty-state">
             <strong>Подготавливаю preview...</strong>
@@ -1050,10 +1097,7 @@ onBeforeUnmount(() => {
                 </button>
                 <label class="video-rate">
                   <span>Speed</span>
-                  <select
-                    :value="videoPlaybackRate"
-                    @change="onVideoRateChange"
-                  >
+                  <select :value="videoPlaybackRate" @change="onVideoRateChange">
                     <option v-for="rate in videoPlaybackRates" :key="rate" :value="rate">
                       {{ rate }}x
                     </option>
@@ -1070,9 +1114,7 @@ onBeforeUnmount(() => {
                 <span class="chip-pill chip-pill--compact">
                   {{ videoProgressPercent.toFixed(0) }}%
                 </span>
-                <span class="chip-pill chip-pill--compact">
-                  {{ frameStepLabel }} / frame
-                </span>
+                <span class="chip-pill chip-pill--compact"> {{ frameStepLabel }} / frame </span>
                 <span class="chip-pill chip-pill--compact">
                   {{ approximateFrameNumber ? `Frame #${approximateFrameNumber}` : 'Frame n/a' }}
                 </span>
@@ -1103,10 +1145,16 @@ onBeforeUnmount(() => {
                     {{ isLooping ? 'Looping' : 'Loop once' }}
                   </span>
                   <span class="chip-pill chip-pill--compact">
-                    {{ activeSubtitleTrack ? `Active: ${activeSubtitleTrack.label}` : 'Subtitles off' }}
+                    {{
+                      activeSubtitleTrack ? `Active: ${activeSubtitleTrack.label}` : 'Subtitles off'
+                    }}
                   </span>
                   <span class="chip-pill chip-pill--compact chip-pill--accent">
-                    {{ posterCaptures.length ? `${posterCaptures.length} posters` : 'Poster rail empty' }}
+                    {{
+                      posterCaptures.length
+                        ? `${posterCaptures.length} posters`
+                        : 'Poster rail empty'
+                    }}
                   </span>
                 </div>
               </div>
@@ -1158,8 +1206,8 @@ onBeforeUnmount(() => {
                   <h3>{{ selection.file.name }}</h3>
                   <p>
                     Browser-native player, waveform rail и metadata inspector живут в одном
-                    workspace, а legacy containers нормализуются в тот же контракт через ffmpeg
-                    bridge.
+                    workspace, а legacy containers нормализуются в тот же контракт через backend
+                    MEDIA_PREVIEW.
                   </p>
                 </div>
               </div>
@@ -1229,7 +1277,9 @@ onBeforeUnmount(() => {
                     {{ isAudioLooping ? 'Looping' : 'Loop once' }}
                   </span>
                   <span class="chip-pill chip-pill--compact chip-pill--accent">
-                    {{ selection.layout.waveform.length ? 'Waveform ready' : 'Waveform unavailable' }}
+                    {{
+                      selection.layout.waveform.length ? 'Waveform ready' : 'Waveform unavailable'
+                    }}
                   </span>
                 </div>
               </div>
@@ -1365,7 +1415,9 @@ onBeforeUnmount(() => {
                   v-for="(table, tableIndex) in selection.layout.tables"
                   :key="table.id"
                   class="document-sheet-chip"
-                  :class="{ 'document-sheet-chip--active': documentDatabaseTableIndex === tableIndex }"
+                  :class="{
+                    'document-sheet-chip--active': documentDatabaseTableIndex === tableIndex,
+                  }"
                   type="button"
                   @click="selectDocumentDatabaseTable(tableIndex)"
                 >
@@ -1416,13 +1468,14 @@ onBeforeUnmount(() => {
                 </div>
               </div>
 
-              <p v-else class="viewer-panel__empty">
-                В этой базе не найдено таблиц для preview.
-              </p>
+              <p v-else class="viewer-panel__empty">В этой базе не найдено таблиц для preview.</p>
             </div>
 
             <div v-else-if="selection.layout.mode === 'slides'" class="document-slide-grid">
-              <article v-if="activeDocumentSlide" class="document-slide-card document-slide-card--focus">
+              <article
+                v-if="activeDocumentSlide"
+                class="document-slide-card document-slide-card--focus"
+              >
                 <div class="document-slide-card__meta">
                   <span class="chip-pill chip-pill--compact chip-pill--accent">
                     Focused Slide {{ documentSlideIndex + 1 }}
@@ -1462,7 +1515,9 @@ onBeforeUnmount(() => {
                 <ul v-if="slide.bullets.length" class="document-slide-card__list">
                   <li v-for="bullet in slide.bullets" :key="bullet">{{ bullet }}</li>
                 </ul>
-                <p v-else class="viewer-panel__empty">На слайде не найден текстовый слой кроме заголовка.</p>
+                <p v-else class="viewer-panel__empty">
+                  На слайде не найден текстовый слой кроме заголовка.
+                </p>
               </article>
             </div>
 
@@ -1500,7 +1555,12 @@ onBeforeUnmount(() => {
             Rotation: {{ rotation }}deg
           </span>
           <span
-            v-if="selection?.kind === 'image' || selection?.kind === 'document' || selection?.kind === 'video' || selection?.kind === 'audio'"
+            v-if="
+              selection?.kind === 'image' ||
+              selection?.kind === 'document' ||
+              selection?.kind === 'video' ||
+              selection?.kind === 'audio'
+            "
             class="chip-pill chip-pill--compact chip-pill--accent"
           >
             {{ selection.previewLabel }}
@@ -1673,20 +1733,12 @@ onBeforeUnmount(() => {
 
           <label>
             <span>Artist</span>
-            <input
-              v-model="metadataDraft.artist"
-              type="text"
-              placeholder="Author / photographer"
-            />
+            <input v-model="metadataDraft.artist" type="text" placeholder="Author / photographer" />
           </label>
 
           <label>
             <span>Copyright</span>
-            <input
-              v-model="metadataDraft.copyright"
-              type="text"
-              placeholder="Copyright notice"
-            />
+            <input v-model="metadataDraft.copyright" type="text" placeholder="Copyright notice" />
           </label>
 
           <label>
@@ -1702,7 +1754,11 @@ onBeforeUnmount(() => {
                   : 'Для этого формата viewer соберёт sidecar JSON с metadata patch.'
               }}
             </p>
-            <button class="action-button action-button--accent" type="submit" :disabled="isSavingMetadata">
+            <button
+              class="action-button action-button--accent"
+              type="submit"
+              :disabled="isSavingMetadata"
+            >
               {{ isSavingMetadata ? 'Building...' : 'Export Metadata' }}
             </button>
           </div>
@@ -1749,7 +1805,7 @@ onBeforeUnmount(() => {
         </div>
         <p v-if="!plannedMediaFormats.length" class="viewer-panel__empty">
           Для video roadmap в текущем срезе больше нет planned-only слотов: все заявленные форматы
-          уже сводятся к native path или legacy decode bridge внутри одного workspace.
+          уже сводятся к native path или server-assisted media preview внутри одного workspace.
         </p>
       </article>
     </section>
@@ -1759,9 +1815,15 @@ onBeforeUnmount(() => {
         <p class="eyebrow">Video Summary</p>
         <h2>Playback facts, warnings и browser-native metadata</h2>
         <div class="document-summary-row">
-          <span class="chip-pill chip-pill--compact chip-pill--accent">{{ selection.format.label }}</span>
-          <span class="chip-pill chip-pill--compact">{{ videoCurrentTimeLabel }} / {{ videoDurationLabel }}</span>
-          <span class="chip-pill chip-pill--compact">{{ isVideoPlaying ? 'Playing' : 'Paused' }}</span>
+          <span class="chip-pill chip-pill--compact chip-pill--accent">{{
+            selection.format.label
+          }}</span>
+          <span class="chip-pill chip-pill--compact"
+            >{{ videoCurrentTimeLabel }} / {{ videoDurationLabel }}</span
+          >
+          <span class="chip-pill chip-pill--compact">{{
+            isVideoPlaying ? 'Playing' : 'Paused'
+          }}</span>
           <span class="chip-pill chip-pill--compact">{{ isLooping ? 'Loop On' : 'Loop Off' }}</span>
         </div>
         <dl class="facts-grid">
@@ -1792,7 +1854,11 @@ onBeforeUnmount(() => {
         <p class="eyebrow">Subtitles</p>
         <h2>Sidecar tracks, cue count и quick switching</h2>
         <div class="viewer-dropzone__actions">
-          <button class="action-button action-button--accent" type="button" @click="openSubtitlePicker">
+          <button
+            class="action-button action-button--accent"
+            type="button"
+            @click="openSubtitlePicker"
+          >
             Add Subtitle File
           </button>
           <button
@@ -1819,11 +1885,22 @@ onBeforeUnmount(() => {
             class="subtitle-track-card"
             :class="{ 'subtitle-track-card--active': activeSubtitleTrackId === track.id }"
           >
-            <button class="subtitle-track-card__select" type="button" @click="setActiveSubtitleTrack(track.id)">
+            <button
+              class="subtitle-track-card__select"
+              type="button"
+              @click="setActiveSubtitleTrack(track.id)"
+            >
               <strong>{{ track.label }}</strong>
-              <span>{{ track.language.toUpperCase() }} · {{ track.cueCount }} cues · {{ track.format.toUpperCase() }}</span>
+              <span
+                >{{ track.language.toUpperCase() }} · {{ track.cueCount }} cues ·
+                {{ track.format.toUpperCase() }}</span
+              >
             </button>
-            <button class="subtitle-track-card__action" type="button" @click="removeSubtitleTrack(track.id)">
+            <button
+              class="subtitle-track-card__action"
+              type="button"
+              @click="removeSubtitleTrack(track.id)"
+            >
               Remove
             </button>
           </article>
@@ -1856,7 +1933,11 @@ onBeforeUnmount(() => {
               <button class="action-button" type="button" @click="seekTo(capture.timeSeconds)">
                 Jump
               </button>
-              <button class="action-button" type="button" @click="downloadPosterCapture(capture.id)">
+              <button
+                class="action-button"
+                type="button"
+                @click="downloadPosterCapture(capture.id)"
+              >
                 Download
               </button>
               <button class="action-button" type="button" @click="removePosterCapture(capture.id)">
@@ -1866,8 +1947,8 @@ onBeforeUnmount(() => {
           </article>
         </div>
         <p v-else class="viewer-panel__empty">
-          Poster rail пока пуст. Захват кадра полезен для cover-image, handoff в converter и
-          быстрых visual checks без отдельного export-пайплайна.
+          Poster rail пока пуст. Захват кадра полезен для cover-image, handoff в converter и быстрых
+          visual checks без отдельного export-пайплайна.
         </p>
       </article>
 
@@ -1924,10 +2005,18 @@ onBeforeUnmount(() => {
         <p class="eyebrow">Audio Summary</p>
         <h2>Playback facts, warnings и technical metadata</h2>
         <div class="document-summary-row">
-          <span class="chip-pill chip-pill--compact chip-pill--accent">{{ selection.format.label }}</span>
-          <span class="chip-pill chip-pill--compact">{{ audioCurrentTimeLabel }} / {{ audioDurationLabel }}</span>
-          <span class="chip-pill chip-pill--compact">{{ isAudioPlaying ? 'Playing' : 'Paused' }}</span>
-          <span class="chip-pill chip-pill--compact">{{ isAudioLooping ? 'Loop On' : 'Loop Off' }}</span>
+          <span class="chip-pill chip-pill--compact chip-pill--accent">{{
+            selection.format.label
+          }}</span>
+          <span class="chip-pill chip-pill--compact"
+            >{{ audioCurrentTimeLabel }} / {{ audioDurationLabel }}</span
+          >
+          <span class="chip-pill chip-pill--compact">{{
+            isAudioPlaying ? 'Playing' : 'Paused'
+          }}</span>
+          <span class="chip-pill chip-pill--compact">{{
+            isAudioLooping ? 'Loop On' : 'Loop Off'
+          }}</span>
         </div>
         <dl class="facts-grid">
           <template v-for="fact in selectionFacts" :key="fact.label">
@@ -1983,7 +2072,11 @@ onBeforeUnmount(() => {
         </label>
 
         <div class="metadata-group-stack">
-          <article v-for="group in filteredAudioMetadataGroups" :key="group.id" class="metadata-group">
+          <article
+            v-for="group in filteredAudioMetadataGroups"
+            :key="group.id"
+            class="metadata-group"
+          >
             <div class="metadata-group__header">
               <strong>{{ group.label }}</strong>
               <span class="chip-pill chip-pill--compact">{{ group.entries.length }} tags</span>
@@ -2059,7 +2152,9 @@ onBeforeUnmount(() => {
         <p class="eyebrow">Document Summary</p>
         <h2>Статистика, warnings и preview facts</h2>
         <div class="document-summary-row">
-          <span class="chip-pill chip-pill--compact chip-pill--accent">{{ selection.format.label }}</span>
+          <span class="chip-pill chip-pill--compact chip-pill--accent">{{
+            selection.format.label
+          }}</span>
           <span class="chip-pill chip-pill--compact">{{ documentModeLabel }}</span>
           <span class="chip-pill chip-pill--compact">Matches: {{ documentMatches.length }}</span>
         </div>
@@ -2178,7 +2273,11 @@ onBeforeUnmount(() => {
         </div>
 
         <div v-else-if="documentParagraphs.length" class="excerpt-stack">
-          <article v-for="(paragraph, index) in documentParagraphs" :key="index" class="excerpt-card">
+          <article
+            v-for="(paragraph, index) in documentParagraphs"
+            :key="index"
+            class="excerpt-card"
+          >
             {{ paragraph }}
           </article>
         </div>
@@ -2234,27 +2333,45 @@ onBeforeUnmount(() => {
         <div class="architecture-grid">
           <article class="architecture-card">
             <strong>Format Registry</strong>
-            <p>Теперь знает не только image family, но и весь document capability map без foundation-only хвостов в текущем срезе.</p>
+            <p>
+              Теперь знает не только image family, но и весь document capability map без
+              foundation-only хвостов в текущем срезе.
+            </p>
           </article>
           <article class="architecture-card">
             <strong>Strategy Runtime</strong>
-            <p>Каждый документ идёт через свой adapter, но результат сводится к одному document selection contract.</p>
+            <p>
+              Каждый документ идёт через свой adapter, но результат сводится к одному document
+              selection contract.
+            </p>
           </article>
           <article class="architecture-card">
             <strong>Layout Modes</strong>
-            <p>PDF embed, plain text, tabular preview, sandbox HTML и database inspection живут как mode-подтипы одной модели.</p>
+            <p>
+              PDF embed, plain text, tabular preview, sandbox HTML и database inspection живут как
+              mode-подтипы одной модели.
+            </p>
           </article>
           <article class="architecture-card">
             <strong>Search Layer</strong>
-            <p>Quick find работает по нормализованному text layer, а не зависит от конкретного renderer или DOM.</p>
+            <p>
+              Quick find работает по нормализованному text layer, а не зависит от конкретного
+              renderer или DOM.
+            </p>
           </article>
           <article class="architecture-card">
             <strong>Capability Honesty</strong>
-            <p>Legacy, archive и SQLite paths честно показывают упрощённый preview там, где faithful render неразумен, вместо ложной promise-поддержки.</p>
+            <p>
+              Legacy, archive и SQLite paths честно показывают упрощённый preview там, где faithful
+              render неразумен, вместо ложной promise-поддержки.
+            </p>
           </article>
           <article class="architecture-card">
             <strong>Shared Workspace</strong>
-            <p>Маршрут остаётся один: stage, fullscreen, drag-and-drop и summary-панели переиспользуются между семьями.</p>
+            <p>
+              Маршрут остаётся один: stage, fullscreen, drag-and-drop и summary-панели
+              переиспользуются между семьями.
+            </p>
           </article>
         </div>
       </article>
@@ -2396,7 +2513,12 @@ h2 {
     linear-gradient(45deg, transparent 75%, rgba(255, 203, 148, 0.16) 75%),
     linear-gradient(-45deg, transparent 75%, rgba(255, 203, 148, 0.16) 75%),
     linear-gradient(155deg, rgba(255, 251, 245, 0.8), rgba(227, 216, 201, 0.86));
-  background-size: 24px 24px, 24px 24px, 24px 24px, 24px 24px, auto;
+  background-size:
+    24px 24px,
+    24px 24px,
+    24px 24px,
+    24px 24px,
+    auto;
   background-position:
     0 0,
     0 12px,
@@ -2547,8 +2669,7 @@ h2 {
 
 .audio-waveform__bar {
   border-radius: 999px;
-  background:
-    linear-gradient(180deg, rgba(255, 157, 97, 0.98), rgba(29, 92, 85, 0.92));
+  background: linear-gradient(180deg, rgba(255, 157, 97, 0.98), rgba(29, 92, 85, 0.92));
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.32),
     0 12px 24px rgba(20, 48, 45, 0.12);
