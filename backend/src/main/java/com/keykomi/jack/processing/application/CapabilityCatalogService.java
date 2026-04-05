@@ -1,7 +1,10 @@
 package com.keykomi.jack.processing.application;
 
+import com.keykomi.jack.processing.domain.CapabilityMatrixPayloads;
 import com.keykomi.jack.processing.domain.ProcessingJobType;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -11,28 +14,32 @@ public class CapabilityCatalogService {
 	private final ImageProcessingService imageProcessingService;
 	private final DocumentPreviewService documentPreviewService;
 	private final MetadataProcessingService metadataProcessingService;
+	private final CapabilityMatrixService capabilityMatrixService;
 
 	public CapabilityCatalogService(
 		MediaPreviewService mediaPreviewService,
 		ImageProcessingService imageProcessingService,
 		DocumentPreviewService documentPreviewService,
-		MetadataProcessingService metadataProcessingService
+		MetadataProcessingService metadataProcessingService,
+		CapabilityMatrixService capabilityMatrixService
 	) {
 		this.mediaPreviewService = mediaPreviewService;
 		this.imageProcessingService = imageProcessingService;
 		this.documentPreviewService = documentPreviewService;
 		this.metadataProcessingService = metadataProcessingService;
+		this.capabilityMatrixService = capabilityMatrixService;
 	}
 
 	public CapabilityScope viewerCapabilities() {
-		var mediaPreviewAvailable = this.mediaPreviewService.isAvailable();
-		var imageProcessingAvailable = this.imageProcessingService.isAvailable();
-		var documentPreviewAvailable = this.documentPreviewService.isAvailable();
-		var metadataProcessingAvailable = this.metadataProcessingService.isAvailable();
+		var availabilityByJobType = availabilityByJobType();
+		var mediaPreviewAvailable = availabilityByJobType.getOrDefault(ProcessingJobType.MEDIA_PREVIEW, false);
+		var imageProcessingAvailable = availabilityByJobType.getOrDefault(ProcessingJobType.IMAGE_CONVERT, false);
+		var documentPreviewAvailable = availabilityByJobType.getOrDefault(ProcessingJobType.DOCUMENT_PREVIEW, false);
+		var metadataProcessingAvailable = availabilityByJobType.getOrDefault(ProcessingJobType.METADATA_EXPORT, false);
 
 		return new CapabilityScope(
 			"viewer",
-			"metadata-service",
+			"server-capability-matrix",
 			List.of(
 				new JobTypeCapability(ProcessingJobType.UPLOAD_INTAKE_ANALYSIS, true, "Backend уже умеет принять файл, создать job и собрать manifest artifact."),
 				new JobTypeCapability(
@@ -66,20 +73,23 @@ public class CapabilityCatalogService {
 			),
 			List.of(
 				"Viewer уже использует server-assisted preview для legacy media, heavy imaging, document intelligence и metadata operations.",
-				"На frontend остаются формы, локальная фильтрация и UX вокруг save/export/download."
-			)
+				"Backend теперь отдаёт format matrix как источник правды: frontend больше не держит локальный registry как единственный canonical source."
+			),
+			this.capabilityMatrixService.viewerMatrix(availabilityByJobType),
+			null
 		);
 	}
 
 	public CapabilityScope converterCapabilities() {
-		var mediaPreviewAvailable = this.mediaPreviewService.isAvailable();
-		var imageProcessingAvailable = this.imageProcessingService.isAvailable();
-		var documentPreviewAvailable = this.documentPreviewService.isAvailable();
-		var metadataProcessingAvailable = this.metadataProcessingService.isAvailable();
+		var availabilityByJobType = availabilityByJobType();
+		var mediaPreviewAvailable = availabilityByJobType.getOrDefault(ProcessingJobType.MEDIA_PREVIEW, false);
+		var imageProcessingAvailable = availabilityByJobType.getOrDefault(ProcessingJobType.IMAGE_CONVERT, false);
+		var documentPreviewAvailable = availabilityByJobType.getOrDefault(ProcessingJobType.DOCUMENT_PREVIEW, false);
+		var metadataProcessingAvailable = availabilityByJobType.getOrDefault(ProcessingJobType.METADATA_EXPORT, false);
 
 		return new CapabilityScope(
 			"converter",
-			"metadata-service",
+			"server-capability-matrix",
 			List.of(
 				new JobTypeCapability(ProcessingJobType.UPLOAD_INTAKE_ANALYSIS, true, "Можно использовать как preflight перед будущими heavy conversion jobs."),
 				new JobTypeCapability(
@@ -113,16 +123,32 @@ public class CapabilityCatalogService {
 			),
 			List.of(
 				"Converter route теперь hybrid: browser-native fast paths остаются локальными, heavy imaging идёт через backend job pipeline.",
-				"Document intelligence и metadata service уже подняты как общие backend processing capability для следующих модулей."
-			)
+				"Backend теперь отдаёт source/target/scenario/preset matrix и убирает расхождение между UI и processing rules."
+			),
+			null,
+			this.capabilityMatrixService.converterMatrix(availabilityByJobType)
 		);
+	}
+
+	private Map<ProcessingJobType, Boolean> availabilityByJobType() {
+		// Backend matrix вычисляется от живых processing services, чтобы frontend видел
+		// не абстрактный roadmap, а реальную доступность конкретных format/scenario routes.
+		var availabilityByJobType = new LinkedHashMap<ProcessingJobType, Boolean>();
+		availabilityByJobType.put(ProcessingJobType.UPLOAD_INTAKE_ANALYSIS, true);
+		availabilityByJobType.put(ProcessingJobType.MEDIA_PREVIEW, this.mediaPreviewService.isAvailable());
+		availabilityByJobType.put(ProcessingJobType.IMAGE_CONVERT, this.imageProcessingService.isAvailable());
+		availabilityByJobType.put(ProcessingJobType.DOCUMENT_PREVIEW, this.documentPreviewService.isAvailable());
+		availabilityByJobType.put(ProcessingJobType.METADATA_EXPORT, this.metadataProcessingService.isAvailable());
+		return availabilityByJobType;
 	}
 
 	public record CapabilityScope(
 		String scope,
 		String phase,
 		List<JobTypeCapability> jobTypes,
-		List<String> notes
+		List<String> notes,
+		CapabilityMatrixPayloads.ViewerCapabilityMatrix viewerMatrix,
+		CapabilityMatrixPayloads.ConverterCapabilityMatrix converterMatrix
 	) {
 	}
 
