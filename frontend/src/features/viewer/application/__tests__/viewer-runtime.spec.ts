@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createEmptyMetadataPayload } from '../viewer-metadata'
-import { createViewerRuntime } from '../viewer-runtime'
+import { createViewerRuntime, releaseViewerEntry } from '../viewer-runtime'
 
 const originalCreateObjectUrl = URL.createObjectURL
 const originalRevokeObjectUrl = URL.revokeObjectURL
@@ -109,5 +109,62 @@ describe('viewer runtime', () => {
     expect(result.format.extension).toBe('raw')
     expect(result.previewLabel).toBe('RAW preview extraction')
     expect(result.metadata.summary).toEqual([{ label: 'Камера', value: 'RAW Body' }])
+  })
+
+  it('builds a document preview for pdf files', async () => {
+    const revokeObjectUrl = vi.fn()
+
+    Object.defineProperty(URL, 'revokeObjectURL', {
+      configurable: true,
+      value: revokeObjectUrl,
+    })
+
+    const runtime = createViewerRuntime({
+      buildPdfDocument: async () => ({
+        summary: [{ label: 'Страниц', value: '3' }],
+        searchableText: 'Alpha beta gamma',
+        warnings: ['Search layer ограничен первыми страницами.'],
+        layout: {
+          mode: 'pdf',
+          objectUrl: 'blob:pdf-preview',
+          pageCount: 3,
+        },
+        previewLabel: 'PDF browser preview',
+      }),
+    })
+
+    const result = await runtime.resolve(new File(['pdf'], 'deck.pdf', { type: 'application/pdf' }))
+
+    if (result.kind !== 'document') {
+      throw new Error('Expected a document preview result.')
+    }
+
+    expect(result.layout.mode).toBe('pdf')
+    expect(result.previewLabel).toBe('PDF browser preview')
+    expect(result.summary).toEqual([{ label: 'Страниц', value: '3' }])
+    expect(result.searchableText).toContain('beta')
+
+    releaseViewerEntry(result)
+
+    expect(revokeObjectUrl).toHaveBeenCalledWith('blob:pdf-preview')
+  })
+
+  it('routes planned office formats into a capability-aware placeholder', async () => {
+    const runtime = createViewerRuntime()
+
+    const result = await runtime.resolve(
+      new File(['docx'], 'proposal.docx', {
+        type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      }),
+    )
+
+    expect(result.kind).toBe('unknown')
+
+    if (result.kind !== 'unknown') {
+      throw new Error('Expected a planned document placeholder.')
+    }
+
+    expect(result.headline).toContain('DOCX')
+    expect(result.detail).toContain('Foundation')
   })
 })

@@ -1,5 +1,9 @@
 import { computed, onBeforeUnmount, ref, shallowRef } from 'vue'
-import { createViewerRuntime, type ViewerResolvedEntry } from '../application/viewer-runtime'
+import {
+  createViewerRuntime,
+  releaseViewerEntry,
+  type ViewerResolvedEntry,
+} from '../application/viewer-runtime'
 
 const viewerRuntime = createViewerRuntime()
 
@@ -11,9 +15,7 @@ export function useViewerWorkspace() {
   const rotation = ref(0)
 
   function releaseSelection() {
-    if (selection.value?.kind === 'image') {
-      URL.revokeObjectURL(selection.value.objectUrl)
-    }
+    releaseViewerEntry(selection.value)
   }
 
   function resetViewportTransform() {

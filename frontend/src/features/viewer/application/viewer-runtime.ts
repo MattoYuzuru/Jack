@@ -4,6 +4,19 @@ import {
   type PreviewStrategyId,
   type ViewerFormatDefinition,
 } from '../domain/viewer-registry'
+import type {
+  ViewerDocumentFact,
+  ViewerDocumentLayout,
+  ViewerDocumentPreviewPayload,
+} from './viewer-document'
+import {
+  buildCsvDocumentPreview,
+  buildHtmlDocumentPreview,
+  buildPdfDocumentPreview,
+  buildRtfDocumentPreview,
+  buildTextDocumentPreview,
+} from './viewer-document-preview'
+import type { ViewerMetadataPayload } from './viewer-metadata'
 import {
   decodeHeicPreview,
   decodeRawPreview,
@@ -11,7 +24,6 @@ import {
   loadStructuredMetadata,
   type ViewerBinaryPreview,
 } from './viewer-preview'
-import type { ViewerMetadataPayload } from './viewer-metadata'
 
 export interface ViewerResolvedImage {
   kind: 'image'
@@ -27,6 +39,18 @@ export interface ViewerResolvedImage {
   previewLabel: string
 }
 
+export interface ViewerResolvedDocument {
+  kind: 'document'
+  file: File
+  extension: string
+  format: ViewerFormatDefinition
+  summary: ViewerDocumentFact[]
+  searchableText: string
+  warnings: string[]
+  layout: ViewerDocumentLayout
+  previewLabel: string
+}
+
 export interface ViewerResolvedUnknown {
   kind: 'unknown'
   file: File
@@ -36,7 +60,10 @@ export interface ViewerResolvedUnknown {
   nextStep: string
 }
 
-export type ViewerResolvedEntry = ViewerResolvedImage | ViewerResolvedUnknown
+export type ViewerResolvedEntry =
+  | ViewerResolvedImage
+  | ViewerResolvedDocument
+  | ViewerResolvedUnknown
 
 interface PreviewStrategyContext {
   file: File
@@ -70,6 +97,21 @@ export interface ViewerRuntimeDependencies {
     buffer: ArrayBuffer,
     context: PreviewStrategyContext,
   ) => Promise<ViewerBinaryPreview>
+  buildPdfDocument?: (
+    context: PreviewStrategyContext,
+  ) => Promise<ViewerDocumentPreviewPayload>
+  buildTextDocument?: (
+    context: PreviewStrategyContext,
+  ) => Promise<ViewerDocumentPreviewPayload>
+  buildCsvDocument?: (
+    context: PreviewStrategyContext,
+  ) => Promise<ViewerDocumentPreviewPayload>
+  buildHtmlDocument?: (
+    context: PreviewStrategyContext,
+  ) => Promise<ViewerDocumentPreviewPayload>
+  buildRtfDocument?: (
+    context: PreviewStrategyContext,
+  ) => Promise<ViewerDocumentPreviewPayload>
 }
 
 const previewStrategies = (
@@ -90,6 +132,11 @@ const previewStrategies = (
     buffer: ArrayBuffer,
     context: PreviewStrategyContext,
   ) => Promise<ViewerBinaryPreview>,
+  buildPdfDocument: (context: PreviewStrategyContext) => Promise<ViewerDocumentPreviewPayload>,
+  buildTextDocument: (context: PreviewStrategyContext) => Promise<ViewerDocumentPreviewPayload>,
+  buildCsvDocument: (context: PreviewStrategyContext) => Promise<ViewerDocumentPreviewPayload>,
+  buildHtmlDocument: (context: PreviewStrategyContext) => Promise<ViewerDocumentPreviewPayload>,
+  buildRtfDocument: (context: PreviewStrategyContext) => Promise<ViewerDocumentPreviewPayload>,
 ): Record<PreviewStrategyId, PreviewStrategy<ViewerResolvedEntry>> => ({
   'native-image': {
     async resolve(context) {
@@ -137,6 +184,36 @@ const previewStrategies = (
       return buildDecodedImageSelection(preview, context, inspectNativeImage)
     },
   },
+  'pdf-document': {
+    async resolve(context) {
+      return buildDocumentSelection(await buildPdfDocument(context), context)
+    },
+  },
+  'text-document': {
+    async resolve(context) {
+      return buildDocumentSelection(await buildTextDocument(context), context)
+    },
+  },
+  'csv-document': {
+    async resolve(context) {
+      return buildDocumentSelection(await buildCsvDocument(context), context)
+    },
+  },
+  'html-document': {
+    async resolve(context) {
+      return buildDocumentSelection(await buildHtmlDocument(context), context)
+    },
+  },
+  'rtf-document': {
+    async resolve(context) {
+      return buildDocumentSelection(await buildRtfDocument(context), context)
+    },
+  },
+  'planned-document': {
+    async resolve(context) {
+      return buildPlannedDocumentSelection(context)
+    },
+  },
 })
 
 export function createViewerRuntime(dependencies: ViewerRuntimeDependencies = {}): ViewerRuntime {
@@ -148,6 +225,11 @@ export function createViewerRuntime(dependencies: ViewerRuntimeDependencies = {}
     dependencies.decodeHeicImage ?? defaultDecodeHeicImage,
     dependencies.decodeTiffImage ?? defaultDecodeTiffImage,
     dependencies.decodeRawImage ?? defaultDecodeRawImage,
+    dependencies.buildPdfDocument ?? defaultBuildPdfDocument,
+    dependencies.buildTextDocument ?? defaultBuildTextDocument,
+    dependencies.buildCsvDocument ?? defaultBuildCsvDocument,
+    dependencies.buildHtmlDocument ?? defaultBuildHtmlDocument,
+    dependencies.buildRtfDocument ?? defaultBuildRtfDocument,
   )
 
   return {
@@ -174,6 +256,21 @@ export function createViewerRuntime(dependencies: ViewerRuntimeDependencies = {}
         format,
       })
     },
+  }
+}
+
+export function releaseViewerEntry(entry: ViewerResolvedEntry | null) {
+  if (!entry) {
+    return
+  }
+
+  if (entry.kind === 'image') {
+    URL.revokeObjectURL(entry.objectUrl)
+    return
+  }
+
+  if (entry.kind === 'document' && entry.layout.mode === 'pdf') {
+    URL.revokeObjectURL(entry.layout.objectUrl)
   }
 }
 
@@ -206,6 +303,36 @@ async function buildDecodedImageSelection(
   }
 }
 
+function buildDocumentSelection(
+  preview: ViewerDocumentPreviewPayload,
+  context: PreviewStrategyContext,
+): ViewerResolvedDocument {
+  return {
+    kind: 'document',
+    file: context.file,
+    extension: context.extension,
+    format: context.format,
+    summary: preview.summary,
+    searchableText: preview.searchableText,
+    warnings: preview.warnings,
+    layout: preview.layout,
+    previewLabel: preview.previewLabel,
+  }
+}
+
+function buildPlannedDocumentSelection(context: PreviewStrategyContext): ViewerResolvedUnknown {
+  return {
+    kind: 'unknown',
+    file: context.file,
+    extension: context.extension,
+    headline: `${context.format.label} уже распознан в document registry, но preview ещё не поднят`,
+    detail:
+      'Foundation для формата уже есть: accept/mime/capability map готовы, но parser и render path для него пока не реализованы.',
+    nextStep:
+      'Нужно добавить format-specific document adapter поверх общего document contract, а не расширять UI вручную.',
+  }
+}
+
 async function defaultLoadNativeMetadata(buffer: ArrayBuffer): Promise<ViewerMetadataPayload> {
   return loadStructuredMetadata(buffer)
 }
@@ -220,6 +347,36 @@ async function defaultDecodeTiffImage(buffer: ArrayBuffer): Promise<ViewerBinary
 
 async function defaultDecodeRawImage(buffer: ArrayBuffer): Promise<ViewerBinaryPreview> {
   return decodeRawPreview(buffer)
+}
+
+async function defaultBuildPdfDocument(
+  context: PreviewStrategyContext,
+): Promise<ViewerDocumentPreviewPayload> {
+  return buildPdfDocumentPreview(context.file)
+}
+
+async function defaultBuildTextDocument(
+  context: PreviewStrategyContext,
+): Promise<ViewerDocumentPreviewPayload> {
+  return buildTextDocumentPreview(context.file)
+}
+
+async function defaultBuildCsvDocument(
+  context: PreviewStrategyContext,
+): Promise<ViewerDocumentPreviewPayload> {
+  return buildCsvDocumentPreview(context.file)
+}
+
+async function defaultBuildHtmlDocument(
+  context: PreviewStrategyContext,
+): Promise<ViewerDocumentPreviewPayload> {
+  return buildHtmlDocumentPreview(context.file)
+}
+
+async function defaultBuildRtfDocument(
+  context: PreviewStrategyContext,
+): Promise<ViewerDocumentPreviewPayload> {
+  return buildRtfDocumentPreview(context.file)
 }
 
 function defaultInspectNativeImage(objectUrl: string): Promise<{ width: number; height: number }> {
