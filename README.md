@@ -95,16 +95,17 @@ docker compose down -v
 - `GET /api/capabilities/viewer`
 - `GET /api/capabilities/converter`
 
-В текущем срезе реально реализованы пять job type:
+В текущем срезе реально реализованы шесть job type:
 
 - `UPLOAD_INTAKE_ANALYSIS` — подтверждает upload/storage/job flow и собирает manifest artifact
 - `MEDIA_PREVIEW` — через `ffprobe` и `ffmpeg` собирает browser-friendly preview для legacy video/audio контейнеров и кладёт в artifacts и binary preview, и manifest
 - `IMAGE_CONVERT` — через server imaging toolchain собирает preview/result artifacts для heavy image preview и conversion scenarios
 - `DOCUMENT_PREVIEW` — через backend document intelligence service собирает `summary`, `warnings`, `searchableText`, `layout payload` и при необходимости PDF preview artifact
 - `METADATA_EXPORT` — через backend metadata service читает image/audio metadata и собирает validated export artifact: embedded JPEG EXIF там, где это безопасно, и sidecar JSON для остальных контейнеров
+- `VIEWER_RESOLVE` — собирает unified viewer manifest/artifact contract для server-assisted image/document/video/audio preview поверх уже существующих processing services
 
 Контейнерный backend теперь сам ставит `ffmpeg`, `ffprobe`, `ImageMagick`, `Ghostscript`, `potrace` и `libraw`, поэтому `MEDIA_PREVIEW` и `IMAGE_CONVERT` работают внутри `docker compose` без внешней подготовки образа.
-Frontend viewer уже использует backend path для `avi`, `mkv`, `wmv`, `flv`, `aac`, `flac`, `aiff`, `heic`, `tiff`, `raw` family, всего document stack (`pdf`, `txt`, `csv`, `html`, `rtf`, `doc`, `docx`, `odt`, `xls`, `xlsx`, `pptx`, `epub`, `db`, `sqlite`) и metadata read/export, а converter гонит через него heavy image scenarios, поэтому для локальной разработки backend также должен разрешать origin из `JACK_WEB_ALLOWED_ORIGINS`.
+Frontend viewer уже использует unified backend route для `avi`, `mkv`, `wmv`, `flv`, `aac`, `flac`, `aiff`, `heic`, `tiff`, `raw` family и всего document stack (`pdf`, `txt`, `csv`, `html`, `rtf`, `doc`, `docx`, `odt`, `xls`, `xlsx`, `pptx`, `epub`, `db`, `sqlite`), metadata read/export остаётся за `METADATA_EXPORT`, а converter гонит через backend heavy image scenarios, поэтому для локальной разработки backend также должен разрешать origin из `JACK_WEB_ALLOWED_ORIGINS`.
 
 ## Локальный Запуск Без Docker
 
@@ -162,8 +163,8 @@ npm run dev
 - [x] Поддержка: `jpg`, `jpeg`, `png`, `webp`, `avif`, `heic`, `gif`, `bmp`, `tiff`, `svg`, `raw`, `ico`
 
 Viewer уже даёт browser-native preview для `jpg`, `jpeg`, `png`, `webp`, `avif`, `gif`, `bmp`, `svg`, `ico`.
-`heic`, `tiff` и `raw` family (`raw`, `dng`, `cr2`, `cr3`, `nef`, `arw`, `raf`, `rw2`, `orf`, `pef`, `srw`) теперь проходят через backend `IMAGE_CONVERT`, который собирает browser-friendly preview artifact и возвращает его в тот же image workspace.
-Поверх preview viewer теперь поднимает metadata payload с summary/groups/editable draft через backend `METADATA_EXPORT`, даёт EXIF/ICC inspection, backend-validated export и image analysis tooling прямо в той же рабочей зоне.
+`heic`, `tiff` и `raw` family (`raw`, `dng`, `cr2`, `cr3`, `nef`, `arw`, `raf`, `rw2`, `orf`, `pef`, `srw`) теперь проходят через backend `VIEWER_RESOLVE`, который сам оркестрирует `IMAGE_CONVERT` и `METADATA_EXPORT`, собирает unified preview artifact и metadata payload и возвращает их в тот же image workspace.
+Поверх этого viewer даёт EXIF/ICC inspection, backend-validated export и image analysis tooling прямо в той же рабочей зоне, но orchestration уже не размазана по отдельным client-side image adapters.
 
 #### 2.2 Office Documents
 
@@ -177,7 +178,7 @@ Viewer уже даёт browser-native preview для `jpg`, `jpeg`, `png`, `webp
 - [x] Поддержка: `doc`, `docx`, `pdf`, `txt`, `rtf`, `odt`, `xls`, `xlsx`, `csv`, `pptx`, `html`, `epub`, `db`, `sqlite`
 
 Document viewer теперь использует тот же registry/strategy foundation, что и image layer, но сами
-document container'ы больше не парсятся в браузере. Backend `DOCUMENT_PREVIEW` сводит
+document container'ы больше не парсятся в браузере. Backend `VIEWER_RESOLVE` сводит их к единому viewer contract, а внутри переиспользует `DOCUMENT_PREVIEW`, который уже собирает
 `pdf`, `txt`, `csv`, `html`, `rtf`, `doc`, `docx`, `odt`, `xls`, `xlsx`, `pptx`, `epub`, `db`, `sqlite`
 к общему document contract:
 `summary + search layer + layout mode + warnings`.
@@ -202,8 +203,8 @@ text deck, `epub` как reflow reading layer, а `db/sqlite` как schema-awar
 Video layer теперь заводится тем же registry/strategy путём, что и image/document:
 `mp4`, `mov`, `webm` идут в browser-native playback path с metadata inspection, timeline, volume,
 speed, fullscreen и picture-in-picture. `avi`, `mkv`, `wmv`, `flv` теперь тоже заведены в тот же
-workspace через backend `MEDIA_PREVIEW`: viewer отправляет исходный контейнер на backend,
-получает browser-playable preview artifact и затем отдаёт его в тот же video contract без отдельной ветки UI.
+workspace через backend `VIEWER_RESOLVE`: viewer отправляет исходный контейнер на backend,
+получает unified manifest и browser-playable preview artifact и затем отдаёт его в тот же video contract без отдельной ветки UI.
 Поверх foundation viewer даёт precision controls для frame-by-frame stepping с явной fps-assumption,
 loop/timestamp helpers, session-level subtitle sidecars для `.vtt/.srt`, poster capture rail и
 richer metadata inspector с aspect ratio, orientation и estimated bitrate.
@@ -218,10 +219,11 @@ richer metadata inspector с aspect ratio, orientation и estimated bitrate.
 
 Audio layer теперь поднимается тем же registry/strategy путём, что и остальные viewer-семьи:
 `mp3`, `wav`, `ogg`, `opus` идут в browser-native audio path, а `aac`, `flac`, `aiff` получают
-server-assisted preview через backend `MEDIA_PREVIEW` и затем сводятся к тому же audio contract.
+server-assisted preview через backend `VIEWER_RESOLVE`, который сам переиспользует `MEDIA_PREVIEW`
+и metadata inspect и затем сводит всё к тому же audio contract.
 Поверх foundation viewer даёт waveform preview, cover-art display, tag inspector с common/native
 groups, timeline/volume/rate controls, loop и keyboard flow для быстрых playback-check сценариев,
-но audio tag extraction теперь тоже приходит через backend metadata service, а не из browser-only parser'а.
+но audio tag extraction и waveform для non-native контейнеров теперь тоже приходят с backend, а не из browser-only parser'ов.
 
 #### 2.5 Другие Форматы
 

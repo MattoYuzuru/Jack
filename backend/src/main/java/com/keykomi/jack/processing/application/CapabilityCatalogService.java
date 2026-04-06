@@ -14,6 +14,7 @@ public class CapabilityCatalogService {
 	private final ImageProcessingService imageProcessingService;
 	private final DocumentPreviewService documentPreviewService;
 	private final MetadataProcessingService metadataProcessingService;
+	private final ViewerResolveService viewerResolveService;
 	private final CapabilityMatrixService capabilityMatrixService;
 
 	public CapabilityCatalogService(
@@ -21,12 +22,14 @@ public class CapabilityCatalogService {
 		ImageProcessingService imageProcessingService,
 		DocumentPreviewService documentPreviewService,
 		MetadataProcessingService metadataProcessingService,
+		ViewerResolveService viewerResolveService,
 		CapabilityMatrixService capabilityMatrixService
 	) {
 		this.mediaPreviewService = mediaPreviewService;
 		this.imageProcessingService = imageProcessingService;
 		this.documentPreviewService = documentPreviewService;
 		this.metadataProcessingService = metadataProcessingService;
+		this.viewerResolveService = viewerResolveService;
 		this.capabilityMatrixService = capabilityMatrixService;
 	}
 
@@ -36,10 +39,11 @@ public class CapabilityCatalogService {
 		var imageProcessingAvailable = availabilityByJobType.getOrDefault(ProcessingJobType.IMAGE_CONVERT, false);
 		var documentPreviewAvailable = availabilityByJobType.getOrDefault(ProcessingJobType.DOCUMENT_PREVIEW, false);
 		var metadataProcessingAvailable = availabilityByJobType.getOrDefault(ProcessingJobType.METADATA_EXPORT, false);
+		var viewerResolveAvailable = availabilityByJobType.getOrDefault(ProcessingJobType.VIEWER_RESOLVE, false);
 
 		return new CapabilityScope(
 			"viewer",
-			"server-capability-matrix",
+			"viewer-backend-first",
 			List.of(
 				new JobTypeCapability(ProcessingJobType.UPLOAD_INTAKE_ANALYSIS, true, "Backend уже умеет принять файл, создать job и собрать manifest artifact."),
 				new JobTypeCapability(
@@ -69,11 +73,18 @@ public class CapabilityCatalogService {
 					metadataProcessingAvailable
 						? "Backend уже умеет читать image/audio metadata и собирать validated metadata export для image files."
 						: "Metadata service сейчас недоступна в текущем backend окружении."
+				),
+				new JobTypeCapability(
+					ProcessingJobType.VIEWER_RESOLVE,
+					viewerResolveAvailable,
+					viewerResolveAvailable
+						? "Backend viewer route теперь сводит server-assisted non-native formats к единому VIEWER_RESOLVE manifest и reuse existing artifacts."
+						: "VIEWER_RESOLVE сейчас недоступен: для конкретных форматов не хватает media/image/document/metadata foundation services."
 				)
 			),
 			List.of(
-				"Viewer уже использует server-assisted preview для legacy media, heavy imaging, document intelligence и metadata operations.",
-				"Backend теперь отдаёт format matrix как источник правды: frontend больше не держит локальный registry как единственный canonical source."
+				"Viewer route теперь backend-first для всех server-assisted non-native formats: frontend запрашивает единый VIEWER_RESOLVE payload и рендерит уже готовый contract.",
+				"Backend отдаёт format matrix как источник правды, а browser оставляет у себя только native rendering, state и interaction tooling."
 			),
 			this.capabilityMatrixService.viewerMatrix(availabilityByJobType),
 			null
@@ -139,6 +150,7 @@ public class CapabilityCatalogService {
 		availabilityByJobType.put(ProcessingJobType.IMAGE_CONVERT, this.imageProcessingService.isAvailable());
 		availabilityByJobType.put(ProcessingJobType.DOCUMENT_PREVIEW, this.documentPreviewService.isAvailable());
 		availabilityByJobType.put(ProcessingJobType.METADATA_EXPORT, this.metadataProcessingService.isAvailable());
+		availabilityByJobType.put(ProcessingJobType.VIEWER_RESOLVE, this.viewerResolveService.isAvailable());
 		return availabilityByJobType;
 	}
 
