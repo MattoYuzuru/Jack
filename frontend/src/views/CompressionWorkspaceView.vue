@@ -2,6 +2,10 @@
 import { computed, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useCompressionWorkspace } from '../features/compression/composables/useCompressionWorkspace'
+import type {
+  CompressionSourceFormatDefinition,
+  CompressionTargetFormatDefinition,
+} from '../features/compression/domain/compression-registry'
 
 const fileInput = ref<HTMLInputElement | null>(null)
 const isDragActive = ref(false)
@@ -57,17 +61,21 @@ const {
 } = useCompressionWorkspace()
 
 const statusLabels: Record<string, string> = {
-  QUEUED: 'Queued',
-  RUNNING: 'Running',
-  COMPLETED: 'Completed',
-  FAILED: 'Failed',
-  CANCELLED: 'Cancelled',
+  QUEUED: 'В очереди',
+  RUNNING: 'В работе',
+  COMPLETED: 'Готово',
+  FAILED: 'Ошибка',
+  CANCELLED: 'Остановлено',
 }
 
 const currentStatusLabel = computed(() =>
-  activeJobStatus.value ? statusLabels[activeJobStatus.value] ?? activeJobStatus.value : 'Idle',
+  activeJobStatus.value
+    ? (statusLabels[activeJobStatus.value] ?? activeJobStatus.value)
+    : 'Ожидание',
 )
-const progressWidth = computed(() => `${Math.max(0, Math.min(activeJobProgressPercent.value, 100))}%`)
+const progressWidth = computed(
+  () => `${Math.max(0, Math.min(activeJobProgressPercent.value, 100))}%`,
+)
 const historyEntries = computed(() => resultHistory.value.slice(0, 5))
 const sourceFacts = computed(() => {
   if (!prepared.value) {
@@ -75,12 +83,122 @@ const sourceFacts = computed(() => {
   }
 
   return [
-    { label: 'Source', value: prepared.value.file.name },
-    { label: 'Family', value: prepared.value.source.family.toUpperCase() },
-    { label: 'Size', value: formatBytes(prepared.value.file.size) },
-    { label: 'Strategy', value: prepared.value.source.statusLabel },
+    { label: 'Файл', value: prepared.value.file.name },
+    { label: 'Категория', value: prepared.value.source.family.toUpperCase() },
+    { label: 'Размер', value: formatBytes(prepared.value.file.size) },
+    { label: 'Режим обработки', value: 'Готов к сжатию' },
   ]
 })
+
+function formatModeLabel(modeId: string): string {
+  switch (modeId) {
+    case 'maximum':
+      return 'Максимальное уменьшение'
+    case 'target-size':
+      return 'Лимит размера'
+    case 'custom':
+      return 'Ручная настройка'
+    default:
+      return modeId
+  }
+}
+
+function formatModeDetail(modeId: string): string {
+  switch (modeId) {
+    case 'maximum':
+      return 'Jack подберёт самый лёгкий практический вариант без ручного перебора настроек.'
+    case 'target-size':
+      return 'Сервис будет искать лучший результат, который помещается в заданный лимит.'
+    case 'custom':
+      return 'Можно вручную выбрать формат результата, качество, битрейт, размер кадра и FPS.'
+    default:
+      return ''
+  }
+}
+
+function formatModeAccents(modeId: string): string[] {
+  switch (modeId) {
+    case 'maximum':
+      return ['Минимальный вес', 'Автовыбор']
+    case 'target-size':
+      return ['Лимит', 'Best effort']
+    case 'custom':
+      return ['Вручную', 'Качество']
+    default:
+      return []
+  }
+}
+
+function formatSourceDescription(
+  source: CompressionSourceFormatDefinition | null | undefined,
+): string {
+  if (!source) {
+    return ''
+  }
+
+  if (source.family === 'image') {
+    return 'Jack подберёт более лёгкий формат и уменьшит размер там, где это действительно помогает.'
+  }
+
+  if (source.family === 'media') {
+    return 'Можно удержать файл в лимите за счёт контейнера, битрейта, разрешения и частоты кадров.'
+  }
+
+  return 'Можно подобрать более компактный контейнер и битрейт без ручного перебора вариантов.'
+}
+
+function formatTargetDescription(
+  target: CompressionTargetFormatDefinition | null | undefined,
+): string {
+  if (!target) {
+    return ''
+  }
+
+  if (target.family === 'image') {
+    return `${target.label} подходит для сжатия изображений с контролем качества и размера.`
+  }
+
+  if (target.family === 'media') {
+    return `${target.label} подходит для видео с ограничением по битрейту, размеру кадра и частоте.`
+  }
+
+  return `${target.label} подходит для компактного аудио с контролем битрейта.`
+}
+
+function formatRuntimeLabel(value: string | null | undefined): string {
+  if (!value) {
+    return 'Автоподбор'
+  }
+
+  const normalized = value.trim().toLowerCase()
+
+  if (
+    normalized.includes('jpeg') ||
+    normalized.includes('png') ||
+    normalized.includes('webp') ||
+    normalized.includes('avif') ||
+    normalized.includes('tiff') ||
+    normalized.includes('ico') ||
+    normalized.includes('svg') ||
+    normalized.includes('heic') ||
+    normalized.includes('imagemagick') ||
+    normalized.includes('potrace')
+  ) {
+    return 'Сжатие изображения'
+  }
+
+  if (
+    normalized.includes('media') ||
+    normalized.includes('ffmpeg') ||
+    normalized.includes('mp4') ||
+    normalized.includes('mp3') ||
+    normalized.includes('wav')
+  ) {
+    return 'Сжатие медиа'
+  }
+
+  return 'Подобранный вариант'
+}
 
 function formatBytes(value: number): string {
   if (value < 1024 * 1024) {
@@ -142,57 +260,56 @@ function onDrop(event: DragEvent) {
       <div class="brand-lockup">
         <img class="brand-lockup__logo" src="/logo.svg" alt="Логотип Jack" />
         <div class="brand-lockup__copy">
-          <p class="eyebrow">Jack of all trades</p>
-          <p class="brand-lockup__title">Compression Workspace</p>
+          <p class="eyebrow">Jack · Compression</p>
+          <p class="brand-lockup__title">Сжатие файлов</p>
         </div>
       </div>
 
       <div class="app-topbar__status">
-        <RouterLink class="back-link" to="/">Back to Home</RouterLink>
-        <span class="chip-pill">Iteration 04</span>
-        <span class="chip-pill chip-pill--accent">Size-first route</span>
+        <RouterLink class="back-link" to="/">На главную</RouterLink>
+        <span class="chip-pill">Сжатие файлов</span>
+        <span class="chip-pill chip-pill--accent">Под размер или на максимум</span>
       </div>
     </header>
 
     <section class="compression-hero-grid">
       <article class="panel-surface compression-hero-copy">
-        <p class="eyebrow">Iteration 04 · Compression</p>
+        <p class="eyebrow">Когда важен итоговый вес файла</p>
         <h1>
-          Compression теперь живёт как отдельный backend-first маршрут: пользователь задаёт size
-          goal, а сервер сам выбирает candidate ladder и лучший итоговый artifact.
+          Сожми изображение, видео или аудио под лимит загрузки либо до практического минимума.
         </h1>
         <p class="lead">
-          Этот экран не дублирует converter. Здесь продуктовая задача другая: не выбрать формат
-          руками, а получить максимально компактный или целевой по размеру файл для image, video и
-          audio групп. Backend route `FILE_COMPRESS` reuse'ит существующие `IMAGE_CONVERT` и
-          `MEDIA_CONVERT`, но наружу отдаёт уже единый compression manifest, финальный result и
-          preview.
+          Этот модуль нужен для реальных ограничений: вложения в письме, лимит CMS, мессенджеры,
+          отчёты и выгрузки. Вместо ручного перебора настроек можно сразу выбрать цель и сравнить,
+          как менялся вес файла на каждом шаге.
         </p>
 
         <div class="compression-signal-row">
-          <span class="chip-pill">Image compression</span>
-          <span class="chip-pill">Video bitrate targeting</span>
-          <span class="chip-pill">Audio delivery shrink</span>
-          <span class="chip-pill">Maximum reduction</span>
-          <span class="chip-pill">Target size</span>
-          <span class="chip-pill">Custom quality limits</span>
-          <span class="chip-pill">Single result contract</span>
-          <span class="chip-pill">Artifact history</span>
+          <span class="chip-pill">Изображения</span>
+          <span class="chip-pill">Видео</span>
+          <span class="chip-pill">Аудио</span>
+          <span class="chip-pill">Лимит размера</span>
+          <span class="chip-pill">Максимальное уменьшение</span>
+          <span class="chip-pill">История попыток</span>
         </div>
       </article>
 
       <article class="panel-surface compression-system-card">
-        <p class="eyebrow">Route Shape</p>
-        <h2>Compression решает размер, а не формальный target conversion.</h2>
+        <p class="eyebrow">Режимы работы</p>
+        <h2>Сначала цель по весу, затем подходящая стратегия для выбранного типа файла.</h2>
 
         <div class="mode-list">
           <article v-for="mode in availableModes" :key="mode.id" class="mode-item">
             <div>
-              <h3>{{ mode.label }}</h3>
-              <p>{{ mode.detail }}</p>
+              <h3>{{ formatModeLabel(mode.id) }}</h3>
+              <p>{{ formatModeDetail(mode.id) }}</p>
             </div>
             <div class="mode-item__accents">
-              <span v-for="accent in mode.accents" :key="accent" class="chip-pill chip-pill--compact">
+              <span
+                v-for="accent in formatModeAccents(mode.id)"
+                :key="accent"
+                class="chip-pill chip-pill--compact"
+              >
                 {{ accent }}
               </span>
             </div>
@@ -205,12 +322,10 @@ function onDrop(event: DragEvent) {
       <article class="panel-surface compression-panel">
         <div class="panel-header">
           <div>
-            <p class="eyebrow">Source</p>
-            <h2>Файл и входная family</h2>
+            <p class="eyebrow">Исходный файл</p>
+            <h2>Выбери, что нужно уменьшить.</h2>
           </div>
-          <button type="button" class="action-button" @click="openFilePicker">
-            Select file
-          </button>
+          <button type="button" class="action-button" @click="openFilePicker">Выбрать файл</button>
         </div>
 
         <input
@@ -229,13 +344,15 @@ function onDrop(event: DragEvent) {
           @dragleave="onDragLeave"
           @drop="onDrop"
         >
-          <span class="compression-dropzone__badge">Drop / Select</span>
-          <strong>{{ prepared ? prepared.file.name : 'Перетащи image, video или audio файл' }}</strong>
+          <span class="compression-dropzone__badge">Перетащить или выбрать</span>
+          <strong>{{
+            prepared ? prepared.file.name : 'Перетащи изображение, видео или аудиофайл'
+          }}</strong>
           <span>
             {{
               prepared
-                ? prepared.source.notes
-                : 'Compression matrix уже знает, какие sources поддерживаются и какие targets доступны для каждой family.'
+                ? formatSourceDescription(prepared.source)
+                : 'После выбора файла Jack подскажет подходящие форматы и режимы сжатия для этого типа данных.'
             }}
           </span>
         </div>
@@ -261,11 +378,11 @@ function onDrop(event: DragEvent) {
       <article class="panel-surface compression-panel">
         <div class="panel-header">
           <div>
-            <p class="eyebrow">Controls</p>
-            <h2>Режим и size budget</h2>
+            <p class="eyebrow">Настройки</p>
+            <h2>Режим и ограничения</h2>
           </div>
           <button type="button" class="action-button" :disabled="!prepared" @click="clearSelection">
-            Reset
+            Сбросить
           </button>
         </div>
 
@@ -278,14 +395,14 @@ function onDrop(event: DragEvent) {
             :class="{ 'mode-toggle__button--active': selectedModeId === mode.id }"
             @click="selectedModeId = mode.id"
           >
-            <strong>{{ mode.label }}</strong>
-            <span>{{ mode.detail }}</span>
+            <strong>{{ formatModeLabel(mode.id) }}</strong>
+            <span>{{ formatModeDetail(mode.id) }}</span>
           </button>
         </div>
 
         <div class="form-grid">
           <label v-if="prepared && activeMode?.supportsTargetSelection" class="form-field">
-            <span>Preferred target</span>
+            <span>Формат результата</span>
             <select v-model="selectedTargetExtension">
               <option v-for="option in targetOptions" :key="option.value" :value="option.value">
                 {{ option.label }}
@@ -294,7 +411,7 @@ function onDrop(event: DragEvent) {
           </label>
 
           <label v-if="showTargetSizeControl" class="form-field">
-            <span>Target size</span>
+            <span>Целевой размер</span>
             <div class="compound-row">
               <input v-model="targetSizeValue" type="number" min="0.1" step="0.1" placeholder="5" />
               <select v-model="targetSizeUnit">
@@ -305,7 +422,7 @@ function onDrop(event: DragEvent) {
           </label>
 
           <label v-if="showResolutionControl" class="form-field">
-            <span>Resolution limit</span>
+            <span>Ограничение по размеру кадра</span>
             <select v-model="selectedResolution">
               <option v-for="option in resolutionOptions" :key="option.value" :value="option.value">
                 {{ option.label }}
@@ -314,7 +431,7 @@ function onDrop(event: DragEvent) {
           </label>
 
           <label v-if="showFpsControl" class="form-field">
-            <span>Target FPS</span>
+            <span>Целевой FPS</span>
             <select v-model="selectedTargetFps">
               <option v-for="option in fpsOptions" :key="option.value" :value="option.value">
                 {{ option.label }}
@@ -323,25 +440,33 @@ function onDrop(event: DragEvent) {
           </label>
 
           <label v-if="showVideoBitrateControl" class="form-field">
-            <span>Video bitrate</span>
+            <span>Видеобитрейт</span>
             <select v-model="selectedVideoBitrateKbps">
-              <option v-for="option in videoBitrateOptions" :key="option.value" :value="option.value">
+              <option
+                v-for="option in videoBitrateOptions"
+                :key="option.value"
+                :value="option.value"
+              >
                 {{ option.label }}
               </option>
             </select>
           </label>
 
           <label v-if="showAudioBitrateControl" class="form-field">
-            <span>Audio bitrate</span>
+            <span>Аудиобитрейт</span>
             <select v-model="selectedAudioBitrateKbps">
-              <option v-for="option in audioBitrateOptions" :key="option.value" :value="option.value">
+              <option
+                v-for="option in audioBitrateOptions"
+                :key="option.value"
+                :value="option.value"
+              >
                 {{ option.label }}
               </option>
             </select>
           </label>
 
           <label v-if="showQualityControl" class="form-field">
-            <span>Quality</span>
+            <span>Качество</span>
             <div class="range-row">
               <input v-model.number="quality" type="range" min="0.45" max="1" step="0.01" />
               <strong>{{ Math.round(quality * 100) }}%</strong>
@@ -349,7 +474,7 @@ function onDrop(event: DragEvent) {
           </label>
 
           <label v-if="showBackgroundColorControl" class="form-field">
-            <span>Background fill</span>
+            <span>Фон вместо прозрачности</span>
             <div class="compound-row">
               <input v-model="backgroundColor" type="color" />
               <code>{{ backgroundColor }}</code>
@@ -359,14 +484,14 @@ function onDrop(event: DragEvent) {
 
         <div class="job-progress">
           <div class="job-progress__labels">
-            <span>Status: {{ currentStatusLabel }}</span>
+            <span>Статус: {{ currentStatusLabel }}</span>
             <span>{{ activeJobProgressPercent }}%</span>
           </div>
           <div class="job-progress__track">
             <div class="job-progress__bar" :style="{ width: progressWidth }"></div>
           </div>
           <p v-if="processingMessage">{{ processingMessage }}</p>
-          <p v-else-if="activeJobId">Job: {{ activeJobId }}</p>
+          <p v-else-if="activeJobId">Задача: {{ activeJobId }}</p>
         </div>
 
         <div class="action-row">
@@ -376,7 +501,7 @@ function onDrop(event: DragEvent) {
             :disabled="!prepared || isLoading || isCompressing"
             @click="compress"
           >
-            {{ isCompressing ? 'Compressing...' : 'Run compression' }}
+            {{ isCompressing ? 'Сжимаю...' : 'Запустить сжатие' }}
           </button>
           <button
             type="button"
@@ -384,7 +509,7 @@ function onDrop(event: DragEvent) {
             :disabled="!canRetry"
             @click="retryLastCompression"
           >
-            Retry
+            Повторить
           </button>
           <button
             type="button"
@@ -392,23 +517,23 @@ function onDrop(event: DragEvent) {
             :disabled="!activeJobId || isCancelling || !isCompressing"
             @click="cancelCompression"
           >
-            {{ isCancelling ? 'Cancelling...' : 'Cancel' }}
+            {{ isCancelling ? 'Останавливаю...' : 'Остановить' }}
           </button>
         </div>
 
         <p v-if="errorMessage" class="status-note status-note--error">{{ errorMessage }}</p>
         <p v-else-if="activeTarget" class="status-note">
-          Active target:
+          Формат результата:
           <strong>{{ activeTarget.label }}</strong>
-          · {{ activeTarget.notes }}
+          · {{ formatTargetDescription(activeTarget) }}
         </p>
       </article>
 
       <article class="panel-surface compression-panel compression-panel--result">
         <div class="panel-header">
           <div>
-            <p class="eyebrow">Result</p>
-            <h2>Preview, reduction и warnings</h2>
+            <p class="eyebrow">Результат</p>
+            <h2>Предпросмотр, снижение веса и предупреждения</h2>
           </div>
           <button
             type="button"
@@ -416,7 +541,7 @@ function onDrop(event: DragEvent) {
             :disabled="!result"
             @click="downloadResult()"
           >
-            Download result
+            Скачать результат
           </button>
         </div>
 
@@ -425,7 +550,7 @@ function onDrop(event: DragEvent) {
             <img
               v-if="result.previewKind === 'image'"
               :src="result.previewObjectUrl"
-              :alt="`Compression preview ${result.fileName}`"
+              :alt="`Предпросмотр ${result.fileName}`"
             />
             <audio
               v-else-if="result.previewMimeType.startsWith('audio/')"
@@ -444,42 +569,42 @@ function onDrop(event: DragEvent) {
 
           <div class="result-summary">
             <article class="result-metric">
-              <span>Result</span>
+              <span>Файл</span>
               <strong>{{ result.fileName }}</strong>
             </article>
             <article class="result-metric">
-              <span>Mode</span>
-              <strong>{{ result.mode }}</strong>
+              <span>Режим</span>
+              <strong>{{ formatModeLabel(result.mode) }}</strong>
             </article>
             <article class="result-metric">
-              <span>Source size</span>
+              <span>Исходный размер</span>
               <strong>{{ formatBytes(result.sourceSizeBytes) }}</strong>
             </article>
             <article class="result-metric">
-              <span>Result size</span>
+              <span>Размер результата</span>
               <strong>{{ formatBytes(result.resultSizeBytes) }}</strong>
             </article>
             <article class="result-metric">
-              <span>Reduction</span>
+              <span>Сжатие</span>
               <strong>{{ result.reductionPercent.toFixed(1) }}%</strong>
             </article>
             <article class="result-metric">
-              <span>Target status</span>
-              <strong>{{ result.targetMet ? 'Reached' : 'Best effort' }}</strong>
+              <span>Цель</span>
+              <strong>{{ result.targetMet ? 'Достигнута' : 'Лучший найденный вариант' }}</strong>
             </article>
             <article class="result-metric">
-              <span>Backend job</span>
+              <span>Задача</span>
               <strong>{{ result.backendJobId }}</strong>
             </article>
             <article class="result-metric">
-              <span>Completed</span>
+              <span>Готово</span>
               <strong>{{ formatDate(result.createdAt) }}</strong>
             </article>
           </div>
 
           <div class="fact-columns">
             <div class="fact-column">
-              <h3>Compression facts</h3>
+              <h3>Параметры сжатия</h3>
               <article
                 v-for="fact in result.compressionFacts"
                 :key="`compression-${fact.label}`"
@@ -491,7 +616,7 @@ function onDrop(event: DragEvent) {
             </div>
 
             <div class="fact-column">
-              <h3>Source facts</h3>
+              <h3>Исходный файл</h3>
               <article
                 v-for="fact in result.sourceFacts"
                 :key="`source-${fact.label}`"
@@ -503,7 +628,7 @@ function onDrop(event: DragEvent) {
             </div>
 
             <div class="fact-column">
-              <h3>Result facts</h3>
+              <h3>Результат</h3>
               <article
                 v-for="fact in result.resultFacts"
                 :key="`result-${fact.label}`"
@@ -525,22 +650,22 @@ function onDrop(event: DragEvent) {
             <article v-for="attempt in result.attempts" :key="attempt.label" class="attempt-item">
               <div>
                 <strong>{{ attempt.label }}</strong>
-                <p>{{ attempt.runtimeLabel }}</p>
+                <p>{{ formatRuntimeLabel(attempt.runtimeLabel) }}</p>
               </div>
               <div class="attempt-item__facts">
                 <span>{{ attempt.targetExtension.toUpperCase() }}</span>
                 <span>{{ formatBytes(attempt.resultSizeBytes) }}</span>
-                <span>{{ attempt.targetMet ? 'Hit target' : 'Candidate' }}</span>
+                <span>{{ attempt.targetMet ? 'Уложился в цель' : 'Промежуточный вариант' }}</span>
               </div>
             </article>
           </div>
         </div>
 
         <div v-else class="result-placeholder">
-          <h3>Compression result пока не собран.</h3>
+          <h3>Результат сжатия пока не собран.</h3>
           <p>
-            Выбери файл, укажи режим и запусти compression. После этого backend вернёт не только
-            final artifact, но и attempt ladder, чтобы было видно, как route пришёл к результату.
+            Выбери файл, укажи режим и запусти сжатие. Здесь появятся итоговый результат, сравнение
+            размеров и история попыток, чтобы было понятно, насколько файл удалось облегчить.
           </p>
         </div>
       </article>
@@ -548,8 +673,8 @@ function onDrop(event: DragEvent) {
       <article class="panel-surface compression-panel">
         <div class="panel-header">
           <div>
-            <p class="eyebrow">History</p>
-            <h2>Последние compression runs</h2>
+            <p class="eyebrow">История</p>
+            <h2>Последние результаты</h2>
           </div>
         </div>
 
@@ -571,7 +696,9 @@ function onDrop(event: DragEvent) {
         </div>
         <div v-else class="result-placeholder result-placeholder--compact">
           <h3>История ещё пуста.</h3>
-          <p>Каждый успешный compression run остаётся здесь как быстрый повторный reference.</p>
+          <p>
+            После первого успешного результата здесь можно будет быстро вернуться к прошлой версии.
+          </p>
         </div>
       </article>
     </section>

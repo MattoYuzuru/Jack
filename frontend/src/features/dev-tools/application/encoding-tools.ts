@@ -14,9 +14,9 @@ export interface EncodingResult {
 const STRATEGY_LABELS: Record<EncodingStrategyId, string> = {
   base64: 'Base64',
   base64url: 'Base64URL',
-  url: 'URL component',
-  html: 'HTML entities',
-  unicode: 'Unicode escapes',
+  url: 'URL-компонент',
+  html: 'HTML-сущности',
+  unicode: 'Unicode-экранирование',
 }
 
 const HTML_ENTITY_MAP: Record<string, string> = {
@@ -63,9 +63,7 @@ export function runEncodingTool(
       ok: false,
       output: '',
       error:
-        error instanceof Error
-          ? error.message
-          : 'Не удалось выполнить выбранное encoding/deconding действие.',
+        error instanceof Error ? error.message : 'Не удалось выполнить выбранное преобразование.',
       warnings: [],
       facts: buildFacts(input, '', strategyId, mode),
     }
@@ -80,11 +78,11 @@ function buildFacts(
 ): DevToolFact[] {
   return [
     { label: 'Стратегия', value: STRATEGY_LABELS[strategyId] },
-    { label: 'Режим', value: mode === 'encode' ? 'Encode' : 'Decode' },
-    { label: 'Input chars', value: String(input.length) },
-    { label: 'Output chars', value: String(output.length) },
-    { label: 'Input bytes', value: String(new TextEncoder().encode(input).length) },
-    { label: 'Output bytes', value: String(new TextEncoder().encode(output).length) },
+    { label: 'Режим', value: mode === 'encode' ? 'Кодирование' : 'Декодирование' },
+    { label: 'Символы на входе', value: String(input.length) },
+    { label: 'Символы на выходе', value: String(output.length) },
+    { label: 'Байты на входе', value: String(new TextEncoder().encode(input).length) },
+    { label: 'Байты на выходе', value: String(new TextEncoder().encode(output).length) },
   ]
 }
 

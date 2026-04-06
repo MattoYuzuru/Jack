@@ -19,11 +19,17 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.function.UnaryOperator;
+import java.util.stream.Collectors;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -46,6 +52,9 @@ public class ProcessingJobService {
 	private final ExecutorService processingExecutor;
 	private final Map<UUID, StoredProcessingJob> jobs = new ConcurrentHashMap<>();
 	private final Map<UUID, Future<?>> submittedJobs = new ConcurrentHashMap<>();
+	private final Counter completedJobsCounter;
+	private final Counter failedJobsCounter;
+	private final Counter cancelledJobsCounter;
 
 	public ProcessingJobService(
 		UploadStorageService uploadStorageService,
@@ -60,7 +69,8 @@ public class ProcessingJobService {
 		MetadataProcessingService metadataProcessingService,
 		ViewerResolveService viewerResolveService,
 		EditorProcessingService editorProcessingService,
-		ExecutorService processingExecutor
+		ExecutorService processingExecutor,
+		MeterRegistry meterRegistry
 	) {
 		this.uploadStorageService = uploadStorageService;
 		this.artifactStorageService = artifactStorageService;
@@ -75,6 +85,36 @@ public class ProcessingJobService {
 		this.viewerResolveService = viewerResolveService;
 		this.editorProcessingService = editorProcessingService;
 		this.processingExecutor = processingExecutor;
+		this.completedJobsCounter = Counter.builder("jack.processing.jobs.completed.total")
+			.description("Количество успешно завершённых processing jobs.")
+			.register(meterRegistry);
+		this.failedJobsCounter = Counter.builder("jack.processing.jobs.failed.total")
+			.description("Количество processing jobs, завершившихся ошибкой.")
+			.register(meterRegistry);
+		this.cancelledJobsCounter = Counter.builder("jack.processing.jobs.cancelled.total")
+			.description("Количество отменённых processing jobs.")
+			.register(meterRegistry);
+		Gauge.builder("jack.processing.jobs.total", this.jobs, jobs -> jobs.size())
+			.description("Текущее число job-записей в in-memory processing registry.")
+			.register(meterRegistry);
+		Gauge.builder("jack.processing.jobs.submitted", this.submittedJobs, jobs -> jobs.size())
+			.description("Число job-задач, отправленных в executor и ещё не снятых с исполнения.")
+			.register(meterRegistry);
+		Gauge.builder("jack.processing.jobs.queued", this, service -> service.countJobsByStatus(ProcessingJobStatus.QUEUED))
+			.description("Число processing jobs в статусе QUEUED.")
+			.register(meterRegistry);
+		Gauge.builder("jack.processing.jobs.running", this, service -> service.countJobsByStatus(ProcessingJobStatus.RUNNING))
+			.description("Число processing jobs в статусе RUNNING.")
+			.register(meterRegistry);
+		Gauge.builder("jack.processing.jobs.completed", this, service -> service.countJobsByStatus(ProcessingJobStatus.COMPLETED))
+			.description("Число processing jobs в статусе COMPLETED.")
+			.register(meterRegistry);
+		Gauge.builder("jack.processing.jobs.failed", this, service -> service.countJobsByStatus(ProcessingJobStatus.FAILED))
+			.description("Число processing jobs в статусе FAILED.")
+			.register(meterRegistry);
+		Gauge.builder("jack.processing.jobs.cancelled", this, service -> service.countJobsByStatus(ProcessingJobStatus.CANCELLED))
+			.description("Число processing jobs в статусе CANCELLED.")
+			.register(meterRegistry);
 	}
 
 	public StoredProcessingJob enqueue(UUID uploadId, ProcessingJobType jobType, Map<String, Object> parameters) {
@@ -117,7 +157,45 @@ public class ProcessingJobService {
 
 		updateJob(jobId, currentJob -> currentJob.cancel(Instant.now(), "Job отменён пользователем."));
 		Optional.ofNullable(this.submittedJobs.remove(jobId)).ifPresent(future -> future.cancel(true));
+		this.cancelledJobsCounter.increment();
 		return getRequiredJob(jobId);
+	}
+
+	public Set<UUID> listActiveJobIds() {
+		return this.jobs.values().stream()
+			.filter(job -> !job.isTerminal())
+			.map(StoredProcessingJob::id)
+			.collect(Collectors.toUnmodifiableSet());
+	}
+
+	public Set<UUID> listActiveUploadIds() {
+		return this.jobs.values().stream()
+			.filter(job -> !job.isTerminal())
+			.map(StoredProcessingJob::uploadId)
+			.collect(Collectors.toUnmodifiableSet());
+	}
+
+	public int purgeExpiredTerminalJobs(Instant cutoff) {
+		var deletedJobs = 0;
+
+		for (var entry : this.jobs.entrySet()) {
+			var job = entry.getValue();
+			if (!job.isTerminal()) {
+				continue;
+			}
+
+			var terminalAt = job.completedAt() != null ? job.completedAt() : job.createdAt();
+			if (!terminalAt.isBefore(cutoff)) {
+				continue;
+			}
+
+			this.submittedJobs.remove(entry.getKey());
+			if (this.jobs.remove(entry.getKey(), job)) {
+				deletedJobs++;
+			}
+		}
+
+		return deletedJobs;
 	}
 
 	private void process(UUID jobId) {
@@ -144,7 +222,7 @@ public class ProcessingJobService {
 				case METADATA_EXPORT -> processMetadataExport(job.id(), upload, parseMetadataJobRequest(job.parameters()));
 				case VIEWER_RESOLVE -> processViewerResolve(job.id(), upload);
 				case EDITOR_PROCESS -> processEditor(job.id(), upload, parseEditorJobRequest(job.parameters()));
-				default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Для этого job type backend processor ещё не реализован.");
+				default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Этот сценарий обработки не поддерживается.");
 			};
 			throwIfCancellationRequested(jobId);
 
@@ -169,22 +247,22 @@ public class ProcessingJobService {
 	}
 
 	private JobProcessingResult processUploadIntakeAnalysis(UUID jobId, StoredUpload upload) {
-		updateJob(jobId, currentJob -> currentJob.updateProgress(45, "Собираю manifest и проверяю upload metadata."));
+		updateJob(jobId, currentJob -> currentJob.updateProgress(45, "Проверяю загруженный файл и собираю сведения о нём."));
 		return new JobProcessingResult(
-			"Intake-analysis завершён, manifest artifact готов к скачиванию.",
+			"Сведения о файле подготовлены и готовы к скачиванию.",
 			List.of(buildUploadIntakeArtifact(jobId, upload))
 		);
 	}
 
 	private JobProcessingResult processMediaPreview(UUID jobId, StoredUpload upload) {
-		updateJob(jobId, currentJob -> currentJob.updateProgress(30, "Проверяю media container через ffprobe."));
+		updateJob(jobId, currentJob -> currentJob.updateProgress(30, "Считываю параметры медиафайла."));
 		var result = this.mediaPreviewService.buildPreview(jobId, upload);
 		updateJob(
 			jobId,
-			currentJob -> currentJob.updateProgress(85, "Media preview собран, сохраняю artifact и manifest.")
+			currentJob -> currentJob.updateProgress(85, "Предпросмотр медиа готовлю к сохранению.")
 		);
 		return new JobProcessingResult(
-			"Media preview готов через backend %s path.".formatted(result.runtimeLabel()),
+			"Предпросмотр медиа готов.",
 			result.artifacts()
 		);
 	}
@@ -194,27 +272,27 @@ public class ProcessingJobService {
 		StoredUpload upload,
 		MediaConversionRequest request
 	) {
-		updateJob(jobId, currentJob -> currentJob.updateProgress(24, "Подготавливаю backend media conversion pipeline."));
+		updateJob(jobId, currentJob -> currentJob.updateProgress(24, "Подготавливаю конвертацию медиа."));
 		var result = this.mediaConversionService.process(jobId, upload, request);
 		updateJob(
 			jobId,
-			currentJob -> currentJob.updateProgress(86, "Media conversion artifacts собраны, сохраняю manifest и output blobs.")
+			currentJob -> currentJob.updateProgress(86, "Сохраняю готовый медиафайл и предпросмотр.")
 		);
 		return new JobProcessingResult(
-			"Media conversion готов через backend %s.".formatted(result.runtimeLabel()),
+			"Конвертация медиа завершена.",
 			result.artifacts()
 		);
 	}
 
 	private JobProcessingResult processImageConvert(UUID jobId, StoredUpload upload, ImageProcessingRequest request) {
-		updateJob(jobId, currentJob -> currentJob.updateProgress(25, "Подготавливаю imaging source и raster contract."));
+		updateJob(jobId, currentJob -> currentJob.updateProgress(25, "Подготавливаю изображение к обработке."));
 		var result = this.imageProcessingService.process(jobId, upload, request);
 		updateJob(
 			jobId,
-			currentJob -> currentJob.updateProgress(85, "Imaging artifacts собраны, сохраняю manifest и output blobs.")
+			currentJob -> currentJob.updateProgress(85, "Сохраняю готовое изображение и предпросмотр.")
 		);
 		return new JobProcessingResult(
-			"Image processing готов через backend %s.".formatted(result.runtimeLabel()),
+			"Обработка изображения завершена.",
 			result.artifacts()
 		);
 	}
@@ -224,7 +302,7 @@ public class ProcessingJobService {
 		StoredUpload upload,
 		CompressionRequest request
 	) {
-		updateJob(jobId, currentJob -> currentJob.updateProgress(18, "Готовлю compression orchestration поверх image/media pipelines."));
+		updateJob(jobId, currentJob -> currentJob.updateProgress(18, "Подготавливаю сценарий сжатия."));
 		var result = this.compressionService.process(
 			jobId,
 			upload,
@@ -233,10 +311,10 @@ public class ProcessingJobService {
 		);
 		updateJob(
 			jobId,
-			currentJob -> currentJob.updateProgress(88, "Compression artifacts собраны, сохраняю manifest и финальный delivery result.")
+			currentJob -> currentJob.updateProgress(88, "Сохраняю лучший найденный результат сжатия.")
 		);
 		return new JobProcessingResult(
-			"Compression готов через backend %s.".formatted(result.runtimeLabel()),
+			"Сжатие завершено.",
 			result.artifacts()
 		);
 	}
@@ -246,7 +324,7 @@ public class ProcessingJobService {
 		StoredUpload upload,
 		PdfToolkitRequest request
 	) {
-		updateJob(jobId, currentJob -> currentJob.updateProgress(18, "Подготавливаю page-aware PDF toolkit orchestration."));
+		updateJob(jobId, currentJob -> currentJob.updateProgress(18, "Подготавливаю операцию с PDF."));
 		var result = this.pdfToolkitService.process(
 			jobId,
 			upload,
@@ -255,10 +333,10 @@ public class ProcessingJobService {
 		);
 		updateJob(
 			jobId,
-			currentJob -> currentJob.updateProgress(88, "PDF toolkit artifacts собраны, сохраняю manifest, preview и итоговый result.")
+			currentJob -> currentJob.updateProgress(88, "Сохраняю итоговый PDF и материалы результата.")
 		);
 		return new JobProcessingResult(
-			"PDF toolkit job готов через backend %s.".formatted(result.runtimeLabel()),
+			"Операция с PDF завершена.",
 			result.artifacts()
 		);
 	}
@@ -268,27 +346,27 @@ public class ProcessingJobService {
 		StoredUpload upload,
 		OfficeConversionRequest request
 	) {
-		updateJob(jobId, currentJob -> currentJob.updateProgress(24, "Подготавливаю backend office/pdf conversion pipeline."));
+		updateJob(jobId, currentJob -> currentJob.updateProgress(24, "Подготавливаю конвертацию документа."));
 		var result = this.officeConversionService.process(jobId, upload, request);
 		updateJob(
 			jobId,
-			currentJob -> currentJob.updateProgress(86, "Office conversion artifacts собраны, сохраняю manifest и output blobs.")
+			currentJob -> currentJob.updateProgress(86, "Сохраняю готовый документ и предпросмотр.")
 		);
 		return new JobProcessingResult(
-			"Office conversion готов через backend %s.".formatted(result.runtimeLabel()),
+			"Конвертация документа завершена.",
 			result.artifacts()
 		);
 	}
 
 	private JobProcessingResult processDocumentPreview(UUID jobId, StoredUpload upload) {
-		updateJob(jobId, currentJob -> currentJob.updateProgress(25, "Подготавливаю document intelligence payload и search layer."));
+		updateJob(jobId, currentJob -> currentJob.updateProgress(25, "Подготавливаю документ к просмотру и поиску."));
 		var result = this.documentPreviewService.process(jobId, upload);
 		updateJob(
 			jobId,
-			currentJob -> currentJob.updateProgress(85, "Document manifest и preview artifacts собраны, сохраняю результат.")
+			currentJob -> currentJob.updateProgress(85, "Сохраняю данные просмотра документа.")
 		);
 		return new JobProcessingResult(
-			"Document preview готов через backend %s.".formatted(result.runtimeLabel()),
+			"Просмотр документа готов.",
 			result.artifacts()
 		);
 	}
@@ -298,40 +376,40 @@ public class ProcessingJobService {
 		StoredUpload upload,
 		MetadataProcessingRequest request
 	) {
-		updateJob(jobId, currentJob -> currentJob.updateProgress(25, "Подготавливаю backend metadata inspect/export pipeline."));
+		updateJob(jobId, currentJob -> currentJob.updateProgress(25, "Подготавливаю чтение или сохранение метаданных."));
 		var result = this.metadataProcessingService.process(jobId, upload, request);
 		updateJob(
 			jobId,
-			currentJob -> currentJob.updateProgress(85, "Metadata manifest и export artifacts собраны, сохраняю результат.")
+			currentJob -> currentJob.updateProgress(85, "Сохраняю метаданные и готовый файл.")
 		);
 		return new JobProcessingResult(
-			"Metadata processing готов через backend %s.".formatted(result.runtimeLabel()),
+			"Операция с метаданными завершена.",
 			result.artifacts()
 		);
 	}
 
 	private JobProcessingResult processViewerResolve(UUID jobId, StoredUpload upload) {
-		updateJob(jobId, currentJob -> currentJob.updateProgress(20, "Собираю unified viewer payload поверх backend processing services."));
+		updateJob(jobId, currentJob -> currentJob.updateProgress(20, "Подготавливаю файл к просмотру."));
 		var result = this.viewerResolveService.process(jobId, upload);
 		updateJob(
 			jobId,
-			currentJob -> currentJob.updateProgress(88, "Viewer payload собран, сохраняю unified manifest и связанные artifacts.")
+			currentJob -> currentJob.updateProgress(88, "Сохраняю данные просмотра и связанные файлы.")
 		);
 		return new JobProcessingResult(
-			"Viewer resolve готов через backend %s.".formatted(result.runtimeLabel()),
+			"Просмотр файла готов.",
 			result.artifacts()
 		);
 	}
 
 	private JobProcessingResult processEditor(UUID jobId, StoredUpload upload, EditorRequest request) {
-		updateJob(jobId, currentJob -> currentJob.updateProgress(22, "Подготавливаю backend editor diagnostics и export pipeline."));
+		updateJob(jobId, currentJob -> currentJob.updateProgress(22, "Проверяю документ и готовлю файлы для редактора."));
 		var result = this.editorProcessingService.process(jobId, upload, request);
 		updateJob(
 			jobId,
-			currentJob -> currentJob.updateProgress(88, "Editor manifest и export artifacts собраны, сохраняю результат.")
+			currentJob -> currentJob.updateProgress(88, "Сохраняю результаты проверки и экспорта.")
 		);
 		return new JobProcessingResult(
-			"Editor processing готов через backend %s.".formatted(result.runtimeLabel()),
+			"Подготовка документа для редактора завершена.",
 			result.artifacts()
 		);
 	}
@@ -351,8 +429,8 @@ public class ProcessingJobService {
 				Files.probeContentType(upload.storagePath()),
 				upload.createdAt(),
 				List.of(
-					"Это foundation artifact: backend пока не декодирует формат, а подтверждает intake/storage/job flow.",
-					"Следующие фазы навесят на этот же job pipeline ffmpeg, imaging и document adapters."
+					"Файл успешно принят сервисом и готов к дальнейшей обработке.",
+					"В манифесте сохранены основные параметры файла, чтобы с ним можно было продолжить работу на следующих шагах."
 				)
 			);
 			return this.artifactStorageService.storeJsonArtifact(jobId, "upload-manifest", "upload-intake-manifest.json", payload);
@@ -378,14 +456,14 @@ public class ProcessingJobService {
 		) {
 			throw new ResponseStatusException(
 				HttpStatus.BAD_REQUEST,
-				"Этот job type уже описан в backend plan, но ещё не реализован в текущем foundation-срезе."
+				"Этот сценарий сейчас недоступен."
 			);
 		}
 
 		if (jobType == ProcessingJobType.MEDIA_PREVIEW && !this.mediaPreviewService.isAvailable()) {
 			throw new ResponseStatusException(
 				HttpStatus.SERVICE_UNAVAILABLE,
-				"MEDIA_PREVIEW job требует доступных ffmpeg/ffprobe binaries в backend окружении."
+				"Предпросмотр медиа сейчас недоступен в этом окружении."
 			);
 		}
 
@@ -394,7 +472,7 @@ public class ProcessingJobService {
 			if (!this.mediaConversionService.isAvailable()) {
 				throw new ResponseStatusException(
 					HttpStatus.SERVICE_UNAVAILABLE,
-					"MEDIA_CONVERT job требует доступных ffmpeg/ffprobe binaries в backend окружении."
+					"Конвертация медиа сейчас недоступна в этом окружении."
 				);
 			}
 		}
@@ -404,7 +482,7 @@ public class ProcessingJobService {
 			if (!this.imageProcessingService.isAvailable()) {
 				throw new ResponseStatusException(
 					HttpStatus.SERVICE_UNAVAILABLE,
-					"IMAGE_CONVERT job требует доступных convert/ffmpeg/potrace/raw-preview binaries в backend окружении."
+					"Обработка изображений сейчас недоступна в этом окружении."
 				);
 			}
 		}
@@ -414,7 +492,7 @@ public class ProcessingJobService {
 			if (!this.compressionService.isAvailableFor(upload)) {
 				throw new ResponseStatusException(
 					HttpStatus.SERVICE_UNAVAILABLE,
-					"FILE_COMPRESS job недоступен для этого upload в текущем backend окружении."
+					"Сжатие недоступно для этого файла в текущем окружении."
 				);
 			}
 		}
@@ -424,7 +502,7 @@ public class ProcessingJobService {
 			if (!this.pdfToolkitService.isAvailableFor(upload)) {
 				throw new ResponseStatusException(
 					HttpStatus.SERVICE_UNAVAILABLE,
-					"PDF_TOOLKIT job недоступен для этого upload в текущем backend окружении."
+					"Операции PDF сейчас недоступны для этого файла."
 				);
 			}
 		}
@@ -434,7 +512,7 @@ public class ProcessingJobService {
 			if (!this.officeConversionService.isAvailable()) {
 				throw new ResponseStatusException(
 					HttpStatus.SERVICE_UNAVAILABLE,
-					"OFFICE_CONVERT job требует доступного backend office/document conversion service."
+					"Конвертация документов сейчас недоступна в этом окружении."
 				);
 			}
 		}
@@ -442,7 +520,7 @@ public class ProcessingJobService {
 		if (jobType == ProcessingJobType.DOCUMENT_PREVIEW && !this.documentPreviewService.isAvailable()) {
 			throw new ResponseStatusException(
 				HttpStatus.SERVICE_UNAVAILABLE,
-				"DOCUMENT_PREVIEW job требует доступного backend document intelligence service."
+				"Просмотр документа сейчас недоступен в этом окружении."
 			);
 		}
 
@@ -451,7 +529,7 @@ public class ProcessingJobService {
 			if (!this.metadataProcessingService.isAvailable()) {
 				throw new ResponseStatusException(
 					HttpStatus.SERVICE_UNAVAILABLE,
-					"METADATA_EXPORT job требует доступного backend metadata service."
+					"Операции с метаданными сейчас недоступны в этом окружении."
 				);
 			}
 		}
@@ -459,7 +537,7 @@ public class ProcessingJobService {
 		if (jobType == ProcessingJobType.VIEWER_RESOLVE && !this.viewerResolveService.isAvailableFor(upload)) {
 			throw new ResponseStatusException(
 				HttpStatus.SERVICE_UNAVAILABLE,
-				"VIEWER_RESOLVE job недоступен для этого upload в текущем backend окружении."
+				"Просмотр этого файла сейчас недоступен в текущем окружении."
 			);
 		}
 
@@ -469,7 +547,7 @@ public class ProcessingJobService {
 			if (!this.editorProcessingService.isAvailable()) {
 				throw new ResponseStatusException(
 					HttpStatus.SERVICE_UNAVAILABLE,
-					"EDITOR_PROCESS job требует доступного backend editor processing service."
+					"Подготовка документа для редактора сейчас недоступна."
 				);
 			}
 		}
@@ -480,27 +558,43 @@ public class ProcessingJobService {
 	}
 
 	private void completeJob(UUID jobId, JobProcessingResult result) {
+		var completed = new AtomicBoolean(false);
 		this.jobs.compute(jobId, (ignored, currentJob) -> {
 			if (currentJob == null || currentJob.status() == ProcessingJobStatus.CANCELLED) {
 				return currentJob;
 			}
 
+			completed.set(true);
 			return currentJob.complete(
 				Instant.now(),
 				result.message(),
 				result.artifacts()
 			);
 		});
+		if (completed.get()) {
+			this.completedJobsCounter.increment();
+		}
 	}
 
 	private void failJob(UUID jobId, Exception exception) {
+		var failed = new AtomicBoolean(false);
 		this.jobs.compute(jobId, (ignored, currentJob) -> {
 			if (currentJob == null || currentJob.status() == ProcessingJobStatus.CANCELLED) {
 				return currentJob;
 			}
 
+			failed.set(true);
 			return currentJob.fail(Instant.now(), resolveErrorMessage(exception));
 		});
+		if (failed.get()) {
+			this.failedJobsCounter.increment();
+		}
+	}
+
+	private long countJobsByStatus(ProcessingJobStatus status) {
+		return this.jobs.values().stream()
+			.filter(job -> job.status() == status)
+			.count();
 	}
 
 	private void throwIfCancellationRequested(UUID jobId) {
@@ -525,18 +619,18 @@ public class ProcessingJobService {
 
 	private String startMessage(ProcessingJobType jobType) {
 		return switch (jobType) {
-			case UPLOAD_INTAKE_ANALYSIS -> "Начинаю intake-analysis для backend processing foundation.";
-			case MEDIA_PREVIEW -> "Запускаю backend media preview pipeline через ffprobe/ffmpeg.";
-			case MEDIA_CONVERT -> "Запускаю backend media conversion pipeline через ffprobe/ffmpeg.";
-			case IMAGE_CONVERT -> "Запускаю backend imaging pipeline через convert/ffmpeg/potrace.";
-			case FILE_COMPRESS -> "Запускаю backend compression orchestration поверх image/media processing services.";
-			case PDF_TOOLKIT -> "Запускаю backend PDF toolkit orchestration для page-aware document flows.";
-			case OFFICE_CONVERT -> "Запускаю backend office/pdf conversion pipeline.";
-			case DOCUMENT_PREVIEW -> "Запускаю backend document intelligence pipeline.";
-			case METADATA_EXPORT -> "Запускаю backend metadata inspect/export pipeline.";
-			case VIEWER_RESOLVE -> "Запускаю backend viewer resolve pipeline поверх processing services.";
-			case EDITOR_PROCESS -> "Запускаю backend editor diagnostics/export pipeline.";
-			default -> "Запускаю backend processing job.";
+			case UPLOAD_INTAKE_ANALYSIS -> "Подготавливаю сведения о файле.";
+			case MEDIA_PREVIEW -> "Подготавливаю предпросмотр медиа.";
+			case MEDIA_CONVERT -> "Запускаю конвертацию медиа.";
+			case IMAGE_CONVERT -> "Запускаю обработку изображения.";
+			case FILE_COMPRESS -> "Запускаю сжатие файла.";
+			case PDF_TOOLKIT -> "Запускаю операцию с PDF.";
+			case OFFICE_CONVERT -> "Запускаю конвертацию документа.";
+			case DOCUMENT_PREVIEW -> "Подготавливаю документ к просмотру.";
+			case METADATA_EXPORT -> "Подготавливаю операцию с метаданными.";
+			case VIEWER_RESOLVE -> "Подготавливаю файл к просмотру.";
+			case EDITOR_PROCESS -> "Подготавливаю документ для редактора.";
+			default -> "Запускаю обработку файла.";
 		};
 	}
 

@@ -70,53 +70,53 @@ public class CapabilityCatalogService {
 			"viewer",
 			"viewer-backend-first",
 			List.of(
-				new JobTypeCapability(ProcessingJobType.UPLOAD_INTAKE_ANALYSIS, true, "Backend уже умеет принять файл, создать job и собрать manifest artifact."),
+				new JobTypeCapability(ProcessingJobType.UPLOAD_INTAKE_ANALYSIS, true, "Сервис уже умеет принять файл и подготовить его к обработке."),
 				new JobTypeCapability(
 					ProcessingJobType.MEDIA_PREVIEW,
 					mediaPreviewAvailable,
 					mediaPreviewAvailable
-						? "Backend уже умеет собирать browser-friendly audio/video preview через ffmpeg/ffprobe."
-						: "Media preview service требует доступных ffmpeg/ffprobe binaries в backend окружении."
+						? "Сервис уже умеет подготавливать совместимый предпросмотр аудио и видео."
+						: "Для предпросмотра аудио и видео нужны доступные ffmpeg и ffprobe."
 				),
 				new JobTypeCapability(
 					ProcessingJobType.IMAGE_CONVERT,
 					imageProcessingAvailable,
 					imageProcessingAvailable
-						? "Backend уже умеет собирать HEIC/TIFF/RAW preview и heavy image conversion через convert/ffmpeg/potrace/libraw."
-						: "Image processing service требует доступных convert/ffmpeg/potrace/raw-preview binaries в backend окружении."
+						? "Сервис уже умеет открывать сложные графические форматы и готовить их к просмотру."
+						: "Для обработки изображений нужны доступные convert, ffmpeg, potrace и raw-preview."
 				),
 				new JobTypeCapability(
 					ProcessingJobType.OFFICE_CONVERT,
 					officeConversionAvailable,
 					officeConversionAvailable
-						? "Backend уже умеет собирать office/pdf conversion artifacts для DOC/DOCX/RTF/ODT/XLSX/ODS/PDF/PPTX сценариев."
-						: "Office conversion service пока недоступна в текущем backend окружении."
+						? "Сервис уже умеет готовить документы, таблицы и презентации к просмотру и конвертации."
+						: "Сейчас недоступна подготовка офисных документов и PDF."
 				),
 				new JobTypeCapability(
 					ProcessingJobType.DOCUMENT_PREVIEW,
 					documentPreviewAvailable,
 					documentPreviewAvailable
-						? "Backend уже умеет собирать structured document payload для PDF/TXT/CSV/HTML/RTF/DOC/DOCX/ODT/XLS/XLSX/PPTX/EPUB/SQLite."
-						: "Document intelligence service сейчас недоступна в текущем backend окружении."
+						? "Сервис уже умеет собирать текст, структуру и факты по документам."
+						: "Сейчас недоступен расширенный просмотр документов."
 				),
 				new JobTypeCapability(
 					ProcessingJobType.METADATA_EXPORT,
 					metadataProcessingAvailable,
 					metadataProcessingAvailable
-						? "Backend уже умеет читать image/audio metadata и собирать validated metadata export для image files."
-						: "Metadata service сейчас недоступна в текущем backend окружении."
+						? "Сервис уже умеет читать и сохранять метаданные изображений и аудио."
+						: "Сейчас недоступна работа с метаданными."
 				),
 				new JobTypeCapability(
 					ProcessingJobType.VIEWER_RESOLVE,
 					viewerResolveAvailable,
 					viewerResolveAvailable
-						? "Backend viewer route теперь сводит server-assisted non-native formats к единому VIEWER_RESOLVE manifest и reuse existing artifacts."
-						: "VIEWER_RESOLVE сейчас недоступен: для конкретных форматов не хватает media/image/document/metadata foundation services."
+						? "Viewer уже умеет собирать единый маршрут просмотра для сложных форматов."
+						: "Сейчас недоступна подготовка просмотра для части сложных форматов."
 				)
 			),
 			List.of(
-				"Viewer route теперь backend-first для всех server-assisted non-native formats: frontend запрашивает единый VIEWER_RESOLVE payload и рендерит уже готовый contract.",
-				"Backend отдаёт format matrix как источник правды, а browser оставляет у себя только native rendering, state и interaction tooling."
+				"Viewer подготавливает сложные форматы на сервере и открывает их в едином рабочем окне.",
+				"Браузер отвечает за отображение, поиск и взаимодействие, а тяжёлая подготовка остаётся на стороне сервиса."
 			),
 			this.capabilityMatrixService.viewerMatrix(availabilityByJobType),
 			null,
@@ -140,53 +140,53 @@ public class CapabilityCatalogService {
 			"converter",
 			"converter-backend-first",
 			List.of(
-				new JobTypeCapability(ProcessingJobType.UPLOAD_INTAKE_ANALYSIS, true, "Можно использовать как preflight перед backend-first conversion jobs и диагностикой intake stage."),
+				new JobTypeCapability(ProcessingJobType.UPLOAD_INTAKE_ANALYSIS, true, "Файл можно заранее проверить и подготовить перед конвертацией."),
 				new JobTypeCapability(
 					ProcessingJobType.IMAGE_CONVERT,
 					imageProcessingAvailable,
 					imageProcessingAvailable
-						? "Converter backend-first route уже гонит supported scenarios через IMAGE_CONVERT jobs с preview/result artifacts."
-						: "Image processing service требует доступных convert/ffmpeg/potrace/raw-preview binaries и пока не активна в текущем окружении."
+						? "Конвертер уже умеет обрабатывать изображения и отдавать готовый результат с предпросмотром."
+						: "Сейчас недоступна серверная обработка изображений."
 				),
 				new JobTypeCapability(
 					ProcessingJobType.OFFICE_CONVERT,
 					officeConversionAvailable,
 					officeConversionAvailable
-						? "Converter route теперь может гнать office/pdf scenarios через OFFICE_CONVERT jobs с preview/result artifacts."
-						: "Office conversion service пока недоступна и office/pdf scenarios не могут быть включены в converter matrix."
+						? "Конвертер уже умеет обрабатывать офисные файлы и PDF."
+						: "Сейчас недоступна конвертация офисных файлов и PDF."
 				),
 				new JobTypeCapability(
 					ProcessingJobType.MEDIA_PREVIEW,
 					mediaPreviewAvailable,
 					mediaPreviewAvailable
-						? "Media preview foundation уже поднята и будет переиспользована для converter/compression flows."
-						: "Media preview foundation требует доступных ffmpeg/ffprobe binaries и пока не активна в текущем окружении."
+						? "Предпросмотр медиа уже доступен для сценариев конвертации и сжатия."
+						: "Для предпросмотра медиа нужны доступные ffmpeg и ffprobe."
 				),
 				new JobTypeCapability(
 					ProcessingJobType.MEDIA_CONVERT,
 					mediaConversionAvailable,
 					mediaConversionAvailable
-						? "Converter route уже умеет гнать video/audio delivery-сценарии через MEDIA_CONVERT jobs с preview/result artifacts."
-						: "Media conversion foundation требует доступных ffmpeg/ffprobe binaries и пока не активна в текущем окружении."
+						? "Конвертер уже умеет обрабатывать видео и аудио."
+						: "Сейчас недоступна конвертация видео и аудио."
 				),
 				new JobTypeCapability(
 					ProcessingJobType.DOCUMENT_PREVIEW,
 					documentPreviewAvailable,
 					documentPreviewAvailable
-						? "Document preview contract уже поднят и готов к переиспользованию в PDF toolkit/editor/converter flows."
-						: "Document intelligence service пока недоступна и не может переиспользоваться в converter-related сценариях."
+						? "Расширенный просмотр документов уже готов для смежных сценариев."
+						: "Сейчас недоступен расширенный просмотр документов."
 				),
 				new JobTypeCapability(
 					ProcessingJobType.METADATA_EXPORT,
 					metadataProcessingAvailable,
 					metadataProcessingAvailable
-						? "Metadata inspect/export service уже поднята и может переиспользоваться в следующих editor/converter сценариях."
-						: "Metadata service пока недоступна и не может переиспользоваться в converter-related сценариях."
+						? "Сервис метаданных уже доступен для смежных сценариев."
+						: "Сейчас недоступна работа с метаданными."
 				)
 			),
 			List.of(
-				"Converter route теперь backend-first: image scenarios идут через IMAGE_CONVERT, office/pdf scenarios через OFFICE_CONVERT, а video/audio scenarios через MEDIA_CONVERT; browser остаётся orchestration/preview слоем.",
-				"Workspace может строить progress, retry, cancel и artifact reuse поверх единых job status и capability rules от backend."
+				"Converter обрабатывает изображения, документы, таблицы, презентации, видео и аудио в одном окне.",
+				"Пользователь видит прогресс, предпросмотр и итоговый файл без ручной настройки внутренних маршрутов."
 			),
 			null,
 			null,
@@ -208,39 +208,39 @@ public class CapabilityCatalogService {
 			"compression",
 			"compression-backend-first",
 			List.of(
-				new JobTypeCapability(ProcessingJobType.UPLOAD_INTAKE_ANALYSIS, true, "Upload intake уже даёт общий foundation для size-first jobs и artifact reuse."),
+				new JobTypeCapability(ProcessingJobType.UPLOAD_INTAKE_ANALYSIS, true, "Файл можно сразу подготовить к сжатию и повторным попыткам."),
 				new JobTypeCapability(
 					ProcessingJobType.FILE_COMPRESS,
 					compressionAvailable,
 					compressionAvailable
-						? "Compression route уже поднимает maximum reduction, target-size и custom limit orchestration поверх existing image/media services."
-						: "Compression route сейчас недоступен: для поддержанных file families не хватает backend image/media foundation."
+						? "Compression уже умеет подбирать лучший вариант под лимит размера или ручные ограничения."
+						: "Сейчас недоступно сжатие файлов в выбранной среде."
 				),
 				new JobTypeCapability(
 					ProcessingJobType.IMAGE_CONVERT,
 					imageProcessingAvailable,
 					imageProcessingAvailable
-						? "Compression reuse'ит IMAGE_CONVERT как внутренний candidate builder для image formats."
-						: "Image processing foundation сейчас недоступна и блокирует image compression scenarios."
+						? "Обработка изображений уже доступна для сценариев сжатия."
+						: "Сейчас недоступна обработка изображений для сжатия."
 				),
 				new JobTypeCapability(
 					ProcessingJobType.MEDIA_CONVERT,
 					mediaConversionAvailable,
 					mediaConversionAvailable
-						? "Compression reuse'ит MEDIA_CONVERT для video/audio bitrate targeting и финальных delivery artifacts."
-						: "Media conversion foundation сейчас недоступна и блокирует video/audio compression scenarios."
+						? "Обработка медиа уже доступна для сценариев сжатия."
+						: "Сейчас недоступна обработка видео и аудио для сжатия."
 				),
 				new JobTypeCapability(
 					ProcessingJobType.MEDIA_PREVIEW,
 					mediaPreviewAvailable,
 					mediaPreviewAvailable
-						? "Media preview foundation остаётся доступной для preview-aware media reuse и связанных future slices."
-						: "Media preview foundation сейчас недоступна и ограничивает media-side reuse."
+						? "Предпросмотр медиа уже доступен для сценариев сжатия."
+						: "Сейчас недоступен предпросмотр медиа."
 				)
 			),
 			List.of(
-				"Compression route отделён от converter: пользователь формулирует size goal и quality limits, а backend сам подбирает candidate ladder и возвращает единый compression manifest.",
-				"Внутри route reuse'ит IMAGE_CONVERT и MEDIA_CONVERT как временные candidates, но наружу отдаёт только один result/preview contract без дублирования job history в UI."
+				"Compression решает задачу уменьшения файла отдельно от обычной конвертации.",
+				"Сервис сам перебирает варианты и возвращает один лучший результат с историей попыток."
 			),
 			null,
 			this.compressionCapabilityMatrixService.compressionMatrix(availabilityByJobType),
@@ -263,46 +263,46 @@ public class CapabilityCatalogService {
 			"pdf-toolkit",
 			"pdf-toolkit-backend-first",
 			List.of(
-				new JobTypeCapability(ProcessingJobType.UPLOAD_INTAKE_ANALYSIS, true, "Upload intake остаётся общим foundation для PDF import, merge stack и follow-up reuse."),
+				new JobTypeCapability(ProcessingJobType.UPLOAD_INTAKE_ANALYSIS, true, "Файл можно заранее подготовить для импорта в PDF и следующих операций."),
 				new JobTypeCapability(
 					ProcessingJobType.PDF_TOOLKIT,
 					pdfToolkitAvailable,
 					pdfToolkitAvailable
-						? "Backend уже умеет merge/split/rotate/reorder/OCR/sign/redact/protect/unlock операции как отдельный PDF_TOOLKIT route."
-						: "PDF toolkit route сейчас недоступен в текущем backend окружении."
+						? "PDF Toolkit уже умеет объединять, разделять, поворачивать, распознавать и защищать документы."
+						: "Сейчас недоступен модуль PDF Toolkit."
 				),
 				new JobTypeCapability(
 					ProcessingJobType.VIEWER_RESOLVE,
 					viewerResolveAvailable,
 					viewerResolveAvailable
-						? "PDF toolkit reuse'ит VIEWER_RESOLVE для preview и page-aware viewing flow."
-						: "VIEWER_RESOLVE сейчас недоступен и PDF viewer stage не сможет загрузить unified preview contract."
+						? "Просмотр страниц уже доступен для работы с PDF."
+						: "Сейчас недоступна подготовка просмотра PDF."
 				),
 				new JobTypeCapability(
 					ProcessingJobType.DOCUMENT_PREVIEW,
 					documentPreviewAvailable,
 					documentPreviewAvailable
-						? "Document preview foundation уже даёт page count, search layer и warnings для PDF workspace."
-						: "DOCUMENT_PREVIEW сейчас недоступен и PDF summary/search stage будет ограничен."
+						? "Сводка, поиск и факты по PDF уже доступны."
+						: "Сейчас недоступны поиск и сводка по PDF."
 				),
 				new JobTypeCapability(
 					ProcessingJobType.IMAGE_CONVERT,
 					imageProcessingAvailable,
 					imageProcessingAvailable
-						? "Image convert foundation уже может заводить image-family sources в import-to-PDF flow перед pdf-toolkit."
-						: "IMAGE_CONVERT сейчас недоступен и image -> PDF intake будет выключен."
+						? "Импорт изображений в PDF уже доступен."
+						: "Сейчас недоступен импорт изображений в PDF."
 				),
 				new JobTypeCapability(
 					ProcessingJobType.OFFICE_CONVERT,
 					officeConversionAvailable,
 					officeConversionAvailable
-						? "Office convert foundation уже может заводить office/PDF-compatible document flows в pdf-toolkit workspace."
-						: "OFFICE_CONVERT сейчас недоступен и office -> PDF intake будет выключен."
+						? "Импорт офисных файлов в PDF уже доступен."
+						: "Сейчас недоступен импорт офисных файлов в PDF."
 				)
 			),
 			List.of(
-				"PDF toolkit теперь отдельный backend-first route: page-aware операции, OCR, redaction и protection живут в PDF_TOOLKIT job вместо browser-side mutation.",
-				"Workspace reuse'ит converter routes для import-to-PDF, VIEWER_RESOLVE для preview и upload/job/artifact foundation для follow-up editing flows."
+				"PDF Toolkit собирает просмотр, импорт и операции с PDF в одном рабочем окне.",
+				"Здесь можно открыть документ, выполнить действие и сразу перейти к следующему шагу без ручных обходов."
 			),
 			null,
 			null,
@@ -325,26 +325,26 @@ public class CapabilityCatalogService {
 				new JobTypeCapability(
 					ProcessingJobType.UPLOAD_INTAKE_ANALYSIS,
 					true,
-					"Upload intake остаётся базовым foundation для editor export/diff/diagnostics jobs."
+					"Файл уже можно подготовить для проверки и экспорта из редактора."
 				),
 				new JobTypeCapability(
 					ProcessingJobType.DOCUMENT_PREVIEW,
 					documentPreviewAvailable,
 					documentPreviewAvailable
-						? "Editor reuse'ит DOCUMENT_PREVIEW там, где уже готов structured text/html contract и outline extraction."
-						: "DOCUMENT_PREVIEW сейчас недоступен и часть html/plain-text editor hints будет ограничена."
+						? "Подготовка текста и структуры уже доступна для редактора."
+						: "Сейчас ограничены подсказки и сводка по документу."
 				),
 				new JobTypeCapability(
 					ProcessingJobType.EDITOR_PROCESS,
 					editorProcessingAvailable,
 					editorProcessingAvailable
-						? "Backend editor route уже умеет собирать diagnostics, safe export artifacts и format-aware outline для text-centric formats."
-						: "EDITOR_PROCESS сейчас недоступен в текущем backend окружении."
+						? "Редактор уже умеет собирать замечания, структуру и готовый экспорт."
+						: "Сейчас недоступна серверная проверка черновика."
 				)
 			),
 			List.of(
-				"Editor route держит interaction, formatting и shortcut flow на frontend, а backend владеет diagnostics, sanitization-aware checks и export artifact contract.",
-				"Markdown/HTML/CSS preview остаются мгновенными в браузере, но validate/export шаг уходит в EDITOR_PROCESS job вместо ad-hoc local blobs."
+				"Редактор оставляет быстрые правки и превью в браузере, а проверку и экспорт доверяет сервису.",
+				"Так пользователь получает знакомую рабочую зону и более надёжный результат на выходе."
 			),
 			null,
 			null,
@@ -361,81 +361,81 @@ public class CapabilityCatalogService {
 			"platform",
 			"processing-platform",
 			List.of(
-				new JobTypeCapability(ProcessingJobType.UPLOAD_INTAKE_ANALYSIS, true, "Upload intake уже даёт общий foundation для новых thin features поверх processing platform."),
+				new JobTypeCapability(ProcessingJobType.UPLOAD_INTAKE_ANALYSIS, true, "Платформа уже умеет принимать файлы для новых модулей."),
 				new JobTypeCapability(
 					ProcessingJobType.FILE_COMPRESS,
 					availabilityByJobType.getOrDefault(ProcessingJobType.FILE_COMPRESS, false),
 					availabilityByJobType.getOrDefault(ProcessingJobType.FILE_COMPRESS, false)
-						? "Dedicated compression orchestration уже поднята и закрывает size-first product route поверх image/media services."
-						: "Compression orchestration ещё не поднята как отдельный product route поверх existing processing foundation."
+						? "Модуль Compression уже доступен как отдельный продуктовый сценарий."
+						: "Модуль Compression сейчас недоступен."
 				),
 				new JobTypeCapability(
 					ProcessingJobType.PDF_TOOLKIT,
 					availabilityByJobType.getOrDefault(ProcessingJobType.PDF_TOOLKIT, false),
 					availabilityByJobType.getOrDefault(ProcessingJobType.PDF_TOOLKIT, false)
-						? "Dedicated PDF toolkit route уже поднят и закрывает page editing, OCR, redact и protection flows поверх processing platform."
-						: "PDF toolkit route ещё не поднят как отдельный product route поверх document/viewer foundation."
+						? "Модуль PDF Toolkit уже доступен как отдельный продуктовый сценарий."
+						: "Модуль PDF Toolkit сейчас недоступен."
 				),
 				new JobTypeCapability(
 					ProcessingJobType.MEDIA_PREVIEW,
 					availabilityByJobType.getOrDefault(ProcessingJobType.MEDIA_PREVIEW, false),
 					availabilityByJobType.getOrDefault(ProcessingJobType.MEDIA_PREVIEW, false)
-						? "Media preview foundation уже готова к reuse в compression, batch и future delivery flows."
-						: "Для reuse media foundation нужны доступные ffmpeg/ffprobe binaries."
+						? "Предпросмотр медиа уже доступен для текущих и следующих сценариев."
+						: "Для предпросмотра медиа нужны доступные ffmpeg и ffprobe."
 				),
 				new JobTypeCapability(
 					ProcessingJobType.MEDIA_CONVERT,
 					availabilityByJobType.getOrDefault(ProcessingJobType.MEDIA_CONVERT, false),
 					availabilityByJobType.getOrDefault(ProcessingJobType.MEDIA_CONVERT, false)
-						? "Media conversion foundation уже готова к reuse в converter, compression и future delivery/export flows."
-						: "Для reuse media conversion foundation нужны доступные ffmpeg/ffprobe binaries."
+						? "Конвертация медиа уже доступна для текущих и следующих сценариев."
+						: "Для конвертации медиа нужны доступные ffmpeg и ffprobe."
 				),
 				new JobTypeCapability(
 					ProcessingJobType.IMAGE_CONVERT,
 					availabilityByJobType.getOrDefault(ProcessingJobType.IMAGE_CONVERT, false),
 					availabilityByJobType.getOrDefault(ProcessingJobType.IMAGE_CONVERT, false)
-						? "Image processing foundation уже готова к reuse в compression, OCR, PDF toolkit и batch conversion."
-						: "Для reuse imaging foundation нужны доступные convert/ffmpeg/potrace/raw-preview binaries."
+						? "Обработка изображений уже доступна для текущих и следующих сценариев."
+						: "Для обработки изображений нужны доступные convert, ffmpeg, potrace и raw-preview."
 				),
 				new JobTypeCapability(
 					ProcessingJobType.OFFICE_CONVERT,
 					availabilityByJobType.getOrDefault(ProcessingJobType.OFFICE_CONVERT, false),
 					availabilityByJobType.getOrDefault(ProcessingJobType.OFFICE_CONVERT, false)
-						? "Office conversion foundation уже готова к reuse в converter, PDF toolkit и future delivery/export flows."
-						: "Office conversion foundation сейчас недоступна и блокирует document-roundtrip reuse."
+						? "Обработка офисных файлов уже доступна для текущих и следующих сценариев."
+						: "Сейчас недоступна обработка офисных файлов."
 				),
 				new JobTypeCapability(
 					ProcessingJobType.DOCUMENT_PREVIEW,
 					availabilityByJobType.getOrDefault(ProcessingJobType.DOCUMENT_PREVIEW, false),
 					availabilityByJobType.getOrDefault(ProcessingJobType.DOCUMENT_PREVIEW, false)
-						? "Document intelligence foundation уже готова к reuse в PDF toolkit, editor, OCR и office conversion."
-						: "Document intelligence foundation сейчас недоступна и блокирует document-centric reuse."
+						? "Расширенный просмотр документов уже доступен для текущих и следующих сценариев."
+						: "Сейчас недоступен расширенный просмотр документов."
 				),
 				new JobTypeCapability(
 					ProcessingJobType.METADATA_EXPORT,
 					availabilityByJobType.getOrDefault(ProcessingJobType.METADATA_EXPORT, false),
 					availabilityByJobType.getOrDefault(ProcessingJobType.METADATA_EXPORT, false)
-						? "Metadata foundation уже готова к reuse в editor/export и quality-aware processing flows."
-						: "Metadata foundation сейчас недоступна и ограничивает export/validation reuse."
+						? "Работа с метаданными уже доступна для текущих и следующих сценариев."
+						: "Сейчас недоступна работа с метаданными."
 				),
 				new JobTypeCapability(
 					ProcessingJobType.VIEWER_RESOLVE,
 					availabilityByJobType.getOrDefault(ProcessingJobType.VIEWER_RESOLVE, false),
 					availabilityByJobType.getOrDefault(ProcessingJobType.VIEWER_RESOLVE, false)
-						? "Unified viewer route уже даёт reusable file-resolve contract для новых product modules."
-						: "VIEWER_RESOLVE сейчас недоступен и часть future module entry points останется fragmented."
+						? "Единый маршрут просмотра уже доступен для новых модулей."
+						: "Сейчас недоступна единая подготовка просмотра."
 				),
 				new JobTypeCapability(
 					ProcessingJobType.EDITOR_PROCESS,
 					availabilityByJobType.getOrDefault(ProcessingJobType.EDITOR_PROCESS, false),
 					availabilityByJobType.getOrDefault(ProcessingJobType.EDITOR_PROCESS, false)
-						? "Editor diagnostics/export route уже поднят и закрывает text-centric validate/export reuse поверх processing platform."
-						: "EDITOR_PROCESS сейчас недоступен и editor module не сможет работать как backend-first route."
+						? "Сценарии проверки и экспорта из редактора уже доступны."
+						: "Сейчас недоступна серверная проверка и экспорт из редактора."
 				)
 			),
 			List.of(
-				"Финальный platform-срез закрывается не новым browser runtime, а reusable processing platform contract для следующих roadmap-модулей.",
-				"Новые модули должны стартовать как thin features поверх upload/job/artifact/capability foundation и добавлять только свою product-specific orchestration."
+				"Платформа уже объединяет общие сценарии загрузки, подготовки и выдачи результата для нескольких модулей.",
+				"Новые инструменты можно строить поверх этих готовых возможностей без дублирования базовой логики."
 			),
 			null,
 			null,

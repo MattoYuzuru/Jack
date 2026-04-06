@@ -67,14 +67,14 @@ public class EditorProcessingService {
 			"CSS_BEHAVIOR",
 			Pattern.compile("(?i)behavior\\s*:"),
 			"CSS использует legacy behavior:, который стоит исключить из modern delivery.",
-			"Удалите behavior: или перенесите нужное поведение в JS runtime."
+			"Удалите behavior: или перенесите нужное поведение в JavaScript."
 		),
 		new PatternIssueRule(
 			"info",
 			"CSS_REMOTE_IMPORT",
 			Pattern.compile("(?i)@import\\s+url\\((['\"])?https?://"),
 			"CSS тянет внешний @import, что может влиять на preview-поведение и стабильность.",
-			"Подумайте о локальном asset pipeline или preload стратегии."
+			"Лучше подключить ресурс локально или подготовить его заранее, чтобы экран загружался стабильнее."
 		),
 		new PatternIssueRule(
 			"warning",
@@ -168,7 +168,7 @@ public class EditorProcessingService {
 			format.label(),
 			format.syntaxMode(),
 			format.previewMode(),
-			"Editor diagnostics service",
+			"Проверка черновика",
 			List.copyOf(summary),
 			List.copyOf(deduplicateIssues(issues)),
 			List.copyOf(outline),
@@ -203,7 +203,7 @@ public class EditorProcessingService {
 			)
 		);
 
-		return new EditorProcessingResult(artifacts, "Editor diagnostics service");
+		return new EditorProcessingResult(artifacts, "Проверка черновика");
 	}
 
 	private String buildPlainTextExport(
@@ -285,7 +285,7 @@ public class EditorProcessingService {
 				"HTML содержит <script>, который в preview будет отключён и требует отдельной security-проверки.",
 				null,
 				null,
-				"Для embed-preview лучше вынести интерактивность в отдельный runtime."
+				"Лучше вынести интерактивность в отдельный скрипт и подключать её осознанно."
 			));
 		}
 		if (!document.select("[onload], [onclick], [onchange], [onsubmit], [onerror], [onmouseover]").isEmpty()) {
@@ -295,14 +295,14 @@ public class EditorProcessingService {
 				"HTML содержит inline event handlers.",
 				null,
 				null,
-				"Перенесите DOM events в JS runtime вместо inline on* атрибутов."
+				"Перенесите обработчики событий в JavaScript вместо inline on* атрибутов."
 			));
 		}
 		if (!document.select("iframe, object, embed").isEmpty()) {
 			issues.add(new EditorPayloads.EditorIssue(
 				"warning",
 				"HTML_EMBED_TAG",
-				"HTML содержит embedded runtime-теги вроде iframe/object/embed.",
+				"HTML содержит встроенные элементы вроде iframe, object или embed.",
 				null,
 				null,
 				"Проверьте sandbox policy и origin доверия перед публикацией."
@@ -822,7 +822,7 @@ public class EditorProcessingService {
 	}
 
 	private String resolveJsonExceptionMessage(JsonProcessingException exception) {
-		return exception.getOriginalMessage() == null ? "Неизвестная JSON parse ошибка." : exception.getOriginalMessage();
+		return exception.getOriginalMessage() == null ? "Не удалось разобрать JSON." : exception.getOriginalMessage();
 	}
 
 	private String resolveYamlExceptionMessage(MarkedYAMLException exception) {

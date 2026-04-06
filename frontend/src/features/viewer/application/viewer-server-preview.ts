@@ -3,11 +3,9 @@ import {
   requestProcessingJson,
   runProcessingJob,
 } from '../../processing/application/processing-client'
+import type { ViewerAudioFact, ViewerAudioLayout } from './viewer-audio'
 import type {
-  ViewerAudioFact,
-  ViewerAudioLayout,
-} from './viewer-audio'
-import type {
+  ViewerDocumentEditableDraft,
   ViewerDocumentFact,
   ViewerDocumentLayout,
 } from './viewer-document'
@@ -28,39 +26,46 @@ type ViewerServerDocumentLayout =
   | {
       mode: 'pdf'
       pageCount: number | null
+      editableDraft: ViewerDocumentEditableDraft | null
     }
   | {
       mode: 'text'
       text: string | null
       paragraphs: string[] | null
+      editableDraft: ViewerDocumentEditableDraft | null
     }
   | {
       mode: 'table'
       text: string | null
       table: Extract<ViewerDocumentLayout, { mode: 'table' }>['table']
+      editableDraft: ViewerDocumentEditableDraft | null
     }
   | {
       mode: 'html'
       text: string | null
       srcDoc: string | null
       outline: Extract<ViewerDocumentLayout, { mode: 'html' }>['outline']
+      editableDraft: ViewerDocumentEditableDraft | null
     }
   | {
       mode: 'workbook'
       text: string | null
       sheets: Extract<ViewerDocumentLayout, { mode: 'workbook' }>['sheets']
       activeSheetIndex: number | null
+      editableDraft: ViewerDocumentEditableDraft | null
     }
   | {
       mode: 'slides'
       text: string | null
       slides: Extract<ViewerDocumentLayout, { mode: 'slides' }>['slides']
+      editableDraft: ViewerDocumentEditableDraft | null
     }
   | {
       mode: 'database'
       text: string | null
       tables: Extract<ViewerDocumentLayout, { mode: 'database' }>['tables']
       activeTableIndex: number | null
+      editableDraft: ViewerDocumentEditableDraft | null
     }
 
 interface ViewerServerImagePayload {
@@ -153,9 +158,9 @@ export async function resolveServerViewerPreview(
     file,
     jobType: VIEWER_RESOLVE_JOB_TYPE,
     reportProgress,
-    createMessage: 'Создаю backend VIEWER_RESOLVE job...',
+    createMessage: 'Подготавливаю просмотр...',
     timeoutMessage:
-      'Backend VIEWER_RESOLVE job не завершился в ожидаемое время. Попробуй файл меньшего размера или проверь backend logs.',
+      'Подготовка просмотра заняла слишком много времени. Попробуй файл меньшего размера или повтори позже.',
   })
 
   const manifestArtifact = completedJob.artifacts.find(
@@ -163,10 +168,10 @@ export async function resolveServerViewerPreview(
   )
 
   if (!manifestArtifact) {
-    throw new Error('Backend VIEWER_RESOLVE job завершился без unified viewer manifest.')
+    throw new Error('Просмотр завершился без файла описания результата.')
   }
 
-  reportProgress?.('Загружаю unified viewer manifest и связанные artifacts с backend...')
+  reportProgress?.('Загружаю данные для просмотра...')
   const manifest = await requestProcessingJson<ViewerServerResolveManifest>(
     manifestArtifact.downloadPath,
   )
@@ -187,7 +192,7 @@ async function buildImagePayload(
   manifest: ViewerServerResolveManifest,
 ): Promise<ViewerServerResolvedPayload> {
   if (!manifest.imagePayload) {
-    throw new Error('Backend VIEWER_RESOLVE не вернул image payload.')
+    throw new Error('Не удалось получить данные изображения.')
   }
 
   const binaryArtifact = requireBinaryArtifact(manifest, 'image')
@@ -210,7 +215,7 @@ async function buildDocumentPayload(
   manifest: ViewerServerResolveManifest,
 ): Promise<ViewerServerResolvedPayload> {
   if (!manifest.documentPayload) {
-    throw new Error('Backend VIEWER_RESOLVE не вернул document payload.')
+    throw new Error('Не удалось получить данные документа.')
   }
 
   let previewObjectUrl: string | null = null
@@ -243,7 +248,7 @@ async function buildVideoPayload(
   manifest: ViewerServerResolveManifest,
 ): Promise<ViewerServerResolvedPayload> {
   if (!manifest.videoPayload) {
-    throw new Error('Backend VIEWER_RESOLVE не вернул video payload.')
+    throw new Error('Не удалось получить данные видео.')
   }
 
   const binaryArtifact = requireBinaryArtifact(manifest, 'video')
@@ -266,7 +271,7 @@ async function buildAudioPayload(
   manifest: ViewerServerResolveManifest,
 ): Promise<ViewerServerResolvedPayload> {
   if (!manifest.audioPayload) {
-    throw new Error('Backend VIEWER_RESOLVE не вернул audio payload.')
+    throw new Error('Не удалось получить данные аудио.')
   }
 
   const binaryArtifact = requireBinaryArtifact(manifest, 'audio')
@@ -286,7 +291,9 @@ async function buildAudioPayload(
       metadata: {
         ...manifest.audioPayload.layout.metadata,
         mimeType:
-          manifest.audioPayload.layout.metadata.mimeType || previewBlob.type || binaryArtifact.mediaType,
+          manifest.audioPayload.layout.metadata.mimeType ||
+          previewBlob.type ||
+          binaryArtifact.mediaType,
       },
     },
     previewLabel: manifest.previewLabel,
@@ -295,10 +302,10 @@ async function buildAudioPayload(
 
 function requireBinaryArtifact(
   manifest: ViewerServerResolveManifest,
-  kind: ViewerServerResolveManifest['kind'],
+  _kind: ViewerServerResolveManifest['kind'],
 ): ViewerServerBinaryArtifact {
   if (!manifest.binaryArtifact) {
-    throw new Error(`Backend VIEWER_RESOLVE не вернул binary artifact для ${kind} preview.`)
+    throw new Error('Не удалось получить файл для предпросмотра.')
   }
 
   return manifest.binaryArtifact
@@ -311,25 +318,28 @@ function mapDocumentLayout(
   switch (layout.mode) {
     case 'pdf':
       if (!previewObjectUrl) {
-        throw new Error('PDF layout требует backend binary artifact.')
+        throw new Error('Для PDF-предпросмотра не хватает файла результата.')
       }
 
       return {
         mode: 'pdf',
         objectUrl: previewObjectUrl,
         pageCount: layout.pageCount ?? null,
+        editableDraft: layout.editableDraft ?? null,
       }
     case 'text':
       return {
         mode: 'text',
         text: layout.text ?? '',
         paragraphs: layout.paragraphs ?? [],
+        editableDraft: layout.editableDraft ?? null,
       }
     case 'table':
       return {
         mode: 'table',
         text: layout.text ?? '',
         table: layout.table,
+        editableDraft: layout.editableDraft ?? null,
       }
     case 'html':
       if (typeof layout.srcDoc !== 'string') {
@@ -341,6 +351,7 @@ function mapDocumentLayout(
         text: layout.text ?? '',
         srcDoc: layout.srcDoc,
         outline: layout.outline ?? [],
+        editableDraft: layout.editableDraft ?? null,
       }
     case 'workbook':
       return {
@@ -348,12 +359,14 @@ function mapDocumentLayout(
         text: layout.text ?? '',
         sheets: layout.sheets ?? [],
         activeSheetIndex: layout.activeSheetIndex ?? 0,
+        editableDraft: layout.editableDraft ?? null,
       }
     case 'slides':
       return {
         mode: 'slides',
         text: layout.text ?? '',
         slides: layout.slides ?? [],
+        editableDraft: layout.editableDraft ?? null,
       }
     case 'database':
       return {
@@ -361,6 +374,7 @@ function mapDocumentLayout(
         text: layout.text ?? '',
         tables: layout.tables ?? [],
         activeTableIndex: layout.activeTableIndex ?? 0,
+        editableDraft: layout.editableDraft ?? null,
       }
   }
 }

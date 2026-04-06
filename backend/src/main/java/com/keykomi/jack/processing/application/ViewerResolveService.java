@@ -301,7 +301,7 @@ public class ViewerResolveService {
 		return findArtifact(artifacts, kind)
 			.orElseThrow(() -> new ResponseStatusException(
 				HttpStatus.INTERNAL_SERVER_ERROR,
-				"Внутренний VIEWER_RESOLVE pipeline не собрал обязательный artifact kind %s.".formatted(kind)
+				"Не удалось подготовить обязательный файл результата: %s.".formatted(kind)
 			));
 	}
 
@@ -316,7 +316,7 @@ public class ViewerResolveService {
 		catch (IOException exception) {
 			throw new ResponseStatusException(
 				HttpStatus.INTERNAL_SERVER_ERROR,
-				"Не удалось прочитать internal artifact %s.".formatted(artifact.kind()),
+				"Не удалось прочитать подготовленный файл результата: %s.".formatted(artifact.kind()),
 				exception
 			);
 		}

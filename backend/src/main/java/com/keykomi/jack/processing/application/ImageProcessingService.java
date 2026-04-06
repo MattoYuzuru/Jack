@@ -187,7 +187,7 @@ public class ImageProcessingService {
 				return new SourceRasterization(
 					sourceRasterPath,
 					"HEIC server rasterization",
-					List.of("HEIC source декодирован server-side и больше не зависит от browser-side HEIC adapter.")
+					List.of("HEIC подготовлен для стабильного просмотра и конвертации.")
 				);
 			}
 			catch (ResponseStatusException exception) {
@@ -195,9 +195,7 @@ public class ImageProcessingService {
 				return new SourceRasterization(
 					sourceRasterPath,
 					"FFmpeg HEIC fallback",
-					List.of(
-						"HEIC source декодирован через ffmpeg fallback, потому что convert path не дал стабильный raster."
-					)
+					List.of("HEIC пришлось открыть через запасной режим декодирования, поэтому картинка может немного отличаться от исходного превью.")
 				);
 			}
 		}
@@ -211,7 +209,7 @@ public class ImageProcessingService {
 			return new SourceRasterization(
 				sourceRasterPath,
 				"PSD composite rasterization",
-				List.of("PSD source сведен в единый composite raster на backend и больше не тянет browser-side PSD parser.")
+				List.of("PSD сведен в единое изображение, поэтому отдельные слои и режимы наложения больше недоступны.")
 			);
 		}
 
@@ -232,7 +230,7 @@ public class ImageProcessingService {
 			return new SourceRasterization(
 				sourceRasterPath,
 				"Illustration rasterization",
-				List.of("AI/EPS source растеризован через backend Ghostscript/ImageMagick path вместо browser-side preview extraction.")
+				List.of("Векторный исходник переведен в растровое изображение для дальнейшей конвертации.")
 			);
 		}
 
@@ -263,9 +261,7 @@ public class ImageProcessingService {
 		return new SourceRasterization(
 			sourceRasterPath,
 			"LibRaw preview extraction",
-			List.of(
-				"RAW source идёт через embedded preview extraction на backend, а не через browser-side TIFF-ish decode path."
-			)
+			List.of("RAW открыт по встроенному превью камеры, поэтому цвет и детализация могут отличаться от финального проявления.")
 		);
 	}
 
@@ -307,14 +303,14 @@ public class ImageProcessingService {
 		var transformedInfo = inspectRaster(transformedRasterPath);
 
 		var resizeLabel = request.presetLabel() != null && !request.presetLabel().isBlank()
-			? "Preset %s уменьшил размерность: %sx%s -> %sx%s.".formatted(
+			? "Профиль %s уменьшил размер: %sx%s -> %sx%s.".formatted(
 				request.presetLabel(),
 				sourceRasterInfo.width(),
 				sourceRasterInfo.height(),
 				transformedInfo.width(),
 				transformedInfo.height()
 			)
-			: "Server-side resize уменьшил размерность: %sx%s -> %sx%s.".formatted(
+			: "Размер был уменьшен: %sx%s -> %sx%s.".formatted(
 				sourceRasterInfo.width(),
 				sourceRasterInfo.height(),
 				transformedInfo.width(),
@@ -360,7 +356,7 @@ public class ImageProcessingService {
 			warnings.add(
 				"pdf".equals(targetExtension)
 					? "Прозрачные области переведены в сплошной фон перед сборкой PDF."
-					: "Прозрачные области переведены в сплошной фон перед JPG encode."
+					: "Прозрачные области переведены в сплошной фон перед сохранением в JPG."
 			);
 		}
 
@@ -440,7 +436,7 @@ public class ImageProcessingService {
 					List.of()
 				);
 				warnings.add(
-					"TIFF собран как single-frame backend image без исходных metadata-блоков и без multi-page контейнера."
+					"TIFF сохранён как один кадр без многополосной структуры и исходных служебных блоков."
 				);
 				yield new EncodedImageResult(
 					resultPath,
@@ -542,7 +538,7 @@ public class ImageProcessingService {
 				);
 				ensureRenderableOutput(resultPath, "svg trace");
 				warnings.add(
-					"SVG target собран через backend bitmap tracing, поэтому результат остаётся approximation, а не исходной векторной сценой."
+					"SVG собран по контуру растрового изображения, поэтому форма может отличаться от исходной графики."
 				);
 				yield new EncodedImageResult(
 					resultPath,

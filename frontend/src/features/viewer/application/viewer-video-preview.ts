@@ -29,13 +29,13 @@ export async function buildNativeVideoPreview(
 
   if (format.extension === 'mov') {
     warnings.push(
-      'MOV preview идёт через browser-native path и зависит от codec support в текущем браузере: metadata и playback могут отличаться для разных роликов.',
+      'Воспроизведение MOV зависит от поддержки кодека в браузере, поэтому поведение может отличаться на разных устройствах.',
     )
   }
 
   return buildVideoPreviewFromBlob(file, format, {
     warnings,
-    playbackPathLabel: 'Browser native video',
+    playbackPathLabel: 'Браузерное воспроизведение',
     metadataMimeType: file.type,
   })
 }
@@ -59,12 +59,18 @@ export async function buildVideoPreviewFromBlob(
         { label: 'Тип видео', value: format.label },
         { label: 'Длительность', value: formatViewerVideoDuration(metadata.durationSeconds) },
         { label: 'Кадр', value: `${metadata.width} x ${metadata.height}` },
-        { label: 'Aspect Ratio', value: formatViewerAspectRatio(metadata.width, metadata.height) },
-        { label: 'Orientation', value: resolveViewerVideoOrientation(metadata.width, metadata.height) },
-        { label: 'Estimated Bitrate', value: formatViewerVideoBitrate(estimatedBitrate) },
         {
-          label: 'Playback path',
-          value: options.playbackPathLabel ?? 'Browser native video',
+          label: 'Соотношение сторон',
+          value: formatViewerAspectRatio(metadata.width, metadata.height),
+        },
+        {
+          label: 'Ориентация',
+          value: resolveViewerVideoOrientation(metadata.width, metadata.height),
+        },
+        { label: 'Битрейт', value: formatViewerVideoBitrate(estimatedBitrate) },
+        {
+          label: 'Режим воспроизведения',
+          value: options.playbackPathLabel ?? 'Браузерное воспроизведение',
         },
         ...(options.extraSummary ?? []),
       ],
@@ -114,7 +120,7 @@ function inspectNativeVideo(objectUrl: string): Promise<NativeVideoMetadata> {
     }
 
     video.onerror = () => {
-      reject(new Error('Не удалось прочитать metadata из видеофайла через browser-native preview path.'))
+      reject(new Error('Не удалось прочитать данные видеофайла для просмотра.'))
       cleanup()
     }
 

@@ -8,7 +8,9 @@ export async function getProcessingPlatformMatrix(): Promise<ProcessingPlatformC
   return getPlatformCapabilityMatrix()
 }
 
-export async function getProcessingPlatformModules(): Promise<ProcessingPlatformModuleCapability[]> {
+export async function getProcessingPlatformModules(): Promise<
+  ProcessingPlatformModuleCapability[]
+> {
   const matrix = await getProcessingPlatformMatrix()
   return matrix.modules
 }

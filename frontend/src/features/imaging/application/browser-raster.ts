@@ -66,7 +66,8 @@ export function encodeRasterFrame(
   options: RasterEncodeOptions,
 ): Promise<Blob> {
   const canvas = rasterFrameToCanvas(frame, {
-    backgroundColor: options.mimeType === 'image/jpeg' ? options.backgroundColor ?? '#ffffff' : undefined,
+    backgroundColor:
+      options.mimeType === 'image/jpeg' ? (options.backgroundColor ?? '#ffffff') : undefined,
   })
 
   return new Promise((resolve, reject) => {
@@ -112,7 +113,11 @@ export function resizeRasterFrame(
   const nextWidth = Math.max(1, Math.round(frame.width * scale))
   const nextHeight = Math.max(1, Math.round(frame.height * scale))
   const sourceCanvas = rasterFrameToCanvas(frame)
-  const targetCanvas = createCanvasSurface(nextWidth, nextHeight, 'Canvas 2D context недоступен для resize-шага.')
+  const targetCanvas = createCanvasSurface(
+    nextWidth,
+    nextHeight,
+    'Canvas 2D context недоступен для resize-шага.',
+  )
   const targetContext = getCanvasContext(
     targetCanvas,
     'Canvas 2D context недоступен для resize-шага.',
@@ -214,7 +219,7 @@ function loadImage(objectUrl: string): Promise<HTMLImageElement> {
     }
 
     image.onerror = () => {
-      reject(new Error('Не удалось rasterize выбранный источник через browser image pipeline.'))
+      reject(new Error('Не удалось подготовить изображение для конвертации в браузере.'))
     }
 
     image.src = objectUrl
@@ -249,7 +254,10 @@ function createCanvasSurface(
   return canvas
 }
 
-function getCanvasContext(canvas: HTMLCanvasElement, errorMessage: string): CanvasRenderingContext2D {
+function getCanvasContext(
+  canvas: HTMLCanvasElement,
+  errorMessage: string,
+): CanvasRenderingContext2D {
   const context = canvas.getContext('2d')
 
   if (!context) {

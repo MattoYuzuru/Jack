@@ -66,7 +66,7 @@ const VIDEO_SOURCE_EXTENSIONS = new Set(['mp4', 'mov', 'mkv', 'avi', 'webm'])
 const VIDEO_TARGET_EXTENSIONS = new Set(['mp4', 'webm', 'gif'])
 const LOSSY_AUDIO_TARGET_EXTENSIONS = new Set(['mp3', 'aac', 'm4a'])
 const RESOLUTION_OPTIONS: SelectOption[] = [
-  { value: 'original', label: 'Original' },
+  { value: 'original', label: 'Исходный размер' },
   { value: '2160p', label: '2160p / 4K' },
   { value: '1440p', label: '1440p' },
   { value: '1080p', label: '1080p' },
@@ -74,7 +74,7 @@ const RESOLUTION_OPTIONS: SelectOption[] = [
   { value: '480p', label: '480p' },
 ]
 const FPS_OPTIONS: SelectOption[] = [
-  { value: '', label: 'Original FPS' },
+  { value: '', label: 'Исходная частота' },
   { value: '60', label: '60 fps' },
   { value: '30', label: '30 fps' },
   { value: '24', label: '24 fps' },
@@ -82,14 +82,14 @@ const FPS_OPTIONS: SelectOption[] = [
   { value: '10', label: '10 fps' },
 ]
 const VIDEO_BITRATE_OPTIONS: SelectOption[] = [
-  { value: '', label: 'Auto bitrate' },
+  { value: '', label: 'Авто' },
   { value: '8000', label: '8000 kbps' },
   { value: '5000', label: '5000 kbps' },
   { value: '2500', label: '2500 kbps' },
   { value: '1200', label: '1200 kbps' },
 ]
 const AUDIO_BITRATE_OPTIONS: SelectOption[] = [
-  { value: '', label: 'Auto bitrate' },
+  { value: '', label: 'Авто' },
   { value: '320', label: '320 kbps' },
   { value: '192', label: '192 kbps' },
   { value: '128', label: '128 kbps' },
@@ -170,7 +170,10 @@ function resolveAudioCodecForTarget(targetExtension: string): string {
   }
 }
 
-function resolveMediaSizing(resolutionId: string): { maxWidth: number | null; maxHeight: number | null } {
+function resolveMediaSizing(resolutionId: string): {
+  maxWidth: number | null
+  maxHeight: number | null
+} {
   switch (resolutionId) {
     case '2160p':
       return { maxWidth: 3840, maxHeight: 2160 }
@@ -266,29 +269,38 @@ export function useConverterWorkspace() {
   )
   const showMediaControls = computed(() => hasMediaSource.value)
   const showVideoCodecControl = computed(
-    () => hasVideoSource.value && Boolean(activeTarget.value && ['mp4', 'webm'].includes(activeTarget.value.extension)),
+    () =>
+      hasVideoSource.value &&
+      Boolean(activeTarget.value && ['mp4', 'webm'].includes(activeTarget.value.extension)),
   )
   const showResolutionControl = computed(
-    () => hasVideoSource.value && Boolean(activeTarget.value && VIDEO_TARGET_EXTENSIONS.has(activeTarget.value.extension)),
+    () =>
+      hasVideoSource.value &&
+      Boolean(activeTarget.value && VIDEO_TARGET_EXTENSIONS.has(activeTarget.value.extension)),
   )
   const showFpsControl = computed(
-    () => hasVideoSource.value && Boolean(activeTarget.value && VIDEO_TARGET_EXTENSIONS.has(activeTarget.value.extension)),
+    () =>
+      hasVideoSource.value &&
+      Boolean(activeTarget.value && VIDEO_TARGET_EXTENSIONS.has(activeTarget.value.extension)),
   )
   const showVideoBitrateControl = computed(
-    () => hasVideoSource.value && Boolean(activeTarget.value && ['mp4', 'webm'].includes(activeTarget.value.extension)),
-  )
-  const showAudioBitrateControl = computed(
     () =>
-      Boolean(
-        activeTarget.value &&
-          (['mp4', 'webm'].includes(activeTarget.value.extension) ||
-            LOSSY_AUDIO_TARGET_EXTENSIONS.has(activeTarget.value.extension)),
-      ),
+      hasVideoSource.value &&
+      Boolean(activeTarget.value && ['mp4', 'webm'].includes(activeTarget.value.extension)),
   )
-  const availableVideoCodecOptions = computed<SelectOption[]>(
-    () => (activeTarget.value ? VIDEO_CODEC_OPTIONS_BY_TARGET[activeTarget.value.extension] ?? [] : []),
+  const showAudioBitrateControl = computed(() =>
+    Boolean(
+      activeTarget.value &&
+      (['mp4', 'webm'].includes(activeTarget.value.extension) ||
+        LOSSY_AUDIO_TARGET_EXTENSIONS.has(activeTarget.value.extension)),
+    ),
   )
-  const resolvedAudioCodec = computed(() => resolveAudioCodecForTarget(activeTarget.value?.extension ?? ''))
+  const availableVideoCodecOptions = computed<SelectOption[]>(() =>
+    activeTarget.value ? (VIDEO_CODEC_OPTIONS_BY_TARGET[activeTarget.value.extension] ?? []) : [],
+  )
+  const resolvedAudioCodec = computed(() =>
+    resolveAudioCodecForTarget(activeTarget.value?.extension ?? ''),
+  )
   const result = computed<ConverterResultViewModel | null>(
     () =>
       resultHistory.value.find((entry) => entry.id === selectedResultId.value) ??
@@ -341,17 +353,19 @@ export function useConverterWorkspace() {
     if (hasMediaSource.value) {
       const defaults = resolveMediaDefaults(preset.id)
       selectedVideoCodec.value = resolveDefaultVideoCodec(target.extension)
-      selectedMediaResolution.value = hasVideoSource.value && VIDEO_TARGET_EXTENSIONS.has(target.extension)
-        ? defaults.resolution
-        : 'original'
-      selectedTargetFps.value = hasVideoSource.value && VIDEO_TARGET_EXTENSIONS.has(target.extension)
-        ? defaults.fps
-        : ''
-      selectedVideoBitrateKbps.value = hasVideoSource.value && ['mp4', 'webm'].includes(target.extension)
-        ? defaults.videoBitrateKbps
-        : ''
+      selectedMediaResolution.value =
+        hasVideoSource.value && VIDEO_TARGET_EXTENSIONS.has(target.extension)
+          ? defaults.resolution
+          : 'original'
+      selectedTargetFps.value =
+        hasVideoSource.value && VIDEO_TARGET_EXTENSIONS.has(target.extension) ? defaults.fps : ''
+      selectedVideoBitrateKbps.value =
+        hasVideoSource.value && ['mp4', 'webm'].includes(target.extension)
+          ? defaults.videoBitrateKbps
+          : ''
       selectedAudioBitrateKbps.value =
-        ['mp4', 'webm'].includes(target.extension) || LOSSY_AUDIO_TARGET_EXTENSIONS.has(target.extension)
+        ['mp4', 'webm'].includes(target.extension) ||
+        LOSSY_AUDIO_TARGET_EXTENSIONS.has(target.extension)
           ? defaults.audioBitrateKbps
           : ''
     }
@@ -432,8 +446,7 @@ export function useConverterWorkspace() {
     resultHistory.value.splice(existingIndex, 1)
     resultHistory.value.unshift(existingEntry)
     selectedResultId.value = existingEntry.id
-    processingMessage.value =
-      'Переиспользую уже собранный backend artifact из текущей сессии без повторного processing job.'
+    processingMessage.value = 'Открываю уже готовый результат из истории текущей сессии.'
   }
 
   function registerJobSnapshot(job: ProcessingJobResponse) {
@@ -517,7 +530,7 @@ export function useConverterWorkspace() {
     lastRequest.value = null
     prepared.value = null
     errorMessage.value = ''
-    processingMessage.value = 'Подготавливаю source-сценарии для выбранного файла...'
+    processingMessage.value = 'Подбираю доступные варианты конвертации...'
     isLoading.value = true
 
     if (isConverting.value) {
@@ -533,7 +546,7 @@ export function useConverterWorkspace() {
       }
 
       if (!inspected || !inspected.targets.length) {
-        throw new Error('Для выбранного файла пока нет зарегистрированного сценария конвертации.')
+        throw new Error('Для выбранного файла пока нет доступного сценария конвертации.')
       }
 
       prepared.value = inspected
@@ -576,7 +589,7 @@ export function useConverterWorkspace() {
     selectedAudioBitrateKbps.value = ''
     lastRequest.value = null
     processingMessage.value = result.value
-      ? 'Последний backend result сохранён в session history и доступен для повторного скачивания.'
+      ? 'Последний результат сохранён в истории и доступен для повторного скачивания.'
       : ''
   }
 
@@ -591,7 +604,7 @@ export function useConverterWorkspace() {
     const conversionToken = ++activeConversionToken
     const revision = selectionRevision
     errorMessage.value = ''
-    processingMessage.value = 'Создаю backend-first conversion job через processing platform...'
+    processingMessage.value = 'Запускаю конвертацию...'
     isConverting.value = true
     isCancelling.value = false
     activeJobProgressPercent.value = 0
@@ -640,7 +653,7 @@ export function useConverterWorkspace() {
       const entry = createHistoryEntry(converted, request)
       rememberResult(entry)
       processingMessage.value =
-        'Backend conversion завершён: result artifact сохранён в history и готов к повторному скачиванию.'
+        'Конвертация завершена. Результат сохранён в истории и готов к скачиванию.'
     } catch (error) {
       if (!isCurrentConversion(conversionToken, revision)) {
         return
@@ -707,7 +720,7 @@ export function useConverterWorkspace() {
 
     isCancelling.value = true
     if (!options.silent) {
-      processingMessage.value = 'Отправляю запрос на отмену активного backend processing job...'
+      processingMessage.value = 'Останавливаю текущую конвертацию...'
     }
 
     try {

@@ -18,7 +18,7 @@ const summaryFacts = computed(() => {
   }
 
   return [
-    { label: 'Формат', value: workspace.activeFormat.value?.label ?? 'Unknown' },
+    { label: 'Формат', value: workspace.activeFormat.value?.label ?? 'Не выбран' },
     { label: 'Символов', value: String(workspace.characterCount.value) },
     { label: 'Строк', value: String(workspace.lineCount.value) },
     { label: 'Слов', value: String(workspace.wordCount.value) },
@@ -26,19 +26,32 @@ const summaryFacts = computed(() => {
 })
 
 const shortcutPills = computed(() => [
-  'Mod+S Ready file',
-  'Mod+Shift+S Plain text',
-  'Mod+Enter Validate',
-  'Alt+Shift+F Format',
-  'Tab / Shift+Tab Indent',
+  'Mod+S скачать файл',
+  'Mod+Shift+S скачать текст',
+  'Mod+Enter проверить',
+  'Alt+Shift+F форматировать',
+  'Tab / Shift+Tab отступ',
 ])
+
+function formatTabLabel(tab: EditorPanelTab): string {
+  switch (tab) {
+    case 'preview':
+      return 'Просмотр'
+    case 'diagnostics':
+      return 'Проверка'
+    case 'outline':
+      return 'Структура'
+    case 'exports':
+      return 'Экспорт'
+  }
+}
 
 async function hydrateWorkspace(): Promise<void> {
   try {
     await workspace.hydrateCapabilities()
   } catch (error) {
     workspace.errorMessage.value =
-      error instanceof Error ? error.message : 'Не удалось загрузить editor capability matrix.'
+      error instanceof Error ? error.message : 'Не удалось загрузить доступные форматы редактора.'
   }
 }
 
@@ -96,29 +109,28 @@ onMounted(() => {
       <div class="brand-lockup">
         <img class="brand-lockup__logo" src="/logo.svg" alt="Логотип Jack" />
         <div class="brand-lockup__copy">
-          <p class="eyebrow">Iteration 06 · Multi-Format Editor</p>
-          <p class="brand-lockup__title">Editor Workspace</p>
+          <p class="eyebrow">Jack · Editor</p>
+          <p class="brand-lockup__title">Редактор документов и текстов</p>
         </div>
       </div>
 
       <div class="editor-topbar__actions">
-        <RouterLink class="back-link" to="/">Back Home</RouterLink>
-        <span class="chip-pill">EDITOR_PROCESS</span>
-        <span class="chip-pill chip-pill--accent">Split View + Diagnostics</span>
+        <RouterLink class="back-link" to="/">На главную</RouterLink>
+        <span class="chip-pill">Несколько текстовых форматов</span>
+        <span class="chip-pill chip-pill--accent">Просмотр, проверка, экспорт</span>
       </div>
     </header>
 
     <section class="editor-hero">
       <article class="panel-surface editor-hero__copy">
-        <p class="eyebrow">Browser-First Editing · Backend Validation</p>
+        <p class="eyebrow">Писать, проверять и сразу сохранять результат</p>
         <h1>
-          Multi-Format Editor закрывает Markdown, HTML, CSS, JavaScript, JSON, YAML и plain text без
-          browser-heavy export логики.
+          Редактор помогает быстро привести в порядок Markdown, HTML, CSS, JavaScript, JSON, YAML и
+          обычный текст в одном рабочем окне.
         </h1>
         <p class="lead">
-          Форматирование, draft flow и live preview остаются мгновенными на клиенте, а backend
-          собирает diagnostics, outline и download-ready artifacts через `EDITOR_PROCESS`.
-          Получается привычный редакторский UX без потери server-owned safety contract.
+          Здесь удобно подготовить заметку, конфиг, сниппет или небольшой документ: отформатировать,
+          проверить структуру, посмотреть превью и скачать итоговый файл без лишних шагов.
         </p>
 
         <div class="signal-row">
@@ -133,23 +145,25 @@ onMounted(() => {
       </article>
 
       <article class="panel-surface editor-hero__status">
-        <p class="eyebrow">Workspace Status</p>
+        <p class="eyebrow">Сводка</p>
         <div class="editor-status-grid">
           <article class="editor-status-card">
-            <strong>{{ workspace.activeFormat.value?.label ?? 'Loading…' }}</strong>
-            <span>Current format</span>
+            <strong>{{ workspace.activeFormat.value?.label ?? 'Загрузка…' }}</strong>
+            <span>Текущий формат</span>
           </article>
           <article class="editor-status-card">
             <strong>{{ workspace.lineCount.value }}</strong>
-            <span>Lines in draft</span>
+            <span>Строк в черновике</span>
           </article>
           <article class="editor-status-card">
             <strong>{{ workspace.diagnosticsBySeverity.value.error }}</strong>
-            <span>Backend errors</span>
+            <span>Ошибок проверки</span>
           </article>
           <article class="editor-status-card">
-            <strong>{{ workspace.hasFreshServerResult.value ? 'Fresh' : 'Stale' }}</strong>
-            <span>Diagnostics state</span>
+            <strong>{{
+              workspace.hasFreshServerResult.value ? 'Актуально' : 'Нужно обновить'
+            }}</strong>
+            <span>Состояние результата</span>
           </article>
         </div>
       </article>
@@ -160,7 +174,7 @@ onMounted(() => {
         <div class="editor-toolbar">
           <div class="editor-toolbar__cluster">
             <label class="editor-field">
-              <span>Format</span>
+              <span>Формат</span>
               <select v-model="workspace.selectedFormatId.value">
                 <option
                   v-for="format in workspace.availableFormats.value"
@@ -173,12 +187,12 @@ onMounted(() => {
             </label>
 
             <label class="editor-field">
-              <span>File Name</span>
+              <span>Имя файла</span>
               <input v-model="workspace.fileName.value" type="text" spellcheck="false" />
             </label>
 
             <label class="editor-field">
-              <span>Template</span>
+              <span>Шаблон</span>
               <select v-model="workspace.selectedTemplateId.value" @change="onTemplateChange">
                 <option
                   v-for="template in workspace.templateOptions.value"
@@ -192,14 +206,16 @@ onMounted(() => {
           </div>
 
           <div class="editor-toolbar__cluster editor-toolbar__cluster--actions">
-            <button class="action-button" type="button" @click="triggerFileOpen">Open File</button>
+            <button class="action-button" type="button" @click="triggerFileOpen">
+              Открыть файл
+            </button>
             <button
               class="action-button"
               type="button"
               :disabled="!workspace.canFormat.value"
               @click="workspace.formatDocument"
             >
-              Format
+              Форматировать
             </button>
             <button
               class="action-button action-button--accent"
@@ -207,7 +223,7 @@ onMounted(() => {
               :disabled="workspace.isValidating.value"
               @click="workspace.validateDocument()"
             >
-              Validate
+              Проверить
             </button>
             <button
               class="action-button"
@@ -215,7 +231,7 @@ onMounted(() => {
               :disabled="workspace.isValidating.value"
               @click="workspace.downloadReadyFile"
             >
-              Ready File
+              Скачать файл
             </button>
             <button
               class="action-button"
@@ -223,7 +239,7 @@ onMounted(() => {
               :disabled="workspace.isValidating.value"
               @click="workspace.downloadPlainTextFile"
             >
-              Plain Text
+              Скачать текст
             </button>
             <button
               v-if="workspace.activeJobId.value"
@@ -232,10 +248,10 @@ onMounted(() => {
               :disabled="workspace.isCancelling.value"
               @click="workspace.cancelValidation"
             >
-              Cancel
+              Отменить
             </button>
             <button class="action-button" type="button" @click="workspace.clearPersistedDraft">
-              Clear Draft
+              Очистить черновик
             </button>
             <input
               ref="fileInput"
@@ -252,17 +268,17 @@ onMounted(() => {
             workspace.draftPersistenceStatus.value
           }}</span>
           <span class="chip-pill chip-pill--compact">
-            {{ workspace.preview.value.note ?? 'Syntax preview' }}
+            {{ workspace.preview.value.note ?? 'Предпросмотр содержимого' }}
           </span>
           <span
             v-if="workspace.restoredDraft.value"
             class="chip-pill chip-pill--compact chip-pill--accent"
           >
-            Draft restored
+            Черновик восстановлен
           </span>
         </div>
 
-        <div class="editor-helper-row" aria-label="Format helpers">
+        <div class="editor-helper-row" aria-label="Быстрые действия по формату">
           <button
             v-for="action in workspace.helperActions.value"
             :key="action.id"
@@ -313,12 +329,12 @@ onMounted(() => {
             type="button"
             @click="activeTab = tab"
           >
-            {{ tab }}
+            {{ formatTabLabel(tab) }}
           </button>
         </div>
 
         <div v-if="activeTab === 'preview'" class="editor-side__panel editor-side__panel--preview">
-          <p class="eyebrow">Live Preview</p>
+          <p class="eyebrow">Просмотр</p>
           <iframe
             v-if="workspace.preview.value.mode === 'sandbox'"
             class="editor-preview-frame"
@@ -338,12 +354,12 @@ onMounted(() => {
         </div>
 
         <div v-else-if="activeTab === 'diagnostics'" class="editor-side__panel">
-          <p class="eyebrow">Diagnostics</p>
+          <p class="eyebrow">Проверка</p>
           <p class="editor-side__note">
             {{
               workspace.hasFreshServerResult.value
-                ? 'Показаны diagnostics для текущего draft.'
-                : 'Diagnostics показывают последний backend validate/export результат. После изменений обнови Validate.'
+                ? 'Показаны результаты для текущего текста.'
+                : 'После изменений запусти проверку ещё раз, чтобы обновить замечания и структуру.'
             }}
           </p>
 
@@ -358,7 +374,8 @@ onMounted(() => {
                 <span class="chip-pill chip-pill--compact">{{ issue.severity }}</span>
                 <strong>{{ issue.code }}</strong>
                 <span v-if="issue.line" class="editor-issue__position">
-                  Line {{ issue.line }}<span v-if="issue.column"> · Col {{ issue.column }}</span>
+                  Строка {{ issue.line
+                  }}<span v-if="issue.column"> · Колонка {{ issue.column }}</span>
                 </span>
               </div>
               <p>{{ issue.message }}</p>
@@ -366,15 +383,14 @@ onMounted(() => {
             </article>
           </div>
           <p v-else class="editor-side__empty">
-            Validate ещё не запускался или backend не нашёл заметных issues.
+            Проверка ещё не запускалась или заметных проблем не найдено.
           </p>
         </div>
 
         <div v-else-if="activeTab === 'outline'" class="editor-side__panel">
-          <p class="eyebrow">Outline</p>
+          <p class="eyebrow">Структура</p>
           <p class="editor-side__note">
-            Backend outline отдаётся после Validate; до этого показывается локальная структура
-            preview.
+            Здесь собирается структура документа: сначала локальная, а после проверки более точная.
           </p>
 
           <div v-if="workspace.outlineItems.value.length" class="editor-outline">
@@ -388,7 +404,7 @@ onMounted(() => {
               <span>{{ item.kind }}</span>
             </div>
           </div>
-          <p v-else class="editor-side__empty">Для текущего draft outline пока не выделился.</p>
+          <p v-else class="editor-side__empty">Для текущего текста структура пока не выделилась.</p>
 
           <div class="editor-suggestions">
             <span
@@ -402,7 +418,7 @@ onMounted(() => {
         </div>
 
         <div v-else class="editor-side__panel">
-          <p class="eyebrow">Export</p>
+          <p class="eyebrow">Экспорт</p>
           <div class="editor-facts">
             <article v-for="fact in summaryFacts" :key="fact.label" class="editor-fact">
               <span>{{ fact.label }}</span>
@@ -417,7 +433,7 @@ onMounted(() => {
               :disabled="workspace.isValidating.value"
               @click="workspace.validateDocument()"
             >
-              Refresh Diagnostics
+              Обновить проверку
             </button>
             <button
               class="action-button"
@@ -425,7 +441,7 @@ onMounted(() => {
               :disabled="workspace.isValidating.value"
               @click="workspace.downloadReadyFile"
             >
-              Download Ready File
+              Скачать файл
             </button>
             <button
               class="action-button"
@@ -433,7 +449,7 @@ onMounted(() => {
               :disabled="workspace.isValidating.value"
               @click="workspace.downloadPlainTextFile"
             >
-              Download Plain Text
+              Скачать текст
             </button>
           </div>
         </div>

@@ -28,21 +28,21 @@ export function buildEditorLocalPreview(formatId: string, content: string): Edit
         mode: 'rich-html',
         html: renderMarkdown(content),
         outline: extractMarkdownOutline(content),
-        note: 'Live preview рендерится локально, без round-trip в backend.',
+        note: 'Предпросмотр обновляется сразу по мере редактирования.',
       }
     case 'html':
       return {
         mode: 'sandbox',
         html: sanitizeHtmlPreview(content),
         outline: extractHtmlOutline(content),
-        note: 'HTML preview рендерится в sandbox iframe без выполнения inline script payload.',
+        note: 'Макет открывается в безопасном режиме без запуска встроенных скриптов.',
       }
     case 'css':
       return {
         mode: 'sandbox',
         html: buildCssPreviewDocument(content),
         outline: extractCssOutline(content),
-        note: 'CSS preview показывает sample canvas. Для итоговых diagnostics используй Validate.',
+        note: 'Показываем пример применения стилей; итоговую проверку можно запустить отдельно.',
       }
     case 'json': {
       const structured = renderJsonStructure(content)
@@ -51,7 +51,7 @@ export function buildEditorLocalPreview(formatId: string, content: string): Edit
           mode: 'rich-html',
           html: structured,
           outline: extractJsonOutline(content),
-          note: 'JSON tree строится локально, если документ проходит parse.',
+          note: 'Структура собирается автоматически, если JSON валиден.',
         }
       }
 
@@ -59,7 +59,7 @@ export function buildEditorLocalPreview(formatId: string, content: string): Edit
         mode: 'syntax',
         html: highlightEditorSyntax(formatId, content),
         outline: [],
-        note: 'Пока JSON невалиден, preview остаётся в syntax mode.',
+        note: 'Пока в JSON есть ошибка, показываем исходный текст с подсветкой.',
       }
     }
     case 'txt':
@@ -67,21 +67,21 @@ export function buildEditorLocalPreview(formatId: string, content: string): Edit
         mode: 'text',
         html: escapeHtml(content),
         outline: extractTextOutline(content),
-        note: 'Plain text preview повторяет текущий draft без скрытых трансформаций.',
+        note: 'Показываем документ без дополнительных преобразований.',
       }
     case 'javascript':
       return {
         mode: 'syntax',
         html: highlightEditorSyntax(formatId, content),
         outline: extractJavaScriptOutline(content),
-        note: 'JS не исполняется в браузере: preview здесь остаётся syntax + diagnostics.',
+        note: 'Код не выполняется: здесь доступна только подсветка и проверка структуры.',
       }
     case 'yaml':
       return {
         mode: 'syntax',
         html: highlightEditorSyntax(formatId, content),
         outline: extractYamlOutline(content),
-        note: 'YAML получает structured diagnostics на backend validate шаге.',
+        note: 'Для YAML доступен текстовый просмотр и отдельная проверка структуры.',
       }
     default:
       return {
@@ -244,7 +244,7 @@ function renderMarkdown(content: string): string {
     html = html.replace(`@@CODEBLOCK_${index}@@`, codeBlock)
   }
 
-  return html || '<p class="editor-preview-empty">Пустой Markdown draft.</p>'
+  return html || '<p class="editor-preview-empty">Документ пока пуст.</p>'
 }
 
 function sanitizeHtmlPreview(content: string): string {
@@ -327,13 +327,13 @@ function buildCssPreviewDocument(content: string): string {
     <body>
       <section class="preview-shell">
         <article class="preview-card">
-          <strong>Jack Editor Sample</strong>
-          <p>Sandbox canvas для live CSS preview.</p>
+          <strong>Пример оформления</strong>
+          <p>Безопасная область, где можно быстро оценить стили.</p>
         </article>
         <div class="preview-grid">
-          <article class="preview-card"><strong>Alpha</strong><p>Grid card</p></article>
-          <article class="preview-card"><strong>Beta</strong><p>Layout card</p></article>
-          <article class="preview-card"><strong>Gamma</strong><p>State card</p></article>
+          <article class="preview-card"><strong>Карточка</strong><p>Сетка и отступы</p></article>
+          <article class="preview-card"><strong>Блок</strong><p>Заголовок и описание</p></article>
+          <article class="preview-card"><strong>Состояние</strong><p>Цвет и акцент</p></article>
         </div>
       </section>
     </body>

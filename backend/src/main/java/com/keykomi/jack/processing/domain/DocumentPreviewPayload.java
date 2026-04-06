@@ -65,6 +65,13 @@ public record DocumentPreviewPayload(
 	) {
 	}
 
+	public record DocumentEditableDraft(
+		String text,
+		String fileName,
+		String editorFormatId
+	) {
+	}
+
 	public record DocumentLayoutPayload(
 		String mode,
 		Integer pageCount,
@@ -77,7 +84,8 @@ public record DocumentPreviewPayload(
 		Integer activeSheetIndex,
 		List<DocumentSlidePreview> slides,
 		List<DocumentDatabaseTablePreview> tables,
-		Integer activeTableIndex
+		Integer activeTableIndex,
+		DocumentEditableDraft editableDraft
 	) {
 	}
 

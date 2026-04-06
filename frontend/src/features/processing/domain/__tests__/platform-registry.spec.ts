@@ -1,10 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createPlatformCapabilityScopeFixture } from '../../application/__tests__/capability-matrix.fixtures'
 import { resetProcessingCapabilityScopeCache } from '../../application/processing-client'
-import {
-  getProcessingPlatformModules,
-  resolveProcessingPlatformModule,
-} from '../platform-registry'
+import { getProcessingPlatformModules, resolveProcessingPlatformModule } from '../platform-registry'
 
 const originalFetch = globalThis.fetch
 

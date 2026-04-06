@@ -51,9 +51,9 @@ public class CompressionCapabilityMatrixService {
 	);
 
 	private static final List<CompressionModeSpec> MODE_SPECS = List.of(
-		new CompressionModeSpec("maximum", "Maximum reduction", "Ищет самый компактный практический result внутри поддержанных targets и профилей.", List.of("Smallest", "Auto target"), false, true, false),
-		new CompressionModeSpec("target-size", "Target size", "Подбирает candidate ladder, пока result не уложится в заданный size budget или не будет найден лучший доступный вариант.", List.of("Budget", "Best effort"), true, true, false),
-		new CompressionModeSpec("custom", "Custom controls", "Даёт ручной target, quality, bitrate, resolution и FPS control без превращения compression в обычный converter.", List.of("Manual", "Limits"), false, true, true)
+		new CompressionModeSpec("maximum", "Максимальное уменьшение", "Ищет самый компактный практический вариант среди доступных форматов и профилей.", List.of("Минимальный вес", "Автовыбор"), false, true, false),
+		new CompressionModeSpec("target-size", "Лимит размера", "Подбирает варианты, пока файл не уложится в заданный лимит или не будет найден лучший доступный результат.", List.of("Лимит", "Best effort"), true, true, false),
+		new CompressionModeSpec("custom", "Ручная настройка", "Даёт ручной выбор формата, качества, битрейта, разрешения и FPS без смешивания со сценарием обычной конвертации.", List.of("Вручную", "Ограничения"), false, true, true)
 	);
 
 	public CapabilityMatrixPayloads.CompressionCapabilityMatrix compressionMatrix(
@@ -103,11 +103,11 @@ public class CompressionCapabilityMatrixService {
 			spec.mimeTypes(),
 			spec.targetExtensions(),
 			spec.defaultTargetExtension(),
-			available ? "Compression ready" : "Capability unavailable",
+			available ? "Готово к сжатию" : "Временно недоступно",
 			spec.notes(),
 			List.of(spec.label(), spec.family()),
 			available,
-			available ? null : "%s compression route требует доступных %s."
+			available ? null : "Для сжатия %s нужны доступные сценарии %s."
 				.formatted(spec.label(), spec.requiredJobTypes().stream().map(Enum::name).collect(Collectors.joining(", "))),
 			spec.requiredJobTypes()
 		);
@@ -128,11 +128,11 @@ public class CompressionCapabilityMatrixService {
 			spec.supportsBitrateControls(),
 			spec.supportsFpsControl(),
 			spec.defaultQuality(),
-			available ? "Compression target" : "Capability unavailable",
+			available ? "Доступный результат" : "Временно недоступно",
 			spec.notes(),
 			List.of(spec.label(), spec.family()),
 			available,
-			available ? null : "%s target требует доступных %s."
+			available ? null : "Для формата %s нужны доступные сценарии %s."
 				.formatted(spec.label(), spec.requiredJobTypes().stream().map(Enum::name).collect(Collectors.joining(", "))),
 			spec.requiredJobTypes()
 		);

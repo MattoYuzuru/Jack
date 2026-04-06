@@ -60,11 +60,11 @@ const {
 } = useConverterWorkspace()
 
 const statusLabels: Record<string, string> = {
-  QUEUED: 'Queued',
-  RUNNING: 'Running',
-  COMPLETED: 'Completed',
-  FAILED: 'Failed',
-  CANCELLED: 'Cancelled',
+  QUEUED: 'В очереди',
+  RUNNING: 'В работе',
+  COMPLETED: 'Готово',
+  FAILED: 'Ошибка',
+  CANCELLED: 'Остановлено',
 }
 
 const sourceFacts = computed(() => {
@@ -73,13 +73,13 @@ const sourceFacts = computed(() => {
   }
 
   return [
-    { label: 'Источник', value: prepared.value.file.name },
+    { label: 'Файл', value: prepared.value.file.name },
     {
       label: 'Размер',
-      value: new Intl.NumberFormat('ru-RU').format(prepared.value.file.size) + ' bytes',
+      value: new Intl.NumberFormat('ru-RU').format(prepared.value.file.size) + ' байт',
     },
     { label: 'Формат', value: prepared.value.source.label },
-    { label: 'Pipeline', value: prepared.value.source.statusLabel },
+    { label: 'Режим обработки', value: 'Готов к конвертации' },
   ]
 })
 
@@ -89,9 +89,13 @@ const currentScenario = computed(() =>
   ),
 )
 const currentStatusLabel = computed(() =>
-  activeJobStatus.value ? statusLabels[activeJobStatus.value] ?? activeJobStatus.value : 'Idle',
+  activeJobStatus.value
+    ? (statusLabels[activeJobStatus.value] ?? activeJobStatus.value)
+    : 'Ожидание',
 )
-const progressWidth = computed(() => `${Math.max(0, Math.min(activeJobProgressPercent.value, 100))}%`)
+const progressWidth = computed(
+  () => `${Math.max(0, Math.min(activeJobProgressPercent.value, 100))}%`,
+)
 const historyEntries = computed(() => resultHistory.value.slice(0, 6))
 const hasAudioPreview = computed(() => result.value?.previewMimeType.startsWith('audio/') ?? false)
 const activeLimitations = computed(() => {
@@ -105,7 +109,7 @@ const activeLimitations = computed(() => {
 
   if (currentScenario.value.family === 'media') {
     limitations.push(
-      'Target format выбирает контейнер, а codec, bitrate, resolution и FPS задаются отдельно в media controls ниже.',
+      'Формат результата задаёт контейнер, а кодек, битрейт, разрешение и FPS настраиваются отдельно ниже.',
     )
   }
 
@@ -133,8 +137,151 @@ const activeLimitations = computed(() => {
   return limitations
 })
 
+function formatScenarioStatusLabel(available: boolean): string {
+  return available ? 'Готово к запуску' : 'Временно недоступно'
+}
+
+function formatTargetStatusLabel(family: string, available: boolean): string {
+  if (!available) {
+    return 'Недоступно'
+  }
+
+  switch (family) {
+    case 'image':
+      return 'Изображение'
+    case 'document':
+      return 'Документ'
+    default:
+      return 'Медиа'
+  }
+}
+
+function formatPresetStatusLabel(presetId: string): string {
+  switch (presetId) {
+    case 'original':
+      return 'Без уменьшения'
+    case 'web-balanced':
+      return 'Для веба'
+    case 'email-attachment':
+      return 'Для вложений'
+    case 'thumbnail':
+      return 'Для миниатюр'
+    default:
+      return 'Профиль'
+  }
+}
+
+function formatPresetDescription(
+  preset: (typeof availablePresets.value)[number] | null | undefined,
+): string {
+  switch (preset?.id) {
+    case 'original':
+      return 'Сохраняет исходную геометрию и подходит, когда нужно только сменить формат.'
+    case 'web-balanced':
+      return 'Сбалансированный профиль для сайтов, CMS и карточек товаров.'
+    case 'email-attachment':
+      return 'Помогает уложиться в ограничения почты и мессенджеров.'
+    case 'thumbnail':
+      return 'Подходит для превью, миниатюр и лёгких карточек.'
+    default:
+      return preset?.detail ?? 'Подбирает разумный баланс между размером и качеством.'
+  }
+}
+
+function formatRuntimeLabel(value: string | null | undefined): string {
+  if (!value) {
+    return 'Локально'
+  }
+
+  const normalized = value.trim().toLowerCase()
+
+  if (
+    normalized.includes('jpeg') ||
+    normalized.includes('png') ||
+    normalized.includes('webp') ||
+    normalized.includes('avif') ||
+    normalized.includes('tiff') ||
+    normalized.includes('ico') ||
+    normalized.includes('svg') ||
+    normalized.includes('heic') ||
+    normalized.includes('imagemagick') ||
+    normalized.includes('potrace')
+  ) {
+    return 'Обработка изображения'
+  }
+
+  if (
+    normalized.includes('media') ||
+    normalized.includes('ffmpeg') ||
+    normalized.includes('mp4') ||
+    normalized.includes('mp3') ||
+    normalized.includes('slideshow')
+  ) {
+    return 'Обработка медиа'
+  }
+
+  if (
+    normalized.includes('pdf') ||
+    normalized.includes('doc') ||
+    normalized.includes('xlsx') ||
+    normalized.includes('sheet') ||
+    normalized.includes('slide') ||
+    normalized.includes('spreadsheet') ||
+    normalized.includes('epub') ||
+    normalized.includes('sqlite')
+  ) {
+    return 'Подготовка документа'
+  }
+
+  return value
+}
+
+function formatScenarioDescription(
+  scenario: (typeof imageScenarios.value)[number] | null | undefined,
+): string {
+  if (!scenario) {
+    return ''
+  }
+
+  const sourceExtension = scenario.sourceExtension.toUpperCase()
+  const targetExtension = scenario.targetExtension.toUpperCase()
+
+  if (scenario.family === 'media') {
+    if (targetExtension === 'GIF') {
+      return `${sourceExtension} можно превратить в короткую анимацию для превью, инструкции или публикации без звука.`
+    }
+
+    if (['MP3', 'WAV', 'AAC', 'M4A', 'FLAC'].includes(targetExtension)) {
+      return `${sourceExtension} можно быстро перевести в аудиоформат и забрать только звуковую дорожку.`
+    }
+
+    return `${sourceExtension} можно перевести в ${targetExtension} с настройкой кодека, битрейта, разрешения и частоты кадров.`
+  }
+
+  if (scenario.sourceExtension === 'pdf' && scenario.targetExtension === 'docx') {
+    return 'Подходит для переноса текста из PDF в редактируемый документ, если важнее содержание, а не точная вёрстка.'
+  }
+
+  if (
+    scenario.sourceExtension === 'pdf' &&
+    ['docx', 'txt', 'xlsx', 'csv', 'pptx'].includes(scenario.targetExtension)
+  ) {
+    return 'Если PDF состоит из сканов без текстового слоя, сначала может понадобиться OCR.'
+  }
+
+  if (scenario.targetExtension === 'csv') {
+    return 'Удобно для выгрузки таблиц в простой табличный формат без оформления и формул.'
+  }
+
+  if (scenario.targetExtension === 'pdf') {
+    return `${sourceExtension} можно перевести в PDF, чтобы документ было удобнее отправлять, хранить и печатать.`
+  }
+
+  return `${sourceExtension} можно перевести в ${targetExtension} и сразу проверить результат перед скачиванием.`
+}
+
 function formatBytes(value: number): string {
-  return new Intl.NumberFormat('ru-RU').format(value) + ' bytes'
+  return new Intl.NumberFormat('ru-RU').format(value) + ' байт'
 }
 
 function formatDate(value: string): string {
@@ -190,61 +337,51 @@ function onDrop(event: DragEvent) {
       <div class="brand-lockup">
         <img class="brand-lockup__logo" src="/logo.svg" alt="Логотип Jack" />
         <div class="brand-lockup__copy">
-          <p class="eyebrow">Jack of all trades</p>
-          <p class="brand-lockup__title">Converter Workspace</p>
+          <p class="eyebrow">Jack · Converter</p>
+          <p class="brand-lockup__title">Конвертация файлов</p>
         </div>
       </div>
 
       <div class="app-topbar__status">
-        <RouterLink class="back-link" to="/">Back to Home</RouterLink>
-        <span class="chip-pill">File Conversion</span>
-        <span class="chip-pill chip-pill--accent">Backend-first route</span>
+        <RouterLink class="back-link" to="/">На главную</RouterLink>
+        <span class="chip-pill">Конвертация файлов</span>
+        <span class="chip-pill chip-pill--accent">Изображения, документы, медиа</span>
       </div>
     </header>
 
     <section class="converter-hero-grid">
       <article class="panel-surface converter-hero-copy">
-        <p class="eyebrow">Iteration 03 · Converter</p>
-        <h1>
-          Конвертер теперь живёт вокруг backend jobs: браузер оркестрирует, показывает прогресс и
-          рендерит готовый результат, а вычисление полностью уходит на сервер.
-        </h1>
+        <p class="eyebrow">Быстрая конвертация без ручных обходов</p>
+        <h1>Выбери файл, формат назначения и сразу получи готовый результат с предпросмотром.</h1>
         <p class="lead">
-          Конвертер больше не делит route на "простые локальные" и "тяжёлые серверные" ветки.
-          Image-сценарии идут через backend `IMAGE_CONVERT`, office/pdf roundtrip через
-          `OFFICE_CONVERT`, video/audio delivery через `MEDIA_CONVERT`, а браузер держит только
-          progress, retry, cancel, artifact reuse и preview уже собранного результата.
+          Конвертер закрывает и привычные сценарии вроде `PNG -> JPG`, и более сложные задачи: `PDF
+          -> DOCX`, `PPTX -> MP4`, `RAW -> JPG`, `video -> audio` и другие. На экране сразу видно,
+          что доступно для выбранного файла, какие ограничения есть у формата и какой результат
+          получится на выходе.
         </p>
 
         <div class="converter-signal-row">
-          <span class="chip-pill">Backend-first JPG / PNG / WebP</span>
-          <span class="chip-pill">Server HEIC / TIFF / RAW / PSD / AI / EPS</span>
-          <span class="chip-pill">DOC / DOCX / PDF / XLSX / ODS / PPTX routes</span>
-          <span class="chip-pill">MOV / MKV / AVI / WebM / MP4 routes</span>
-          <span class="chip-pill">Server AVIF / SVG / ICO / TIFF / PDF targets</span>
-          <span class="chip-pill">PDF -> DOCX/XLSX/PPTX</span>
-          <span class="chip-pill">PPTX -> PDF / image / MP4</span>
-          <span class="chip-pill">MP4 / WebM / GIF / MP3 / WAV / AAC / FLAC / M4A</span>
-          <span class="chip-pill">Codec + bitrate + resolution + FPS controls</span>
-          <span class="chip-pill">Job progress + cancel + retry</span>
-          <span class="chip-pill">Artifact reuse history</span>
-          <span class="chip-pill">Scenario registry</span>
-          <span class="chip-pill">IMAGE_CONVERT + OFFICE_CONVERT + MEDIA_CONVERT</span>
+          <span class="chip-pill">HEIC, TIFF, RAW</span>
+          <span class="chip-pill">DOC, DOCX, PDF, XLSX, PPTX</span>
+          <span class="chip-pill">MP4, WebM, GIF, MP3</span>
+          <span class="chip-pill">Готовые пресеты</span>
+          <span class="chip-pill">Предпросмотр результата</span>
+          <span class="chip-pill">Повторное скачивание</span>
         </div>
       </article>
 
       <article class="panel-surface converter-system-card">
-        <p class="eyebrow">Current Matrix</p>
-        <h2>Матрица теперь целиком server-owned: UI лишь отражает backend route и его ограничения.</h2>
+        <p class="eyebrow">Подходящие направления</p>
+        <h2>Ниже показаны самые близкие сценарии для изображений, документов и медиа.</h2>
 
         <div class="scenario-list" aria-label="Доступные сценарии конвертации">
           <article v-for="scenario in imageScenarios" :key="scenario.id" class="scenario-item">
             <div>
               <h3>{{ scenario.label }}</h3>
-              <p>{{ scenario.notes }}</p>
+              <p>{{ formatScenarioDescription(scenario) }}</p>
             </div>
             <span class="chip-pill chip-pill--compact chip-pill--accent">{{
-              scenario.statusLabel
+              formatScenarioStatusLabel(scenario.available)
             }}</span>
           </article>
         </div>
@@ -253,19 +390,23 @@ function onDrop(event: DragEvent) {
           <article v-for="scenario in documentScenarios" :key="scenario.id" class="scenario-item">
             <div>
               <h3>{{ scenario.label }}</h3>
-              <p>{{ scenario.notes }}</p>
+              <p>{{ formatScenarioDescription(scenario) }}</p>
             </div>
-            <span class="chip-pill chip-pill--compact">{{ scenario.statusLabel }}</span>
+            <span class="chip-pill chip-pill--compact">{{
+              formatScenarioStatusLabel(scenario.available)
+            }}</span>
           </article>
         </div>
 
-        <div class="scenario-list scenario-list--secondary" aria-label="Media scenarios">
+        <div class="scenario-list scenario-list--secondary" aria-label="Медиа-сценарии">
           <article v-for="scenario in mediaScenarios" :key="scenario.id" class="scenario-item">
             <div>
               <h3>{{ scenario.label }}</h3>
-              <p>{{ scenario.notes }}</p>
+              <p>{{ formatScenarioDescription(scenario) }}</p>
             </div>
-            <span class="chip-pill chip-pill--compact">{{ scenario.statusLabel }}</span>
+            <span class="chip-pill chip-pill--compact">{{
+              formatScenarioStatusLabel(scenario.available)
+            }}</span>
           </article>
         </div>
       </article>
@@ -275,8 +416,8 @@ function onDrop(event: DragEvent) {
       <article class="panel-surface converter-panel">
         <div class="panel-header">
           <div>
-            <p class="eyebrow">Source Intake</p>
-            <h2>Выбери source и подходящий target/runtime profile.</h2>
+            <p class="eyebrow">Исходный файл</p>
+            <h2>Загрузи материал и выбери, во что его превратить.</h2>
           </div>
 
           <button v-if="prepared" type="button" class="action-button" @click="clearSelection">
@@ -301,14 +442,11 @@ function onDrop(event: DragEvent) {
           @dragleave="onDragLeave"
           @drop="onDrop"
         >
-          <span class="converter-dropzone__badge">Drop / Select</span>
-          <strong>
-            Загрузи image, office, PDF или media source из capability matrix.
-          </strong>
+          <span class="converter-dropzone__badge">Перетащить или выбрать</span>
+          <strong>Перетащи изображение, документ, PDF, видео или аудио.</strong>
           <span>
-            После intake image-сценарии идут в backend `IMAGE_CONVERT`, office/pdf routes в
-            `OFFICE_CONVERT`, а video/audio delivery в `MEDIA_CONVERT`. Браузер держит только
-            orchestration, progress UI и preview уже собранного артефакта.
+            После выбора Jack покажет только совместимые форматы назначения, а ниже откроет
+            настройки качества, размера и кодеков там, где это действительно нужно.
           </span>
         </button>
 
@@ -330,7 +468,7 @@ function onDrop(event: DragEvent) {
 
           <div class="control-cluster">
             <div>
-              <p class="control-label">Target format</p>
+              <p class="control-label">Формат результата</p>
               <div class="target-grid">
                 <button
                   v-for="target in availableTargets"
@@ -341,13 +479,13 @@ function onDrop(event: DragEvent) {
                   @click="selectedTargetExtension = target.extension"
                 >
                   <span>{{ target.label }}</span>
-                  <small>{{ target.statusLabel }}</small>
+                  <small>{{ formatTargetStatusLabel(target.family, target.available) }}</small>
                 </button>
               </div>
             </div>
 
             <div>
-              <p class="control-label">Preset profile</p>
+              <p class="control-label">Профиль качества</p>
               <div class="preset-grid">
                 <button
                   v-for="preset in availablePresets"
@@ -358,7 +496,7 @@ function onDrop(event: DragEvent) {
                   @click="selectedPresetId = preset.id"
                 >
                   <span>{{ preset.label }}</span>
-                  <small>{{ preset.statusLabel }}</small>
+                  <small>{{ formatPresetStatusLabel(preset.id) }}</small>
                 </button>
               </div>
             </div>
@@ -366,23 +504,23 @@ function onDrop(event: DragEvent) {
             <div v-if="currentScenario" class="scenario-callout">
               <p class="control-label">Активный сценарий</p>
               <h3>{{ currentScenario.label }}</h3>
-              <p>{{ currentScenario.notes }}</p>
+              <p>{{ formatScenarioDescription(currentScenario) }}</p>
             </div>
 
             <div v-if="activeLimitations.length" class="scenario-callout scenario-callout--limits">
-              <p class="control-label">Known limits</p>
+              <p class="control-label">Что важно учесть</p>
               <h3>Что важно учитывать до запуска</h3>
               <p v-for="item in activeLimitations" :key="item">{{ item }}</p>
             </div>
 
             <div class="scenario-callout scenario-callout--job">
-              <p class="control-label">Job lifecycle</p>
+              <p class="control-label">Состояние обработки</p>
               <h3>{{ currentStatusLabel }}</h3>
               <p>
                 {{
                   activeJobId
-                    ? `Job ${activeJobId} идёт через backend processing platform.`
-                    : 'Новый backend job появится после запуска конвертации.'
+                    ? `Задача ${activeJobId} сейчас обрабатывает конвертацию.`
+                    : 'После запуска здесь появится идентификатор текущей задачи.'
                 }}
               </p>
               <div class="job-progress">
@@ -397,11 +535,11 @@ function onDrop(event: DragEvent) {
             <div v-if="activePreset" class="scenario-callout">
               <p class="control-label">Активный пресет</p>
               <h3>{{ activePreset.label }}</h3>
-              <p>{{ activePreset.detail }}</p>
+              <p>{{ formatPresetDescription(activePreset) }}</p>
             </div>
 
             <label v-if="showVideoCodecControl" class="form-field">
-              <span class="control-label">Video codec</span>
+              <span class="control-label">Видеокодек</span>
               <select v-model="selectedVideoCodec" class="surface-select">
                 <option
                   v-for="option in availableVideoCodecOptions"
@@ -414,9 +552,13 @@ function onDrop(event: DragEvent) {
             </label>
 
             <label v-if="showResolutionControl" class="form-field">
-              <span class="control-label">Resolution</span>
+              <span class="control-label">Разрешение</span>
               <select v-model="selectedMediaResolution" class="surface-select">
-                <option v-for="option in resolutionOptions" :key="option.value" :value="option.value">
+                <option
+                  v-for="option in resolutionOptions"
+                  :key="option.value"
+                  :value="option.value"
+                >
                   {{ option.label }}
                 </option>
               </select>
@@ -432,7 +574,7 @@ function onDrop(event: DragEvent) {
             </label>
 
             <label v-if="showVideoBitrateControl" class="form-field">
-              <span class="control-label">Video bitrate</span>
+              <span class="control-label">Видеобитрейт</span>
               <select v-model="selectedVideoBitrateKbps" class="surface-select">
                 <option
                   v-for="option in videoBitrateOptions"
@@ -445,7 +587,7 @@ function onDrop(event: DragEvent) {
             </label>
 
             <label v-if="showAudioBitrateControl" class="form-field">
-              <span class="control-label">Audio bitrate</span>
+              <span class="control-label">Аудиобитрейт</span>
               <select v-model="selectedAudioBitrateKbps" class="surface-select">
                 <option
                   v-for="option in audioBitrateOptions"
@@ -458,13 +600,16 @@ function onDrop(event: DragEvent) {
             </label>
 
             <div v-if="showMediaControls && resolvedAudioCodec" class="scenario-callout">
-              <p class="control-label">Resolved audio codec</p>
+              <p class="control-label">Аудиокодек результата</p>
               <h3>{{ resolvedAudioCodec }}</h3>
-              <p>Контейнер выбирается target format, а audio codec показан отдельно, чтобы delivery-ограничения не смешивались в один выбор.</p>
+              <p>
+                Формат файла задаёт контейнер, а кодек показан отдельно, чтобы было понятно, что
+                именно получишь на выходе.
+              </p>
             </div>
 
             <label v-if="activeTarget?.supportsQuality" class="form-field">
-              <span class="control-label">Quality</span>
+              <span class="control-label">Качество</span>
               <div class="range-row">
                 <input v-model.number="quality" type="range" min="0.55" max="1" step="0.01" />
                 <strong>{{ Math.round(quality * 100) }}%</strong>
@@ -472,7 +617,7 @@ function onDrop(event: DragEvent) {
             </label>
 
             <label v-if="activeTarget && !activeTarget.supportsTransparency" class="form-field">
-              <span class="control-label">Background for alpha</span>
+              <span class="control-label">Фон вместо прозрачности</span>
               <div class="color-row">
                 <input v-model="backgroundColor" type="color" />
                 <span>{{ backgroundColor }}</span>
@@ -496,7 +641,7 @@ function onDrop(event: DragEvent) {
               :disabled="isCancelling"
               @click="cancelConversion"
             >
-              {{ isCancelling ? 'Cancelling...' : 'Cancel backend job' }}
+              {{ isCancelling ? 'Останавливаю...' : 'Остановить' }}
             </button>
             <button
               v-else
@@ -505,7 +650,7 @@ function onDrop(event: DragEvent) {
               :disabled="!canRetry"
               @click="retryLastConversion"
             >
-              Retry last request
+              Повторить последний запуск
             </button>
           </div>
         </div>
@@ -514,7 +659,7 @@ function onDrop(event: DragEvent) {
       <article class="panel-surface converter-panel converter-panel--result">
         <div class="panel-header">
           <div>
-            <p class="eyebrow">Result Deck</p>
+            <p class="eyebrow">Результат</p>
             <h2>Предпросмотр итогового файла и быстрый download.</h2>
           </div>
 
@@ -524,7 +669,7 @@ function onDrop(event: DragEvent) {
             class="action-button action-button--accent"
             @click="downloadResult"
           >
-            Download
+            Скачать
           </button>
         </div>
 
@@ -533,7 +678,7 @@ function onDrop(event: DragEvent) {
             <img
               v-if="result.previewKind === 'image'"
               :src="result.objectUrl"
-              :alt="`Converted preview ${result.fileName}`"
+              :alt="`Предпросмотр результата ${result.fileName}`"
             />
             <audio
               v-else-if="hasAudioPreview"
@@ -551,7 +696,7 @@ function onDrop(event: DragEvent) {
               v-else
               class="result-preview__frame"
               :src="result.objectUrl"
-              title="Converted preview"
+              title="Предпросмотр результата"
             />
           </div>
 
@@ -568,14 +713,14 @@ function onDrop(event: DragEvent) {
               <span>Тип результата</span>
               <strong>{{
                 result.kind === 'document'
-                  ? 'Document output'
+                  ? 'Документ'
                   : result.kind === 'media'
-                    ? 'Media output'
-                    : 'Image output'
+                    ? 'Медиа'
+                    : 'Изображение'
               }}</strong>
             </article>
             <article class="fact-card">
-              <span>Preset</span>
+              <span>Профиль</span>
               <strong>{{ result.preset.label }}</strong>
             </article>
             <article
@@ -587,16 +732,16 @@ function onDrop(event: DragEvent) {
               <strong>{{ fact.value }}</strong>
             </article>
             <article class="fact-card">
-              <span>Blob size</span>
+              <span>Размер файла</span>
               <strong>{{ formatBytes(result.blob.size) }}</strong>
             </article>
             <article class="fact-card">
-              <span>Backend job</span>
-              <strong>{{ result.backendJobId ?? 'Local fallback' }}</strong>
+              <span>Задача</span>
+              <strong>{{ result.backendJobId ?? 'Без очереди' }}</strong>
             </article>
             <article class="fact-card">
-              <span>Runtime</span>
-              <strong>{{ result.backendRuntimeLabel ?? 'Local runtime' }}</strong>
+              <span>Режим обработки</span>
+              <strong>{{ formatRuntimeLabel(result.backendRuntimeLabel) }}</strong>
             </article>
             <article class="fact-card">
               <span>Собрано</span>
@@ -612,11 +757,11 @@ function onDrop(event: DragEvent) {
             {{ warning }}
           </p>
 
-          <section v-if="hasResultHistory" class="history-stack" aria-label="История conversion jobs">
+          <section v-if="hasResultHistory" class="history-stack" aria-label="История конвертаций">
             <div class="panel-header panel-header--compact">
               <div>
-                <p class="eyebrow">Session History</p>
-                <h3>Готовые backend artifacts можно открыть снова или скачать без повторного job.</h3>
+                <p class="eyebrow">История сессии</p>
+                <h3>Недавние результаты можно открыть повторно или скачать ещё раз.</h3>
               </div>
             </div>
 
@@ -628,20 +773,22 @@ function onDrop(event: DragEvent) {
             >
               <div>
                 <strong>{{ entry.fileName }}</strong>
-                <p>{{ entry.sourceFileName }} · {{ entry.source.label }} -> {{ entry.target.label }}</p>
+                <p>
+                  {{ entry.sourceFileName }} · {{ entry.source.label }} -> {{ entry.target.label }}
+                </p>
                 <span>{{ formatDate(entry.createdAt) }}</span>
               </div>
 
               <div class="history-actions">
                 <button type="button" class="action-button" @click="selectResult(entry.id)">
-                  Open
+                  Открыть
                 </button>
                 <button
                   type="button"
                   class="action-button action-button--accent"
                   @click="downloadHistoryEntry(entry.id)"
                 >
-                  Download again
+                  Скачать ещё раз
                 </button>
               </div>
             </article>
@@ -649,11 +796,11 @@ function onDrop(event: DragEvent) {
         </div>
 
         <div v-else class="result-placeholder">
-          <p class="eyebrow">No output yet</p>
-          <h3>Сначала выбери source и запусти backend-first конвертацию.</h3>
+          <p class="eyebrow">Результат появится здесь</p>
+          <h3>Сначала выбери файл и направление конвертации.</h3>
           <p>
-            После первого успешного job здесь появятся итоговый preview, повторное скачивание и
-            история готовых backend artifacts.
+            После успешной обработки здесь появятся предпросмотр, основные параметры результата и
+            история последних выгрузок.
           </p>
         </div>
       </article>

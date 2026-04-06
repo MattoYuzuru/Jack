@@ -47,9 +47,9 @@ function validateJson(input: string): ValidationResult {
       valid: true,
       normalized: JSON.stringify(parsed, null, 2),
       facts: [
-        { label: 'Format', value: 'JSON' },
-        { label: 'Root type', value: resolveValueType(parsed) },
-        { label: 'Top-level keys', value: String(countTopLevelKeys(parsed)) },
+        { label: 'Формат', value: 'JSON' },
+        { label: 'Тип корня', value: resolveValueType(parsed) },
+        { label: 'Ключи верхнего уровня', value: String(countTopLevelKeys(parsed)) },
       ],
       issues: [],
     }
@@ -57,7 +57,7 @@ function validateJson(input: string): ValidationResult {
     return {
       valid: false,
       normalized: '',
-      facts: [{ label: 'Format', value: 'JSON' }],
+      facts: [{ label: 'Формат', value: 'JSON' }],
       issues: [
         {
           severity: 'error',
@@ -91,7 +91,7 @@ function validateYaml(input: string): ValidationResult {
     return {
       valid: false,
       normalized: '',
-      facts: [{ label: 'Format', value: 'YAML' }],
+      facts: [{ label: 'Формат', value: 'YAML' }],
       issues,
     }
   }
@@ -101,9 +101,9 @@ function validateYaml(input: string): ValidationResult {
     valid: true,
     normalized: YAML.stringify(parsed),
     facts: [
-      { label: 'Format', value: 'YAML' },
-      { label: 'Root type', value: resolveValueType(parsed) },
-      { label: 'Top-level keys', value: String(countTopLevelKeys(parsed)) },
+      { label: 'Формат', value: 'YAML' },
+      { label: 'Тип корня', value: resolveValueType(parsed) },
+      { label: 'Ключи верхнего уровня', value: String(countTopLevelKeys(parsed)) },
     ],
     issues,
   }
@@ -117,7 +117,7 @@ function validateXml(input: string): ValidationResult {
     return {
       valid: false,
       normalized: '',
-      facts: [{ label: 'Format', value: 'XML' }],
+      facts: [{ label: 'Формат', value: 'XML' }],
       issues: [
         {
           severity: 'error',
@@ -133,10 +133,10 @@ function validateXml(input: string): ValidationResult {
     valid: true,
     normalized: formatXml(new XMLSerializer().serializeToString(document)),
     facts: [
-      { label: 'Format', value: 'XML' },
-      { label: 'Root element', value: rootElement.tagName },
-      { label: 'Attributes', value: String(rootElement.attributes.length) },
-      { label: 'Direct children', value: String(rootElement.children.length) },
+      { label: 'Формат', value: 'XML' },
+      { label: 'Корневой элемент', value: rootElement.tagName },
+      { label: 'Атрибуты', value: String(rootElement.attributes.length) },
+      { label: 'Дочерние узлы', value: String(rootElement.children.length) },
     ],
     issues: [],
   }
@@ -159,7 +159,7 @@ function validateEnv(input: string): ValidationResult {
       issues.push({
         severity: 'error',
         code: 'ENV_MISSING_EQUALS',
-        message: `Line ${index + 1}: expected KEY=value pair.`,
+        message: `Строка ${index + 1}: ожидается пара KEY=value.`,
       })
       return
     }
@@ -170,7 +170,7 @@ function validateEnv(input: string): ValidationResult {
       issues.push({
         severity: 'error',
         code: 'ENV_INVALID_KEY',
-        message: `Line ${index + 1}: ${key} не выглядит как корректный env key.`,
+        message: `Строка ${index + 1}: ${key} не выглядит как корректное имя переменной.`,
       })
       return
     }
@@ -179,7 +179,7 @@ function validateEnv(input: string): ValidationResult {
       issues.push({
         severity: 'warning',
         code: 'ENV_DUPLICATE_KEY',
-        message: `Line ${index + 1}: ключ ${key} уже встречался выше.`,
+        message: `Строка ${index + 1}: ключ ${key} уже встречался выше.`,
       })
     }
 
@@ -192,10 +192,10 @@ function validateEnv(input: string): ValidationResult {
     valid: !hasErrors,
     normalized: hasErrors ? '' : entries.map(([key, value]) => `${key}=${value}`).join('\n'),
     facts: [
-      { label: 'Format', value: '.env' },
-      { label: 'Variables', value: String(entries.length) },
+      { label: 'Формат', value: '.env' },
+      { label: 'Переменные', value: String(entries.length) },
       {
-        label: 'Warnings',
+        label: 'Предупреждения',
         value: String(issues.filter((issue) => issue.severity === 'warning').length),
       },
     ],
@@ -221,12 +221,23 @@ function normalizeEnvValue(value: string): string {
 
 function resolveValueType(value: unknown): string {
   if (Array.isArray(value)) {
-    return 'array'
+    return 'массив'
   }
   if (value === null) {
     return 'null'
   }
-  return typeof value
+  switch (typeof value) {
+    case 'object':
+      return 'объект'
+    case 'string':
+      return 'строка'
+    case 'number':
+      return 'число'
+    case 'boolean':
+      return 'булево'
+    default:
+      return typeof value
+  }
 }
 
 function countTopLevelKeys(value: unknown): number {

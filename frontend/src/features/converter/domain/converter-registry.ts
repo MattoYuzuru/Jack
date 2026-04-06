@@ -104,7 +104,7 @@ export async function getConverterCapabilityMatrix(): Promise<ConverterCapabilit
   const matrix = scope.converterMatrix as ConverterCapabilityMatrix | null | undefined
 
   if (!matrix) {
-    throw new Error('Backend converter capability matrix не вернула converterMatrix payload.')
+    throw new Error('Не удалось загрузить доступные направления конвертации.')
   }
 
   return {
@@ -146,7 +146,9 @@ export async function resolveConverterSourceFormat(
 
   if (normalizedMimeType) {
     const matchByMime = matrix.sourceFormats.find((definition) =>
-      definition.mimeTypes.some((candidate) => candidate.trim().toLowerCase() === normalizedMimeType),
+      definition.mimeTypes.some(
+        (candidate) => candidate.trim().toLowerCase() === normalizedMimeType,
+      ),
     )
 
     if (matchByMime) {
@@ -161,8 +163,7 @@ export async function resolveConverterSourceFormat(
 
   return (
     matrix.sourceFormats.find(
-      (definition) =>
-        definition.extension === extension || definition.aliases.includes(extension),
+      (definition) => definition.extension === extension || definition.aliases.includes(extension),
     ) ?? null
   )
 }
@@ -208,13 +209,12 @@ export async function listConverterTargetsForSource(
   }
 
   return matrix.scenarios
-    .filter(
-      (scenario) => scenario.sourceExtension === source.extension && scenario.available,
-    )
+    .filter((scenario) => scenario.sourceExtension === source.extension && scenario.available)
     .flatMap((scenario) => {
       const target =
-        matrix.targetFormats.find((candidate) => candidate.extension === scenario.targetExtension) ??
-        null
+        matrix.targetFormats.find(
+          (candidate) => candidate.extension === scenario.targetExtension,
+        ) ?? null
 
       return target && target.available ? [target] : []
     })

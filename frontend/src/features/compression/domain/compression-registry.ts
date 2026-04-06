@@ -58,7 +58,7 @@ export async function getCompressionCapabilityMatrix(): Promise<CompressionCapab
   const matrix = scope.compressionMatrix as CompressionCapabilityMatrix | null | undefined
 
   if (!matrix) {
-    throw new Error('Backend compression capability matrix не вернула compressionMatrix payload.')
+    throw new Error('Не удалось загрузить доступные режимы сжатия.')
   }
 
   return {
@@ -97,7 +97,9 @@ export async function resolveCompressionSourceFormat(
 
   if (normalizedMimeType) {
     const matchByMime = matrix.sourceFormats.find((definition) =>
-      definition.mimeTypes.some((candidate) => candidate.trim().toLowerCase() === normalizedMimeType),
+      definition.mimeTypes.some(
+        (candidate) => candidate.trim().toLowerCase() === normalizedMimeType,
+      ),
     )
 
     if (matchByMime) {
@@ -112,8 +114,7 @@ export async function resolveCompressionSourceFormat(
 
   return (
     matrix.sourceFormats.find(
-      (definition) =>
-        definition.extension === extension || definition.aliases.includes(extension),
+      (definition) => definition.extension === extension || definition.aliases.includes(extension),
     ) ?? null
   )
 }

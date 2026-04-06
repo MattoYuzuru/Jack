@@ -28,7 +28,7 @@ export async function buildNativeAudioPreview(
   format: ViewerFormatDefinition,
 ): Promise<ViewerAudioPreviewPayload> {
   return buildAudioPreviewFromBlob(file, format, {
-    playbackPathLabel: 'Browser native audio',
+    playbackPathLabel: 'Браузерное воспроизведение',
     metadataMimeType: file.type,
     metadataSource: file,
   })
@@ -60,7 +60,7 @@ export async function buildAudioPreviewFromBlob(
                   container: null,
                 },
               } satisfies ViewerAudioMetadataPayload,
-              warnings: ['Metadata source file не передан в audio preview path.'],
+              warnings: ['Не удалось получить исходные метаданные аудио.'],
             }),
         inspectNativeAudio(objectUrl),
         decodeViewerAudioWaveform(blob),
@@ -70,7 +70,7 @@ export async function buildAudioPreviewFromBlob(
 
     if (!waveform.length) {
       baseWarnings.push(
-        'Waveform preview не удалось собрать через Web Audio decode path. Playback и metadata остаются доступными.',
+        'Не удалось собрать волну сигнала, но воспроизведение и основные данные остаются доступны.',
       )
     }
 
@@ -94,24 +94,24 @@ export async function buildAudioPreviewFromBlob(
         { label: 'Тип аудио', value: format.label },
         { label: 'Длительность', value: formatViewerAudioDuration(audioMetadata.durationSeconds) },
         {
-          label: 'Estimated Bitrate',
+          label: 'Битрейт',
           value: formatViewerAudioBitrate(technicalMetadata.estimatedBitrateBitsPerSecond),
         },
         {
-          label: 'Sample Rate',
+          label: 'Частота дискретизации',
           value: formatViewerSampleRate(technicalMetadata.sampleRate),
         },
         {
-          label: 'Channels',
+          label: 'Каналы',
           value: formatViewerChannelLayout(technicalMetadata.channelCount),
         },
         {
-          label: 'Codec',
+          label: 'Кодек',
           value: technicalMetadata.codec ?? 'n/a',
         },
         {
-          label: 'Playback path',
-          value: options.playbackPathLabel ?? 'Browser native audio',
+          label: 'Режим воспроизведения',
+          value: options.playbackPathLabel ?? 'Браузерное воспроизведение',
         },
         ...metadataPayload.summary,
         ...(options.extraSummary ?? []),
@@ -156,7 +156,7 @@ async function safeLoadViewerAudioMetadata(
           container: null,
         },
       },
-      warnings: ['Не удалось извлечь audio tags из исходного контейнера.'],
+      warnings: ['Не удалось извлечь теги из исходного аудиофайла.'],
     }
   }
 }
@@ -180,7 +180,7 @@ function inspectNativeAudio(objectUrl: string): Promise<NativeAudioMetadata> {
     }
 
     audio.onerror = () => {
-      reject(new Error('Не удалось прочитать metadata из аудиофайла через browser-native preview path.'))
+      reject(new Error('Не удалось прочитать данные аудиофайла для просмотра.'))
       cleanup()
     }
 
@@ -190,7 +190,8 @@ function inspectNativeAudio(objectUrl: string): Promise<NativeAudioMetadata> {
 
 async function decodeViewerAudioWaveform(blob: Blob): Promise<number[]> {
   const AudioContextConstructor =
-    window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+    window.AudioContext ||
+    (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
 
   if (!AudioContextConstructor) {
     return []

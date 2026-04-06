@@ -73,7 +73,9 @@ describe('converter runtime', () => {
       },
     })
 
-    const prepared = await runtime.inspect(new File(['image'], 'capture.heic', { type: 'image/heic' }))
+    const prepared = await runtime.inspect(
+      new File(['image'], 'capture.heic', { type: 'image/heic' }),
+    )
 
     if (!prepared) {
       throw new Error('Expected a prepared source for HEIC.')
@@ -95,7 +97,8 @@ describe('converter runtime', () => {
   it('emits an alpha warning when transparent pixels go to jpeg', async () => {
     const runtime = createConverterRuntime({
       isServerScenario: () => false,
-      decodeNativeRaster: async (_prepared: ConverterPreparedSource) => createDecodedSource(1280, 720, true),
+      decodeNativeRaster: async (_prepared: ConverterPreparedSource) =>
+        createDecodedSource(1280, 720, true),
       encodeJpeg: async () => ({
         blob: new Blob(['jpg'], { type: 'image/jpeg' }),
         warnings: [],
@@ -122,7 +125,8 @@ describe('converter runtime', () => {
   it('builds document outputs through the pdf target strategy', async () => {
     const runtime = createConverterRuntime({
       isServerScenario: () => false,
-      decodeNativeRaster: async (_prepared: ConverterPreparedSource) => createDecodedSource(1280, 720, true),
+      decodeNativeRaster: async (_prepared: ConverterPreparedSource) =>
+        createDecodedSource(1280, 720, true),
       encodePdf: async () => ({
         blob: new Blob(['pdf'], { type: 'application/pdf' }),
         warnings: ['PDF собран как single-page raster document без отдельного текстового слоя.'],
@@ -156,7 +160,8 @@ describe('converter runtime', () => {
 
     const runtime = createConverterRuntime({
       isServerScenario: () => false,
-      decodeNativeRaster: async (_prepared: ConverterPreparedSource) => createDecodedSource(4000, 3000, false),
+      decodeNativeRaster: async (_prepared: ConverterPreparedSource) =>
+        createDecodedSource(4000, 3000, false),
       resizeRaster: async (raster, preset) => {
         receivedPresetId = preset.id
 
@@ -205,7 +210,8 @@ describe('converter runtime', () => {
   it('returns a png preview layer for tiff targets while keeping the download blob as tiff', async () => {
     const runtime = createConverterRuntime({
       isServerScenario: () => false,
-      decodeRawSource: async (_prepared: ConverterPreparedSource) => createDecodedSource(2400, 1600, false),
+      decodeRawSource: async (_prepared: ConverterPreparedSource) =>
+        createDecodedSource(2400, 1600, false),
       encodeTiff: async () => ({
         blob: new Blob(['tiff'], { type: 'image/tiff' }),
         previewBlob: new Blob(['png-preview'], { type: 'image/png' }),
@@ -341,7 +347,9 @@ describe('converter runtime', () => {
     })
 
     expect(result.fileName).toBe('poster.png')
-    expect(result.warnings).toContain('AI/EPS сведен через PDF-compatible render path в единый raster-слой.')
+    expect(result.warnings).toContain(
+      'AI/EPS сведен через PDF-compatible render path в единый raster-слой.',
+    )
   })
 
   it('returns preview-safe blobs for avif and ico targets', async () => {
@@ -452,7 +460,9 @@ describe('converter runtime', () => {
       },
     })
 
-    const prepared = await runtime.inspect(new File(['image'], 'capture.heic', { type: 'image/heic' }))
+    const prepared = await runtime.inspect(
+      new File(['image'], 'capture.heic', { type: 'image/heic' }),
+    )
 
     if (!prepared) {
       throw new Error('Expected a prepared source for HEIC.')
@@ -555,7 +565,9 @@ describe('converter runtime', () => {
       },
     })
 
-    const prepared = await runtime.inspect(new File(['video'], 'clip.mkv', { type: 'video/x-matroska' }))
+    const prepared = await runtime.inspect(
+      new File(['video'], 'clip.mkv', { type: 'video/x-matroska' }),
+    )
 
     if (!prepared) {
       throw new Error('Expected a prepared source for MKV.')

@@ -157,11 +157,9 @@ export function ensureViewerWebVtt(source: string): string {
   return `WEBVTT\n\n${normalizedSource.trim()}\n`
 }
 
-export function countViewerSubtitleCues(
-  source: string,
-  format: ViewerSubtitleFormat,
-): number {
-  const normalizedSource = format === 'srt' ? convertViewerSrtToVtt(source) : ensureViewerWebVtt(source)
+export function countViewerSubtitleCues(source: string, format: ViewerSubtitleFormat): number {
+  const normalizedSource =
+    format === 'srt' ? convertViewerSrtToVtt(source) : ensureViewerWebVtt(source)
   const matches = normalizedSource.match(
     /^\s*(?:\d{2}:)?\d{2}:\d{2}\.\d{3}\s+-->\s+(?:\d{2}:)?\d{2}:\d{2}\.\d{3}.*$/gm,
   )
@@ -248,7 +246,10 @@ function sanitizeViewerSubtitleLabel(fileName: string): string {
 }
 
 function normalizeViewerText(source: string): string {
-  return source.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n').trim()
+  return source
+    .replace(/^\uFEFF/, '')
+    .replace(/\r\n/g, '\n')
+    .trim()
 }
 
 function greatestCommonDivisor(a: number, b: number): number {

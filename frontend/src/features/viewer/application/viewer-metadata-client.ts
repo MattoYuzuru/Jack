@@ -32,8 +32,8 @@ interface ViewerMetadataExportManifest {
 const METADATA_JOB_TYPE = 'METADATA_EXPORT'
 
 export function canEmbedMetadata(fileName: string): boolean {
-	const extension = detectFileExtension(fileName)
-	return extension === 'jpg' || extension === 'jpeg'
+  const extension = detectFileExtension(fileName)
+  return extension === 'jpg' || extension === 'jpeg'
 }
 
 export async function inspectViewerImageMetadata(
@@ -43,7 +43,7 @@ export async function inspectViewerImageMetadata(
   const manifest = await runMetadataInspectJob(file, 'inspect-image', reportProgress)
 
   if (!manifest.imagePayload) {
-    throw new Error('Backend metadata inspect вернул пустой image payload.')
+    throw new Error('Не удалось получить метаданные изображения.')
   }
 
   return manifest.imagePayload
@@ -56,7 +56,7 @@ export async function inspectViewerAudioMetadata(
   const manifest = await runMetadataInspectJob(file, 'inspect-audio', reportProgress)
 
   if (!manifest.audioPayload) {
-    throw new Error('Backend metadata inspect вернул пустой audio payload.')
+    throw new Error('Не удалось получить метаданные аудио.')
   }
 
   return {
@@ -79,9 +79,9 @@ export async function exportViewerMetadata(
       metadata,
     },
     reportProgress,
-    createMessage: 'Создаю backend METADATA_EXPORT job для metadata export...',
+    createMessage: 'Сохраняю метаданные...',
     timeoutMessage:
-      'Backend METADATA_EXPORT job не завершился в ожидаемое время. Попробуй файл меньшего размера или проверь backend logs.',
+      'Сохранение метаданных заняло слишком много времени. Попробуй файл меньшего размера или повтори позже.',
   })
 
   const manifestArtifact = completedJob.artifacts.find(
@@ -92,10 +92,10 @@ export async function exportViewerMetadata(
   )
 
   if (!manifestArtifact || !exportArtifact) {
-    throw new Error('Backend METADATA_EXPORT job завершился без metadata export artifacts.')
+    throw new Error('Сохранение метаданных завершилось без файлов результата.')
   }
 
-  reportProgress?.('Загружаю backend metadata export artifact...')
+  reportProgress?.('Загружаю готовый файл...')
   const [manifest, blob] = await Promise.all([
     requestProcessingJson<ViewerMetadataExportManifest>(manifestArtifact.downloadPath),
     requestProcessingBlob(exportArtifact.downloadPath),
@@ -121,9 +121,9 @@ async function runMetadataInspectJob(
     jobType: METADATA_JOB_TYPE,
     parameters: { operation },
     reportProgress,
-    createMessage: `Создаю backend METADATA_EXPORT job для ${operation}...`,
+    createMessage: 'Считываю метаданные...',
     timeoutMessage:
-      'Backend METADATA_EXPORT inspect job не завершился в ожидаемое время. Проверь backend logs и размер файла.',
+      'Чтение метаданных заняло слишком много времени. Проверь размер файла и повтори позже.',
   })
 
   const manifestArtifact = completedJob.artifacts.find(
@@ -131,9 +131,9 @@ async function runMetadataInspectJob(
   )
 
   if (!manifestArtifact) {
-    throw new Error('Backend METADATA_EXPORT inspect job завершился без manifest artifact.')
+    throw new Error('Чтение метаданных завершилось без файла результата.')
   }
 
-  reportProgress?.('Загружаю metadata manifest с backend...')
+  reportProgress?.('Загружаю данные метаданных...')
   return requestProcessingJson<ViewerMetadataInspectManifest>(manifestArtifact.downloadPath)
 }

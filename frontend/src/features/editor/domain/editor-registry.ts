@@ -38,7 +38,7 @@ export async function getEditorCapabilityMatrix(): Promise<EditorCapabilityMatri
   const matrix = scope.editorMatrix as EditorCapabilityMatrix | null | undefined
 
   if (!matrix) {
-    throw new Error('Backend editor capability matrix не вернула editorMatrix payload.')
+    throw new Error('Не удалось загрузить доступные форматы редактора.')
   }
 
   return {

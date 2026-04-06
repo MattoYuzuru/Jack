@@ -31,13 +31,13 @@ export function generateUlid(timestamp = Date.now(), randomBytes = defaultRandom
 export function analyzeTimestamp(input: string): TimestampAnalysisResult {
   const normalizedInput = input.trim()
   if (!normalizedInput) {
-    return buildTimestampError('Добавь Unix timestamp или ISO date string.')
+    return buildTimestampError('Добавь Unix timestamp или дату в ISO-формате.')
   }
 
   const parsedDate = parseTimestampInput(normalizedInput)
   if (!parsedDate) {
     return buildTimestampError(
-      'Не удалось распознать timestamp. Используй epoch seconds, epoch milliseconds или ISO date.',
+      'Не удалось распознать время. Используй секунды Unix, миллисекунды Unix или дату в ISO-формате.',
     )
   }
 
@@ -46,10 +46,10 @@ export function analyzeTimestamp(input: string): TimestampAnalysisResult {
     error: null,
     facts: [
       {
-        label: 'Source kind',
-        value: /^\d+$/u.test(normalizedInput) ? 'Numeric epoch' : 'Date string',
+        label: 'Тип источника',
+        value: /^\d+$/u.test(normalizedInput) ? 'Числовой timestamp' : 'Строка даты',
       },
-      { label: 'Timezone', value: 'Browser local + UTC' },
+      { label: 'Часовой пояс', value: 'Локальное время + UTC' },
     ],
     isoUtc: parsedDate.toISOString(),
     localTime: parsedDate.toLocaleString(),

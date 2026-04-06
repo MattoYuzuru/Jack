@@ -52,7 +52,7 @@ public class EditorCapabilityMatrixService {
 			return null;
 		}
 
-		return "Формат требует доступных backend capabilities: %s."
+		return "Формат сейчас недоступен. Нужны сервисы: %s."
 			.formatted(requiredJobTypes.stream().map(Enum::name).toList());
 	}
 

@@ -87,6 +87,10 @@ docker compose down -v
 - `JACK_PROCESSING_TESSERACT_EXECUTABLE`
 - `JACK_PROCESSING_PDF_TOOLKIT_TIMEOUT_SECONDS`
 - `JACK_PROCESSING_PDF_TOOLKIT_DEFAULT_OCR_LANGUAGE`
+- `JACK_PROCESSING_CLEANUP_INTERVAL_MILLIS`
+- `JACK_PROCESSING_UPLOAD_RETENTION_HOURS`
+- `JACK_PROCESSING_ARTIFACT_RETENTION_HOURS`
+- `JACK_PROCESSING_JOB_RETENTION_HOURS`
 
 ## Backend Processing Platform
 
@@ -170,7 +174,7 @@ npm run dev
 ### 2. File Viewer
 
 - [x] Унифицированная загрузка файлов и рабочая зона предпросмотра
-- [ ] Поддержка изображений, аудио, видео, офисных документов, файлов БД и других полезных форматов
+- [x] Поддержка изображений, аудио, видео, офисных документов, файлов БД и других полезных форматов
 
 #### 2.1 Image Viewer
 
@@ -194,20 +198,23 @@ Viewer уже даёт browser-native preview для `jpg`, `jpeg`, `png`, `webp
 - [x] OOXML adapters для `docx`, `xlsx`, `pptx` с preview поверх общего document contract
 - [x] Полировка UX для поддержанных документов: quick actions, sheet tabs, slide focus и более ясный search flow
 - [x] Legacy/open/database adapters для `doc`, `odt`, `xls`, `epub`, `db`, `sqlite`
-- [ ] Частичное редактирование содержимого там, где формат это позволяет
-- [x] Поддержка: `doc`, `docx`, `pdf`, `txt`, `rtf`, `odt`, `xls`, `xlsx`, `csv`, `pptx`, `html`, `epub`, `db`, `sqlite`
+- [x] Частичное редактирование содержимого там, где формат это позволяет
+- [x] Поддержка: `doc`, `docx`, `pdf`, `txt`, `rtf`, `odt`, `xls`, `xlsx`, `csv`, `tsv`, `pptx`, `html`, `epub`, `db`, `sqlite`, `md`, `markdown`, `json`, `yaml`, `yml`, `xml`, `env`, `log`, `sql`
 
 Document viewer теперь использует тот же registry/strategy foundation, что и image layer, но сами
 document container'ы больше не парсятся в браузере. Backend `VIEWER_RESOLVE` сводит их к единому viewer contract, а внутри переиспользует `DOCUMENT_PREVIEW`, который уже собирает
-`pdf`, `txt`, `csv`, `html`, `rtf`, `doc`, `docx`, `odt`, `xls`, `xlsx`, `pptx`, `epub`, `db`, `sqlite`
+`pdf`, `txt`, `csv`, `tsv`, `html`, `rtf`, `doc`, `docx`, `odt`, `xls`, `xlsx`, `pptx`, `epub`, `db`, `sqlite`, `md`, `markdown`, `json`, `yaml`, `yml`, `xml`, `env`, `log`, `sql`
 к общему document contract:
 `summary + search layer + layout mode + warnings`.
 `pdf` открывается через backend-prepared PDF artifact и получает page/search stats, `csv` получает table preview,
 `html` приходит после backend sanitization в sandbox `srcdoc`, `rtf` и `doc` идут через server text extraction path,
 `docx` и `odt` собираются как structured document HTML, `xls` и `xlsx` как workbook/sheet preview, `pptx` как slide
-text deck, `epub` как reflow reading layer, а `db/sqlite` как schema-aware database preview.
-Поверх этого viewer даёт copy/download для extracted text, внятные active states для sheets/slides
-и более читаемый search UX прямо внутри общего workspace, но тяжёлый parsing/runtime уже принадлежит backend.
+text deck, `epub` как reflow reading layer, `db/sqlite` как schema-aware database preview, а
+`markdown/json/yaml/xml/.env/log/sql` получают structured preview и безопасную editable-copy
+handoff в editor.
+Поверх этого viewer даёт copy/download для extracted text, внятные active states для sheets/slides,
+более читаемый search UX и quick edit для тексто-ориентированных форматов прямо внутри общего
+workspace, но тяжёлый parsing/runtime уже принадлежит backend.
 
 #### 2.3 Video Viewer
 
@@ -247,7 +254,13 @@ groups, timeline/volume/rate controls, loop и keyboard flow для быстры
 
 #### 2.5 Другие Форматы
 
-- [ ] Дополнительные viewer-сценарии для нишевых и служебных форматов
+- [x] Дополнительные viewer-сценарии для нишевых и служебных форматов
+
+Viewer теперь закрывает и служебные текстовые форматы, которые важны не столько для faithful
+рендера, сколько для быстрого чтения, поиска и правки: `markdown`, `json`, `yaml`, `xml`, `.env`,
+`tsv`, `log`, `sql`.
+Для них Jack собирает summary, outline/search там, где это разумно, и даёт безопасную рабочую
+копию, которую можно сразу передать в Editor.
 
 ### 3. Конвертация Файлов
 
@@ -462,6 +475,16 @@ Dev Tools в итерации 7 закрыт как отдельный frontend-
 инструменты работают на тексте, URL и локальных файлах, считаются мгновенно в браузере, не строят server-owned artifact и не выигрывают от queue/retry/capability routing.
 Поэтому route живёт как локальный toolbox с persisted state, copy/download UX и разбивкой на шесть рабочих наборов:
 `Encoding`, `JWT`, `Hashes`, `Links`, `Validators`, `Quick Utils`.
+
+### 8. Debt Burn-down And Product Polish
+
+- [x] Убрать технический helper-copy и внутренние implementation-описания с основных экранов
+- [x] Довести document viewer до quick-edit handoff в editor для тексто-ориентированных форматов
+- [x] Расширить document preview на `markdown/json/yaml/xml/.env/tsv/log/sql`
+- [x] Перевести backend manifest/capability сообщения на продуктовый язык без архитектурного жаргона
+- [x] Синхронизировать названия пресетов, режимов сжатия и статусы доступности между backend и UI
+- [x] Добавить TTL cleanup policy для upload/artifact/job storage
+- [x] Открыть базовые processing metrics через actuator и закрепить новые cleanup env-настройки
 
 ## Модель Итераций
 

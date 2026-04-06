@@ -46,14 +46,14 @@ export function useDevToolsWorkspace() {
 
   const encodingStrategyId = ref<EncodingStrategyId>('base64')
   const encodingMode = ref<EncodingMode>('encode')
-  const encodingInput = ref('Hello Jack\n{"mode":"dev"}')
+  const encodingInput = ref('Привет, Jack\n{"channel":"share"}')
 
   const jwtInput = ref(
     'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6ImRldi1rZXkifQ.eyJpc3MiOiJqYWNrLmxvY2FsIiwic3ViIjoiZGV2LXVzZXIiLCJhdWQiOiJ3ZWItdG9vbHMiLCJpYXQiOjE3MDAwMDAwMDAsIm5iZiI6MTcwMDAwMDAwMCwiZXhwIjo0MTAyNDQ0ODAwLCJzY29wZSI6InJlYWQ6dG9vbHMgd3JpdGU6dG9vbHMifQ.signature',
   )
 
   const hashSourceMode = ref<HashSourceMode>('text')
-  const hashTextInput = ref('Jack integrity payload')
+  const hashTextInput = ref('Подписываемый текст для сверки')
   const hashSecret = ref('')
   const hashFile = ref<File | null>(null)
   const hashReport = ref<HashReport | null>(null)
@@ -70,13 +70,13 @@ export function useDevToolsWorkspace() {
   })
 
   const validationFormatId = ref<ValidationFormatId>('json')
-  const validationInput = ref('{\n  "service": "jack",\n  "iteration": 7,\n  "ready": true\n}')
+  const validationInput = ref('{\n  "project": "jack",\n  "env": "prod",\n  "ready": true\n}')
 
   const quickUuid = ref(generateUuid())
   const quickUlid = ref(generateUlid())
   const timestampInput = ref(String(Date.now()))
   const basicAuthUsername = ref('jack-user')
-  const basicAuthPassword = ref('local-secret')
+  const basicAuthPassword = ref('demo-secret')
 
   const actionMessage = ref('')
 
@@ -203,7 +203,7 @@ export function useDevToolsWorkspace() {
 
   async function copyText(value: string, label: string): Promise<void> {
     if (!value.trim()) {
-      actionMessage.value = `${label}: nothing to copy`
+      actionMessage.value = `${label}: пока нечего копировать`
       return
     }
 
@@ -213,7 +213,7 @@ export function useDevToolsWorkspace() {
     }
 
     await navigator.clipboard.writeText(value)
-    actionMessage.value = `${label} copied to clipboard`
+    actionMessage.value = `${label} скопирован в буфер`
   }
 
   function downloadText(
@@ -230,7 +230,7 @@ export function useDevToolsWorkspace() {
     anchor.click()
     anchor.remove()
     URL.revokeObjectURL(objectUrl)
-    actionMessage.value = `${fileName} downloaded`
+    actionMessage.value = `${fileName} сохранён`
   }
 
   return {

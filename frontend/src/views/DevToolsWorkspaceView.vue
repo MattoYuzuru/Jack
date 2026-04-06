@@ -13,8 +13,8 @@ const encodingStrategies: Array<{ id: EncodingStrategyId; label: string }> = [
   { id: 'base64', label: 'Base64' },
   { id: 'base64url', label: 'Base64URL' },
   { id: 'url', label: 'URL' },
-  { id: 'html', label: 'HTML entities' },
-  { id: 'unicode', label: 'Unicode escapes' },
+  { id: 'html', label: 'HTML-сущности' },
+  { id: 'unicode', label: 'Unicode-экранирование' },
 ]
 
 const validationFormats: Array<{ id: ValidationFormatId; label: string }> = [
@@ -25,23 +25,21 @@ const validationFormats: Array<{ id: ValidationFormatId; label: string }> = [
 ]
 
 const statusCards = computed(() => [
-  { value: '6', label: 'toolkits in one route' },
-  { value: '24', label: 'daily operations covered' },
-  { value: '0', label: 'backend roundtrips needed' },
-  { value: 'Local', label: 'state persisted in browser' },
+  { value: '6', label: 'рабочих наборов' },
+  { value: '24', label: 'повседневных задач' },
+  { value: '0', label: 'лишних загрузок на сервер' },
+  { value: 'Локально', label: 'состояние хранится в браузере' },
 ])
 
 const signalPills = [
-  'Iteration 07',
-  'Frontend-native by design',
-  'Clipboard-ready outputs',
-  'Persistent local state',
-  'JWT claims timeline',
-  'SHA + HMAC',
-  'UTM cleaner',
-  'JSON/YAML/XML/.env validators',
-  'UUID + ULID',
-  'Timestamp converter',
+  'Быстрые повседневные утилиты',
+  'Мгновенный результат',
+  'Копирование и экспорт',
+  'JWT и подписи',
+  'Чистка ссылок',
+  'Проверка JSON, YAML, XML и .env',
+  'UUID и ULID',
+  'Преобразование времени',
 ]
 
 function triggerHashFilePicker(): void {
@@ -55,6 +53,10 @@ function onHashFileSelected(event: Event): void {
     input.value = ''
   }
 }
+
+function formatQueryEntryStatus(status: 'kept' | 'removed'): string {
+  return status === 'removed' ? 'Убран' : 'Оставлен'
+}
 </script>
 
 <template>
@@ -63,30 +65,29 @@ function onHashFileSelected(event: Event): void {
       <div class="brand-lockup">
         <img class="brand-lockup__logo" src="/logo.svg" alt="Логотип Jack" />
         <div class="brand-lockup__copy">
-          <p class="eyebrow">Iteration 07 · Dev Tools And Utils</p>
-          <p class="brand-lockup__title">Dev Tools Workspace</p>
+          <p class="eyebrow">Jack · Dev-инструменты</p>
+          <p class="brand-lockup__title">Инженерные утилиты</p>
         </div>
       </div>
 
       <div class="devtools-topbar__actions">
-        <RouterLink class="back-link" to="/">Back Home</RouterLink>
-        <span class="chip-pill">Browser-native route</span>
-        <span class="chip-pill chip-pill--accent">Instant daily workflows</span>
+        <RouterLink class="back-link" to="/">На главную</RouterLink>
+        <span class="chip-pill">Локальные вычисления</span>
+        <span class="chip-pill chip-pill--accent">Быстрые ежедневные задачи</span>
       </div>
     </header>
 
     <section class="devtools-hero">
       <article class="panel-surface devtools-hero__copy">
-        <p class="eyebrow">Local-First Engineering Utilities</p>
+        <p class="eyebrow">Небольшие задачи без лишних переключений</p>
         <h1>
-          Dev Tools закрывает ежедневные инженерные мелочи прямо в вебе: encoding lab, JWT
-          inspector, hash toolkit, link cleaner, validators и quick helpers.
+          Этот набор собирает в одном месте всё, что нужно между основными задачами: кодировки,
+          токены, хэши, ссылки, валидаторы и быстрые сервисные мелочи.
         </h1>
         <p class="lead">
-          В этой итерации архитектура выбрана осознанно: инструменты мгновенные, тексто- и
-          URL-центричные, не дают выгоды от backend queue/artifact orchestration и поэтому живут в
-          браузере. Это сохраняет ощущение локального toolbox, но остаётся в том же визуальном и
-          продуктово-модульном каркасе Jack.
+          Это набор утилит, которые должны открываться и отрабатывать мгновенно: без очередей,
+          лишних экранов и внешних сервисов. Можно быстро почистить ссылку, проверить токен,
+          посчитать подпись или привести конфиг в порядок и сразу вернуться к основной работе.
         </p>
 
         <div class="signal-row">
@@ -102,12 +103,13 @@ function onHashFileSelected(event: Event): void {
         </div>
 
         <div class="devtools-hero__notes">
-          <p class="eyebrow">System Notes</p>
-          <h2>Новый маршрут не спорит с processing-platform, а закрывает другой класс задач.</h2>
+          <p class="eyebrow">Что здесь удобно</p>
+          <h2>
+            Всё рассчитано на быстрый ручной сценарий: открыл, проверил, скопировал, пошёл дальше.
+          </h2>
           <p>
-            Viewer, converter, compression, PDF toolkit и editor остаются backend-first там, где
-            нужны artifacts, retries и единый source of truth. Dev tools, наоборот, должны быть
-            мгновенными, копируемыми и безопасно локальными.
+            Состояние сохраняется локально, поэтому можно вернуться к последней ссылке, токену или
+            конфигу и продолжить с того же места.
           </p>
         </div>
       </article>
@@ -149,7 +151,7 @@ function onHashFileSelected(event: Event): void {
       <article class="panel-surface devtools-panel">
         <div class="devtools-panel__header">
           <div>
-            <p class="eyebrow">Input Workspace</p>
+            <p class="eyebrow">Рабочая область</p>
             <h2>{{ workspace.activeTool.value?.title }}</h2>
           </div>
           <span class="chip-pill chip-pill--accent">{{
@@ -160,7 +162,7 @@ function onHashFileSelected(event: Event): void {
         <div v-if="workspace.activeToolId.value === 'encoding'" class="devtools-stack">
           <div class="devtools-field-row">
             <label class="devtools-field">
-              <span>Strategy</span>
+              <span>Формат</span>
               <select v-model="workspace.encodingStrategyId.value">
                 <option v-for="option in encodingStrategies" :key="option.id" :value="option.id">
                   {{ option.label }}
@@ -175,7 +177,7 @@ function onHashFileSelected(event: Event): void {
                 type="button"
                 @click="workspace.encodingMode.value = 'encode'"
               >
-                Encode
+                Кодировать
               </button>
               <button
                 class="action-button"
@@ -183,25 +185,25 @@ function onHashFileSelected(event: Event): void {
                 type="button"
                 @click="workspace.encodingMode.value = 'decode'"
               >
-                Decode
+                Декодировать
               </button>
             </div>
           </div>
 
           <label class="devtools-field">
-            <span>Input</span>
+            <span>Текст</span>
             <textarea
               v-model="workspace.encodingInput.value"
               rows="12"
               spellcheck="false"
-              placeholder="Paste text to encode or decode"
+              placeholder="Вставь текст, который нужно преобразовать"
             />
           </label>
         </div>
 
         <div v-else-if="workspace.activeToolId.value === 'jwt'" class="devtools-stack">
           <label class="devtools-field">
-            <span>JWT token</span>
+            <span>JWT</span>
             <textarea
               v-model="workspace.jwtInput.value"
               rows="12"
@@ -220,7 +222,7 @@ function onHashFileSelected(event: Event): void {
                 type="button"
                 @click="workspace.hashSourceMode.value = 'text'"
               >
-                Text
+                Текст
               </button>
               <button
                 class="action-button"
@@ -228,37 +230,37 @@ function onHashFileSelected(event: Event): void {
                 type="button"
                 @click="workspace.hashSourceMode.value = 'file'"
               >
-                File
+                Файл
               </button>
             </div>
 
             <label class="devtools-field">
-              <span>HMAC secret</span>
+              <span>Секрет HMAC</span>
               <input
                 v-model="workspace.hashSecret.value"
                 type="password"
                 spellcheck="false"
-                placeholder="Optional shared secret"
+                placeholder="Необязательно"
               />
             </label>
           </div>
 
           <label v-if="workspace.hashSourceMode.value === 'text'" class="devtools-field">
-            <span>Payload</span>
+            <span>Текст</span>
             <textarea
               v-model="workspace.hashTextInput.value"
               rows="10"
               spellcheck="false"
-              placeholder="Payload to hash"
+              placeholder="Вставь текст для расчёта хэша"
             />
           </label>
 
           <div v-else class="devtools-file-picker">
             <p class="devtools-file-picker__title">
-              {{ workspace.hashFile.value?.name ?? 'No file selected' }}
+              {{ workspace.hashFile.value?.name ?? 'Файл не выбран' }}
             </p>
             <p class="devtools-file-picker__detail">
-              {{ workspace.hashFile.value?.type || 'Pick any local file to compute digests.' }}
+              {{ workspace.hashFile.value?.type || 'Выбери локальный файл, чтобы посчитать хэш.' }}
             </p>
             <div class="devtools-file-picker__actions">
               <button
@@ -266,7 +268,7 @@ function onHashFileSelected(event: Event): void {
                 type="button"
                 @click="triggerHashFilePicker"
               >
-                Choose File
+                Выбрать файл
               </button>
               <button
                 class="action-button"
@@ -274,7 +276,7 @@ function onHashFileSelected(event: Event): void {
                 :disabled="!workspace.hashFile.value"
                 @click="workspace.clearHashFile"
               >
-                Clear
+                Очистить
               </button>
             </div>
             <input
@@ -288,27 +290,27 @@ function onHashFileSelected(event: Event): void {
 
         <div v-else-if="workspace.activeToolId.value === 'link'" class="devtools-stack">
           <label class="devtools-field">
-            <span>URL</span>
+            <span>Ссылка</span>
             <textarea
               v-model="workspace.linkInput.value"
               rows="8"
               spellcheck="false"
-              placeholder="example.com/path?utm_source=..."
+              placeholder="https://example.com/page?utm_source=newsletter"
             />
           </label>
 
           <div class="devtools-checkbox-grid">
             <label class="devtools-checkbox">
               <input v-model="workspace.linkOptions.stripTracking" type="checkbox" />
-              <span>Strip tracking params</span>
+              <span>Убирать трекинг-параметры</span>
             </label>
             <label class="devtools-checkbox">
               <input v-model="workspace.linkOptions.sortParams" type="checkbox" />
-              <span>Sort query params</span>
+              <span>Сортировать query-параметры</span>
             </label>
             <label class="devtools-checkbox">
               <input v-model="workspace.linkOptions.removeFragment" type="checkbox" />
-              <span>Remove fragment</span>
+              <span>Убирать якорь</span>
             </label>
           </div>
         </div>
@@ -328,12 +330,12 @@ function onHashFileSelected(event: Event): void {
           </div>
 
           <label class="devtools-field">
-            <span>Input</span>
+            <span>Текст</span>
             <textarea
               v-model="workspace.validationInput.value"
               rows="12"
               spellcheck="false"
-              placeholder="Paste JSON, YAML, XML or .env payload"
+              placeholder="Вставь JSON, YAML, XML или содержимое .env"
             />
           </label>
         </div>
@@ -347,7 +349,7 @@ function onHashFileSelected(event: Event): void {
                   <h3>{{ workspace.quickUuid.value }}</h3>
                 </div>
                 <button class="action-button" type="button" @click="workspace.regenerateUuid">
-                  New UUID
+                  Новый UUID
                 </button>
               </div>
             </article>
@@ -359,7 +361,7 @@ function onHashFileSelected(event: Event): void {
                   <h3>{{ workspace.quickUlid.value }}</h3>
                 </div>
                 <button class="action-button" type="button" @click="workspace.regenerateUlid">
-                  New ULID
+                  Новый ULID
                 </button>
               </div>
             </article>
@@ -367,7 +369,7 @@ function onHashFileSelected(event: Event): void {
 
           <div class="devtools-field-row">
             <label class="devtools-field">
-              <span>Timestamp</span>
+              <span>Дата или timestamp</span>
               <input
                 v-model="workspace.timestampInput.value"
                 type="text"
@@ -380,17 +382,17 @@ function onHashFileSelected(event: Event): void {
               type="button"
               @click="workspace.useCurrentTimestamp"
             >
-              Use Now
+              Сейчас
             </button>
           </div>
 
           <div class="devtools-field-row">
             <label class="devtools-field">
-              <span>Basic Auth user</span>
+              <span>Логин</span>
               <input v-model="workspace.basicAuthUsername.value" type="text" spellcheck="false" />
             </label>
             <label class="devtools-field">
-              <span>Password</span>
+              <span>Пароль</span>
               <input
                 v-model="workspace.basicAuthPassword.value"
                 type="password"
@@ -404,11 +406,11 @@ function onHashFileSelected(event: Event): void {
       <article class="panel-surface devtools-panel devtools-panel--output">
         <div class="devtools-panel__header">
           <div>
-            <p class="eyebrow">Output & Diagnostics</p>
+            <p class="eyebrow">Результат</p>
             <h2>{{ workspace.activeTool.value?.title }}</h2>
           </div>
           <span class="chip-pill">{{
-            workspace.actionMessage.value || 'Ready for copy / export'
+            workspace.actionMessage.value || 'Можно копировать или сохранять'
           }}</span>
         </div>
 
@@ -418,9 +420,9 @@ function onHashFileSelected(event: Event): void {
               class="action-button action-button--accent"
               type="button"
               :disabled="!workspace.encodingResult.value.output"
-              @click="workspace.copyText(workspace.encodingResult.value.output, 'Encoding result')"
+              @click="workspace.copyText(workspace.encodingResult.value.output, 'Результат')"
             >
-              Copy Output
+              Скопировать
             </button>
             <button
               class="action-button"
@@ -433,7 +435,7 @@ function onHashFileSelected(event: Event): void {
                 )
               "
             >
-              Download Output
+              Скачать
             </button>
           </div>
 
@@ -445,7 +447,7 @@ function onHashFileSelected(event: Event): void {
           </p>
           <template v-else>
             <label class="devtools-field">
-              <span>Output</span>
+              <span>Результат</span>
               <textarea
                 :value="workspace.encodingResult.value.output"
                 rows="12"
@@ -485,9 +487,14 @@ function onHashFileSelected(event: Event): void {
               <button
                 class="action-button action-button--accent"
                 type="button"
-                @click="workspace.copyText(workspace.jwtResult.value.bearerHeader, 'Bearer header')"
+                @click="
+                  workspace.copyText(
+                    workspace.jwtResult.value.bearerHeader,
+                    'Заголовок авторизации',
+                  )
+                "
               >
-                Copy Bearer Header
+                Скопировать заголовок авторизации
               </button>
               <button
                 class="action-button"
@@ -500,13 +507,13 @@ function onHashFileSelected(event: Event): void {
                   )
                 "
               >
-                Download Payload
+                Скачать данные токена
               </button>
             </div>
 
             <div class="devtools-pre-grid">
               <label class="devtools-field">
-                <span>Header</span>
+                <span>Заголовок</span>
                 <textarea
                   :value="workspace.jwtResult.value.headerPretty"
                   rows="8"
@@ -515,7 +522,7 @@ function onHashFileSelected(event: Event): void {
                 />
               </label>
               <label class="devtools-field">
-                <span>Payload</span>
+                <span>Данные</span>
                 <textarea
                   :value="workspace.jwtResult.value.payloadPretty"
                   rows="8"
@@ -544,9 +551,9 @@ function onHashFileSelected(event: Event): void {
 
             <div class="devtools-claims-card">
               <div class="devtools-claims-card__header">
-                <h3>Claim Inspector</h3>
+                <h3>Поля токена</h3>
                 <span class="chip-pill chip-pill--compact"
-                  >{{ workspace.jwtResult.value.claims.length }} claims</span
+                  >{{ workspace.jwtResult.value.claims.length }} полей</span
                 >
               </div>
               <div class="devtools-claims-list">
@@ -565,7 +572,7 @@ function onHashFileSelected(event: Event): void {
         </div>
 
         <div v-else-if="workspace.activeToolId.value === 'hash'" class="devtools-stack">
-          <p v-if="workspace.isHashing.value" class="devtools-message">Computing digests...</p>
+          <p v-if="workspace.isHashing.value" class="devtools-message">Считаю хэши...</p>
           <p
             v-else-if="workspace.hashErrorMessage.value"
             class="devtools-message devtools-message--error"
@@ -576,7 +583,7 @@ function onHashFileSelected(event: Event): void {
             v-else-if="workspace.hashSourceMode.value === 'file' && !workspace.hashFile.value"
             class="devtools-message"
           >
-            Choose a file to build the digest table.
+            Выбери файл, чтобы собрать таблицу хэшей.
           </p>
           <template v-else-if="workspace.hashReport.value">
             <div class="devtools-facts-grid">
@@ -592,8 +599,8 @@ function onHashFileSelected(event: Event): void {
 
             <div class="devtools-hash-table">
               <div class="devtools-hash-table__header">
-                <h3>Digests</h3>
-                <span class="chip-pill chip-pill--compact">Web Crypto</span>
+                <h3>Хэши</h3>
+                <span class="chip-pill chip-pill--compact">В браузере</span>
               </div>
               <article
                 v-for="digest in workspace.hashReport.value.digests"
@@ -609,7 +616,7 @@ function onHashFileSelected(event: Event): void {
                   type="button"
                   @click="workspace.copyText(digest.value, digest.label)"
                 >
-                  Copy
+                  Скопировать
                 </button>
               </article>
             </div>
@@ -617,7 +624,7 @@ function onHashFileSelected(event: Event): void {
             <div v-if="workspace.hashReport.value.hmacDigests.length" class="devtools-hash-table">
               <div class="devtools-hash-table__header">
                 <h3>HMAC</h3>
-                <span class="chip-pill chip-pill--compact chip-pill--accent">Secret enabled</span>
+                <span class="chip-pill chip-pill--compact chip-pill--accent">Секрет задан</span>
               </div>
               <article
                 v-for="digest in workspace.hashReport.value.hmacDigests"
@@ -633,7 +640,7 @@ function onHashFileSelected(event: Event): void {
                   type="button"
                   @click="workspace.copyText(digest.value, digest.label)"
                 >
-                  Copy
+                  Скопировать
                 </button>
               </article>
             </div>
@@ -652,23 +659,26 @@ function onHashFileSelected(event: Event): void {
               <button
                 class="action-button action-button--accent"
                 type="button"
-                @click="workspace.copyText(workspace.linkResult.value.cleanedUrl, 'Clean URL')"
+                @click="workspace.copyText(workspace.linkResult.value.cleanedUrl, 'Чистая ссылка')"
               >
-                Copy Clean URL
+                Скопировать чистую ссылку
               </button>
               <button
                 class="action-button"
                 type="button"
                 @click="
-                  workspace.copyText(workspace.linkResult.value.normalizedUrl, 'Normalized URL')
+                  workspace.copyText(
+                    workspace.linkResult.value.normalizedUrl,
+                    'Нормализованная ссылка',
+                  )
                 "
               >
-                Copy Normalized URL
+                Скопировать нормализованную ссылку
               </button>
             </div>
 
             <label class="devtools-field">
-              <span>Normalized URL</span>
+              <span>Нормализованная ссылка</span>
               <textarea
                 :value="workspace.linkResult.value.normalizedUrl"
                 rows="4"
@@ -677,7 +687,7 @@ function onHashFileSelected(event: Event): void {
               />
             </label>
             <label class="devtools-field">
-              <span>Share-friendly URL</span>
+              <span>Готовая ссылка для отправки</span>
               <textarea
                 :value="workspace.linkResult.value.cleanedUrl"
                 rows="4"
@@ -705,9 +715,9 @@ function onHashFileSelected(event: Event): void {
 
             <div class="devtools-hash-table">
               <div class="devtools-hash-table__header">
-                <h3>Query params</h3>
+                <h3>Параметры запроса</h3>
                 <span class="chip-pill chip-pill--compact">
-                  {{ workspace.linkResult.value.queryEntries.length }} entries
+                  {{ workspace.linkResult.value.queryEntries.length }} шт.
                 </span>
               </div>
               <article
@@ -717,13 +727,13 @@ function onHashFileSelected(event: Event): void {
               >
                 <div>
                   <strong>{{ entry.key }}</strong>
-                  <span>{{ entry.value || 'empty' }}</span>
+                  <span>{{ entry.value || 'пусто' }}</span>
                 </div>
                 <span
                   class="chip-pill chip-pill--compact"
                   :class="{ 'chip-pill--accent': entry.status === 'removed' }"
                 >
-                  {{ entry.status }}
+                  {{ formatQueryEntryStatus(entry.status) }}
                 </span>
               </article>
             </div>
@@ -739,11 +749,11 @@ function onHashFileSelected(event: Event): void {
               @click="
                 workspace.copyText(
                   workspace.validationResult.value.normalized,
-                  'Normalized payload',
+                  'Нормализованный текст',
                 )
               "
             >
-              Copy Normalized
+              Скопировать нормализованный текст
             </button>
             <button
               class="action-button"
@@ -756,7 +766,7 @@ function onHashFileSelected(event: Event): void {
                 )
               "
             >
-              Download Normalized
+              Скачать нормализованный текст
             </button>
           </div>
 
@@ -777,7 +787,7 @@ function onHashFileSelected(event: Event): void {
               'devtools-issue-list--clean': !workspace.validationResult.value.issues.length,
             }"
           >
-            <li v-if="!workspace.validationResult.value.issues.length">Payload looks valid.</li>
+            <li v-if="!workspace.validationResult.value.issues.length">Структура корректна.</li>
             <li
               v-for="issue in workspace.validationResult.value.issues"
               :key="`${issue.code}:${issue.message}`"
@@ -788,7 +798,7 @@ function onHashFileSelected(event: Event): void {
           </ul>
 
           <label v-if="workspace.validationResult.value.valid" class="devtools-field">
-            <span>Normalized output</span>
+            <span>Нормализованный текст</span>
             <textarea
               :value="workspace.validationResult.value.normalized"
               rows="12"
@@ -808,7 +818,7 @@ function onHashFileSelected(event: Event): void {
                 type="button"
                 @click="workspace.copyText(workspace.quickUuid.value, 'UUID')"
               >
-                Copy UUID
+                Скопировать UUID
               </button>
             </article>
 
@@ -820,19 +830,19 @@ function onHashFileSelected(event: Event): void {
                 type="button"
                 @click="workspace.copyText(workspace.quickUlid.value, 'ULID')"
               >
-                Copy ULID
+                Скопировать ULID
               </button>
             </article>
           </div>
 
           <div class="devtools-hash-table">
             <div class="devtools-hash-table__header">
-              <h3>Timestamp Converter</h3>
+              <h3>Конвертация времени</h3>
               <span
                 class="chip-pill chip-pill--compact"
                 :class="{ 'chip-pill--accent': workspace.timestampResult.value.ok }"
               >
-                {{ workspace.timestampResult.value.ok ? 'Parsed' : 'Input needed' }}
+                {{ workspace.timestampResult.value.ok ? 'Распознано' : 'Нужен ввод' }}
               </span>
             </div>
             <p
@@ -852,27 +862,27 @@ function onHashFileSelected(event: Event): void {
                   type="button"
                   @click="workspace.copyText(workspace.timestampResult.value.isoUtc, 'UTC ISO')"
                 >
-                  Copy
+                  Скопировать
                 </button>
               </article>
               <article class="devtools-hash-row">
                 <div>
-                  <strong>Local time</strong>
+                  <strong>Локальное время</strong>
                   <span>{{ workspace.timestampResult.value.localTime }}</span>
                 </div>
                 <button
                   class="action-button"
                   type="button"
                   @click="
-                    workspace.copyText(workspace.timestampResult.value.localTime, 'Local time')
+                    workspace.copyText(workspace.timestampResult.value.localTime, 'Локальное время')
                   "
                 >
-                  Copy
+                  Скопировать
                 </button>
               </article>
               <article class="devtools-hash-row">
                 <div>
-                  <strong>Epoch seconds</strong>
+                  <strong>Unix-время, сек</strong>
                   <span>{{ workspace.timestampResult.value.epochSeconds }}</span>
                 </div>
                 <button
@@ -881,16 +891,16 @@ function onHashFileSelected(event: Event): void {
                   @click="
                     workspace.copyText(
                       workspace.timestampResult.value.epochSeconds,
-                      'Epoch seconds',
+                      'Unix-время, сек',
                     )
                   "
                 >
-                  Copy
+                  Скопировать
                 </button>
               </article>
               <article class="devtools-hash-row">
                 <div>
-                  <strong>Epoch milliseconds</strong>
+                  <strong>Unix-время, мс</strong>
                   <span>{{ workspace.timestampResult.value.epochMilliseconds }}</span>
                 </div>
                 <button
@@ -899,11 +909,11 @@ function onHashFileSelected(event: Event): void {
                   @click="
                     workspace.copyText(
                       workspace.timestampResult.value.epochMilliseconds,
-                      'Epoch milliseconds',
+                      'Unix-время, мс',
                     )
                   "
                 >
-                  Copy
+                  Скопировать
                 </button>
               </article>
             </template>
@@ -911,37 +921,40 @@ function onHashFileSelected(event: Event): void {
 
           <div class="devtools-hash-table">
             <div class="devtools-hash-table__header">
-              <h3>Basic Auth Helper</h3>
-              <span class="chip-pill chip-pill--compact">Header + curl</span>
+              <h3>Базовая авторизация</h3>
+              <span class="chip-pill chip-pill--compact">Заголовок и curl</span>
             </div>
             <article class="devtools-hash-row">
               <div>
-                <strong>Authorization header</strong>
+                <strong>Заголовок Authorization</strong>
                 <span>{{ workspace.basicAuthResult.value.header }}</span>
               </div>
               <button
                 class="action-button"
                 type="button"
                 @click="
-                  workspace.copyText(workspace.basicAuthResult.value.header, 'Basic auth header')
+                  workspace.copyText(
+                    workspace.basicAuthResult.value.header,
+                    'Заголовок Authorization',
+                  )
                 "
               >
-                Copy
+                Скопировать
               </button>
             </article>
             <article class="devtools-hash-row">
               <div>
-                <strong>curl snippet</strong>
+                <strong>curl-команда</strong>
                 <span>{{ workspace.basicAuthResult.value.curlSnippet }}</span>
               </div>
               <button
                 class="action-button"
                 type="button"
                 @click="
-                  workspace.copyText(workspace.basicAuthResult.value.curlSnippet, 'curl snippet')
+                  workspace.copyText(workspace.basicAuthResult.value.curlSnippet, 'curl-команда')
                 "
               >
-                Copy
+                Скопировать
               </button>
             </article>
           </div>

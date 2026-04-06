@@ -125,7 +125,7 @@ class OfficeConversionApiTests {
 				.andReturn()
 		);
 		assertThat(pngArtifacts.get("office-convert-binary").path("mediaType").asText()).isEqualTo("image/png");
-		assertThat(pngManifest.path("warnings").toString()).contains("contact sheet");
+		assertThat(pngManifest.path("warnings").toString()).contains("длинный лист предпросмотра");
 
 		var pptxJob = awaitCompletedJob(createOfficeJob(uploadId, "pptx"));
 		var pptxArtifacts = artifactIndex(pptxJob);
@@ -197,7 +197,7 @@ class OfficeConversionApiTests {
 				.andReturn()
 		);
 		assertThat(pdfArtifacts.get("office-convert-binary").path("mediaType").asText()).isEqualTo("application/pdf");
-		assertThat(pdfManifest.path("warnings").toString()).contains("rasterization");
+		assertThat(pdfManifest.path("warnings").toString()).contains("сохраняет внешний вид каждого слайда");
 
 		var mp4Job = awaitCompletedJob(createOfficeJob(uploadId, "mp4"));
 		var mp4Artifacts = artifactIndex(mp4Job);

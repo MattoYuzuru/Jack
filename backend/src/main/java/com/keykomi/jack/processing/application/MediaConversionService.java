@@ -326,7 +326,7 @@ public class MediaConversionService {
 			derivedPreviewFileName(upload.originalFileName(), "mp3"),
 			"audio/mpeg",
 			"media",
-			List.of("Для browser-safe playback backend дополнительно собрал MP3 preview artifact поверх итогового audio target.")
+			List.of("Для удобного прослушивания дополнительно подготовлен MP3-предпросмотр.")
 		);
 	}
 

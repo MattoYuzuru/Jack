@@ -12,62 +12,61 @@ export interface DevToolDefinition {
 const DEV_TOOL_DEFINITIONS: DevToolDefinition[] = [
   {
     id: 'encoding',
-    label: '01 · Encoding Lab',
-    title: 'Encoding & Decoding',
+    label: '01 · Кодировки',
+    title: 'Кодировки и преобразования',
     description:
-      'Base64, Base64URL, URL, HTML entity и Unicode escape преобразования без переключения между внешними сервисами.',
+      'Быстрые преобразования Base64, Base64URL, URL, HTML entity и Unicode escape в одном окне.',
     detail:
-      'Подходит для payload cleanup, query debugging, unsafe fragment inspection и быстрого перевода текста между transport-friendly представлениями.',
+      'Удобно, когда нужно быстро подготовить текст для ссылки, запроса, интеграции или обмена с другой системой.',
     accents: ['Base64', 'URL', 'HTML', 'Unicode'],
   },
   {
     id: 'jwt',
-    label: '02 · JWT Inspector',
-    title: 'JWT Decoder',
+    label: '02 · JWT',
+    title: 'Проверка JWT',
     description:
-      'Разбор header/payload, временных claim и transport-состояния токена без подписи и без внешней отправки.',
+      'Разбор заголовка, данных и срока жизни токена без отправки данных во внешний сервис.',
     detail:
-      'Inspector показывает exp/iat/nbf, предупреждает про alg=none, пустую signature часть и сразу собирает Bearer header.',
-    accents: ['Header', 'Claims', 'Expiry', 'Bearer'],
+      'Можно быстро проверить сроки действия, подозрительные поля и сразу скопировать готовый заголовок авторизации.',
+    accents: ['JWT', 'Claims', 'Срок', 'Auth'],
   },
   {
     id: 'hash',
-    label: '03 · Hash Toolkit',
-    title: 'Hashes & HMAC',
-    description:
-      'SHA-family digests и HMAC для текста или локального файла прямо в браузере через Web Crypto.',
+    label: '03 · Хэши',
+    title: 'Хэши и HMAC',
+    description: 'SHA-хэши и HMAC для текста или локального файла прямо в браузере.',
     detail:
-      'Нужен для checksum, webhook debugging, signature comparison и быстрой сверки payload без backend roundtrip.',
+      'Полезно для проверки контрольных сумм, подписи webhook и сверки содержимого перед отправкой.',
     accents: ['SHA', 'HMAC', 'Files', 'Integrity'],
   },
   {
     id: 'link',
-    label: '04 · Link Utils',
-    title: 'Links & Share URLs',
+    label: '04 · Ссылки',
+    title: 'Ссылки и URL для отправки',
     description:
-      'Разбор URL, чистка tracking-параметров и сборка более короткой share-friendly версии вместо нереалистичного hosted shortener.',
+      'Очистка ссылок от лишних параметров и сборка аккуратной версии для отправки коллегам или клиентам.',
     detail:
-      'Модуль показывает host/path/query структуру, чистит UTM/analytics noise и считает, насколько ссылка стала компактнее.',
+      'Показывает структуру URL, убирает трекинг и помогает быстро получить понятную чистую ссылку.',
     accents: ['URL', 'UTM', 'Query', 'Share'],
   },
   {
     id: 'validator',
-    label: '05 · Validators',
-    title: 'Structured Validators',
+    label: '05 · Валидаторы',
+    title: 'Проверка структуры',
     description:
-      'Быстрая валидация JSON, YAML, XML и .env без открытия редактора и без смешивания этого сценария с полноценным editing route.',
+      'Проверка JSON, YAML, XML и `.env`, когда нужно быстро убедиться, что текст читается без ошибок.',
     detail:
-      'Validator возвращает короткие diagnostics, нормализованный output и базовую структурную сводку для повседневных payload checks.',
+      'На выходе сразу есть короткая диагностика, нормализованный текст и компактная сводка по структуре.',
     accents: ['JSON', 'YAML', 'XML', '.env'],
   },
   {
     id: 'quick-utils',
-    label: '06 · Quick Utils',
-    title: 'Daily Helpers',
+    label: '06 · Быстрые утилиты',
+    title: 'Ежедневные задачи',
     description:
-      'UUID/ULID generator, timestamp converter и Basic Auth helper для типовых инженерных микро-задач.',
+      'UUID, ULID, конвертация времени и базовая авторизация для частых рабочих мелочей.',
     detail:
-      'Это те мелкие действия, которые постоянно всплывают в документации, curl/debug flow и внутренних интеграционных проверках.',
+      'Те самые маленькие задачи, которые постоянно всплывают в интеграциях, отладке и ручных проверках.',
     accents: ['UUID', 'ULID', 'Epoch', 'Auth'],
   },
 ]

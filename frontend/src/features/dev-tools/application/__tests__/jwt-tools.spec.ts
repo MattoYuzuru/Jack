@@ -44,6 +44,6 @@ describe('jwt tools', () => {
 
     expect(result.ok).toBe(true)
     expect(result.warnings.join(' ')).toContain('alg=none')
-    expect(result.warnings.join(' ')).toContain('Signature segment отсутствует')
+    expect(result.warnings.join(' ')).toContain('Сегмент подписи отсутствует')
   })
 })

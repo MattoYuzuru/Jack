@@ -234,7 +234,7 @@ public class OfficeConversionService {
 		var warnings = new ArrayList<>(structuredDocument.warnings());
 		var sourceExtension = normalizeExtension(upload.extension());
 		if ("pdf".equals(sourceExtension) && "docx".equals(targetExtension)) {
-			warnings.add("PDF -> DOCX переносит текстовый поток и базовую структуру, но сложная вёрстка, колонки, positioned blocks и page-perfect layout могут измениться.");
+			warnings.add("PDF -> DOCX переносит текст и базовую структуру, но сложная вёрстка, колонки и точное расположение блоков могут измениться.");
 		}
 		var resultFileName = replaceExtension(upload.originalFileName(), targetExtension);
 		var previewFileName = derivedPreviewFileName(upload.originalFileName(), "html");
@@ -335,9 +335,9 @@ public class OfficeConversionService {
 				resultFacts = buildWorkbookResultFacts("XLSX", spreadsheetBundle.sheets());
 			}
 			case "csv" -> {
-				warnings.add("CSV target остаётся flattened table export: formulas, styling, comments и rich workbook structure не переносятся.");
+				warnings.add("CSV сохраняет только плоскую таблицу: формулы, оформление, комментарии и сложная структура книги не переносятся.");
 				if (spreadsheetBundle.sheets().size() > 1) {
-					warnings.add("CSV target может унести только один лист, поэтому экспортирует первый sheet из workbook source.");
+					warnings.add("CSV может содержать только один лист, поэтому выгружается первый лист исходной книги.");
 				}
 				writeCsvDocument(resultPath, spreadsheetBundle.sheets().getFirst().rows());
 				resultMediaType = "text/csv";
@@ -383,7 +383,7 @@ public class OfficeConversionService {
 		var payload = this.documentPreviewService.analyze(upload);
 		var pageImages = renderPdfPages(upload, request);
 		var warnings = new ArrayList<>(payload.warnings());
-		warnings.add("PDF -> PPTX складывает каждую страницу в отдельный slide как полноразмерное изображение: текст внутри deck остаётся не редактируемым.");
+		warnings.add("PDF -> PPTX переносит каждую страницу как отдельный слайд-изображение, поэтому текст внутри презентации не будет редактируемым.");
 
 		var resultFileName = replaceExtension(upload.originalFileName(), "pptx");
 		var resultPath = workingDirectory.resolve(resultFileName);
@@ -420,7 +420,7 @@ public class OfficeConversionService {
 		var pageImages = renderPdfPages(upload, request);
 		var warnings = new ArrayList<>(payload.warnings());
 		if (pageImages.size() > 1) {
-			warnings.add("Несколько страниц PDF собраны в один вертикальный contact sheet, потому что image target здесь одностраничный.");
+			warnings.add("Несколько страниц PDF объединены в один длинный лист предпросмотра, потому что выбранный формат поддерживает только одно изображение.");
 		}
 
 		var resultFileName = replaceExtension(upload.originalFileName(), targetExtension);
@@ -462,7 +462,7 @@ public class OfficeConversionService {
 		var payload = this.documentPreviewService.analyze(upload);
 		var slideImages = renderPresentationSlides(upload, request);
 		var warnings = new ArrayList<>(payload.warnings());
-		warnings.add("PPTX -> PDF сохраняет visual layer каждого slide через backend rasterization: animations, speaker notes и embedded media в PDF не переносятся.");
+		warnings.add("PPTX -> PDF сохраняет внешний вид каждого слайда, но анимации, заметки докладчика и встроенные медиа не переносятся.");
 
 		var resultFileName = replaceExtension(upload.originalFileName(), "pdf");
 		var resultPath = workingDirectory.resolve(resultFileName);
@@ -499,7 +499,7 @@ public class OfficeConversionService {
 		var slideImages = renderPresentationSlides(upload, request);
 		var warnings = new ArrayList<>(payload.warnings());
 		if (slideImages.size() > 1) {
-			warnings.add("Несколько slide preview объединены в единый vertical contact sheet, чтобы уложиться в один image artifact.");
+			warnings.add("Несколько слайдов объединены в один длинный лист предпросмотра, чтобы результат остался одним изображением.");
 		}
 
 		var resultFileName = replaceExtension(upload.originalFileName(), targetExtension);
@@ -575,7 +575,7 @@ public class OfficeConversionService {
 		ensureArtifact(resultPath, "pptx video export");
 
 		var warnings = new ArrayList<>(payload.warnings());
-		warnings.add("PPTX -> video собирает фиксированный MP4 slideshow с равной длительностью по %s секунды на slide: animations, transitions и embedded audio не воспроизводятся.".formatted(SLIDE_VIDEO_SECONDS));
+		warnings.add("PPTX -> video собирает MP4-слайд-шоу с равной длительностью по %s секунды на слайд: анимации, переходы и встроенный звук не воспроизводятся.".formatted(SLIDE_VIDEO_SECONDS));
 
 		return new OfficeConversionOutput(
 			resultPath,
@@ -638,7 +638,7 @@ public class OfficeConversionService {
 			// Здесь явно фиксируем ограничение scanned/poorly-structured документов:
 			// конвертация не должна падать без результата, но и притворяться полной нельзя.
 			blocks.add(new TextBlock("Searchable content is not available in this source without OCR.", 0));
-			warnings.add("Источник не дал читаемый structured/text layer. Экспорт построен из placeholder-блока; для scanned PDF и image-based документов дальше нужен OCR.");
+			warnings.add("В источнике не найден читаемый текстовый слой. Экспорт собран из минимального шаблона; для сканов и изображений понадобится OCR.");
 		}
 
 		return new StructuredDocument(
@@ -706,7 +706,7 @@ public class OfficeConversionService {
 			}
 
 			var warnings = new ArrayList<>(payload.warnings());
-			warnings.add("PDF -> table export использует line-based extraction: строки и page order сохраняются, но сложная табличная вёрстка и merged cells не восстанавливаются точно.");
+			warnings.add("PDF -> table export собирает строки по текстовому слою: порядок страниц сохраняется, но сложные таблицы и объединённые ячейки могут восстановиться неточно.");
 
 			return new SpreadsheetBundle(sheets, payload.summary(), warnings, payload.previewLabel());
 		}
@@ -777,7 +777,7 @@ public class OfficeConversionService {
 					new DocumentPreviewPayload.DocumentFact("Sheets", String.valueOf(sheets.size())),
 					new DocumentPreviewPayload.DocumentFact("Rows", String.valueOf(Math.max(sheets.getFirst().rows().size() - 1, 0)))
 				),
-				new ArrayList<>(List.of("ODS source читается через backend archive/xml adapter: cell values и sheet order сохраняются, но формулы, styles и charts при roundtrip сводятся к plain workbook data.")),
+				new ArrayList<>(List.of("ODS сохраняет значения ячеек и порядок листов, но формулы, оформление и диаграммы могут быть упрощены.")),
 				"ODS spreadsheet adapter"
 			);
 		}

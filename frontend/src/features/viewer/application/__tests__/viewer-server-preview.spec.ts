@@ -123,7 +123,7 @@ describe('viewer server preview client', () => {
     expect(result.objectUrl).toBe('blob:server-image-preview')
     expect(result.dimensions).toEqual({ width: 3024, height: 4032 })
     expect(result.metadata.summary).toEqual([{ label: 'Камера', value: 'JackCam' }])
-    expect(progressMessages).toContain('Загружаю unified viewer manifest и связанные artifacts с backend...')
+    expect(progressMessages).toContain('Загружаю данные для просмотра...')
   })
 
   it('builds a server-assisted pdf preview from the unified viewer manifest', async () => {
@@ -189,6 +189,7 @@ describe('viewer server preview client', () => {
             layout: {
               mode: 'pdf',
               pageCount: 3,
+              editableDraft: null,
             },
           },
           videoPayload: null,
@@ -214,7 +215,9 @@ describe('viewer server preview client', () => {
 
     expect(result.previewLabel).toBe('PDF server preview')
     expect(result.layout.mode).toBe('pdf')
-    expect(result.layout.mode === 'pdf' ? result.layout.objectUrl : '').toBe('blob:document-preview')
+    expect(result.layout.mode === 'pdf' ? result.layout.objectUrl : '').toBe(
+      'blob:document-preview',
+    )
     expect(result.searchableText).toBe('Alpha beta gamma')
   })
 

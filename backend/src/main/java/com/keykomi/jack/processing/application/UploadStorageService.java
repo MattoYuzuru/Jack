@@ -13,6 +13,7 @@ import java.time.Instant;
 import java.util.HexFormat;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.http.HttpStatus;
@@ -34,13 +35,13 @@ public class UploadStorageService {
 
 	public StoredUpload store(MultipartFile file) {
 		if (file.isEmpty()) {
-			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Пустой файл нельзя отправить в processing pipeline.");
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Пустой файл нельзя загрузить для обработки.");
 		}
 
 		if (file.getSize() > this.processingProperties.getMaxUploadSizeBytes()) {
 			throw new ResponseStatusException(
 				HttpStatus.PAYLOAD_TOO_LARGE,
-				"Файл превышает текущий backend limit для processing foundation."
+				"Файл превышает допустимый размер загрузки для текущего сервиса."
 			);
 		}
 
@@ -85,11 +86,52 @@ public class UploadStorageService {
 
 	public StoredUpload getRequiredUpload(UUID uploadId) {
 		return findUpload(uploadId)
-			.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Upload не найден в processing storage."));
+			.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Файл загрузки не найден."));
 	}
 
 	public Optional<StoredUpload> findUpload(UUID uploadId) {
 		return Optional.ofNullable(this.uploads.get(uploadId));
+	}
+
+	public int purgeExpired(Instant cutoff, Set<UUID> retainedUploadIds) {
+		var retainedIds = retainedUploadIds == null ? Set.<UUID>of() : Set.copyOf(retainedUploadIds);
+		var deletedUploads = 0;
+
+		for (var entry : this.uploads.entrySet()) {
+			var upload = entry.getValue();
+			if (retainedIds.contains(upload.id()) || !upload.createdAt().isBefore(cutoff)) {
+				continue;
+			}
+			if (!deletePath(upload.storagePath())) {
+				continue;
+			}
+			if (this.uploads.remove(entry.getKey(), upload)) {
+				deletedUploads++;
+			}
+		}
+
+		try (var storedFiles = Files.list(this.processingProperties.uploadsDirectory())) {
+			for (var iterator = storedFiles.iterator(); iterator.hasNext();) {
+				var path = iterator.next();
+				if (!Files.isRegularFile(path) || !isExpired(path, cutoff)) {
+					continue;
+				}
+
+				var uploadId = extractUploadId(path);
+				if (uploadId != null && (retainedIds.contains(uploadId) || this.uploads.containsKey(uploadId))) {
+					continue;
+				}
+
+				if (deletePath(path)) {
+					deletedUploads++;
+				}
+			}
+		}
+		catch (IOException ignored) {
+			// Очистка не должна срывать runtime: следующий TTL-проход попробует удалить хвосты повторно.
+		}
+
+		return deletedUploads;
 	}
 
 	private String sanitizeFileName(String originalFileName) {
@@ -107,6 +149,39 @@ public class UploadStorageService {
 		}
 
 		return fileName.substring(dotIndex + 1).toLowerCase();
+	}
+
+	private boolean isExpired(Path path, Instant cutoff) {
+		try {
+			return Files.getLastModifiedTime(path).toInstant().isBefore(cutoff);
+		}
+		catch (IOException ignored) {
+			return false;
+		}
+	}
+
+	private UUID extractUploadId(Path path) {
+		var fileName = path.getFileName().toString();
+		if (fileName.length() < 37 || fileName.charAt(36) != '-') {
+			return null;
+		}
+
+		try {
+			return UUID.fromString(fileName.substring(0, 36));
+		}
+		catch (IllegalArgumentException ignored) {
+			return null;
+		}
+	}
+
+	private boolean deletePath(Path path) {
+		try {
+			Files.deleteIfExists(path);
+			return true;
+		}
+		catch (IOException ignored) {
+			return false;
+		}
 	}
 
 }

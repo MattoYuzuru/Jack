@@ -88,13 +88,13 @@ const FILE_COMPRESS_JOB_TYPE = 'FILE_COMPRESS'
 export async function runServerCompression(
   input: RunServerCompressionInput,
 ): Promise<ServerCompressionResult> {
-  input.reportProgress?.('Проверяю backend FILE_COMPRESS capability для compression route...')
+  input.reportProgress?.('Проверяю доступность сжатия...')
   await ensureProcessingCapability('compression', FILE_COMPRESS_JOB_TYPE)
 
-  input.reportProgress?.('Отправляю source в backend processing storage...')
+  input.reportProgress?.('Загружаю исходный файл...')
   const upload = await uploadProcessingFile(input.file)
 
-  input.reportProgress?.('Создаю backend FILE_COMPRESS job для size-first orchestration...')
+  input.reportProgress?.('Запускаю подбор оптимального результата...')
   const createdJob = await createProcessingJob({
     uploadId: upload.id,
     jobType: FILE_COMPRESS_JOB_TYPE,
@@ -117,23 +117,25 @@ export async function runServerCompression(
   const completedJob = await awaitProcessingJob(createdJob.id, {
     reportProgress: input.reportProgress,
     timeoutMessage:
-      'Backend FILE_COMPRESS job не завершился в ожидаемое время. Проверь processing logs или попробуй более мягкий size budget.',
+      'Сжатие заняло слишком много времени. Попробуй смягчить ограничения или повтори позже.',
     onUpdate: input.onJobUpdate,
   })
 
-  input.reportProgress?.('Загружаю compression result и preview artifacts...')
+  input.reportProgress?.('Загружаю результат и предпросмотр...')
   return downloadServerCompressionArtifacts(completedJob)
 }
 
 export async function downloadServerCompressionArtifacts(
   job: ProcessingJobResponse,
 ): Promise<ServerCompressionResult> {
-  const manifestArtifact = job.artifacts.find((artifact) => artifact.kind === 'compression-manifest')
+  const manifestArtifact = job.artifacts.find(
+    (artifact) => artifact.kind === 'compression-manifest',
+  )
   const resultArtifact = job.artifacts.find((artifact) => artifact.kind === 'compression-binary')
   const previewArtifact = job.artifacts.find((artifact) => artifact.kind === 'compression-preview')
 
   if (!manifestArtifact || !resultArtifact || !previewArtifact) {
-    throw new Error('Backend FILE_COMPRESS job завершился без обязательных compression artifacts.')
+    throw new Error('Сжатие завершилось без обязательных файлов результата.')
   }
 
   const [manifest, resultBlob, previewBlob] = await Promise.all([

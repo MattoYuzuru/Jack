@@ -27,9 +27,7 @@ const HMAC_ALGORITHMS = [
 export async function buildHashReport(source: string | File, secret: string): Promise<HashReport> {
   const subtle = globalThis.crypto?.subtle
   if (!subtle) {
-    throw new Error(
-      'Web Crypto недоступен в этом браузере, поэтому hash toolkit не может работать локально.',
-    )
+    throw new Error('Криптография браузера недоступна, поэтому локальный расчёт хэшей невозможен.')
   }
 
   const bytes =
@@ -59,16 +57,16 @@ export async function buildHashReport(source: string | File, secret: string): Pr
     facts:
       typeof source === 'string'
         ? [
-            { label: 'Source', value: 'Inline text' },
-            { label: 'Chars', value: String(source.length) },
-            { label: 'Bytes', value: String(bytes.byteLength) },
-            { label: 'HMAC', value: secret ? 'Enabled' : 'Disabled' },
+            { label: 'Источник', value: 'Встроенный текст' },
+            { label: 'Символы', value: String(source.length) },
+            { label: 'Байты', value: String(bytes.byteLength) },
+            { label: 'HMAC', value: secret ? 'Включён' : 'Выключен' },
           ]
         : [
-            { label: 'Source', value: source.name || 'local-file' },
-            { label: 'Type', value: source.type || 'application/octet-stream' },
-            { label: 'Bytes', value: String(bytes.byteLength) },
-            { label: 'HMAC', value: secret ? 'Enabled' : 'Disabled' },
+            { label: 'Источник', value: source.name || 'локальный-файл' },
+            { label: 'Тип', value: source.type || 'application/octet-stream' },
+            { label: 'Байты', value: String(bytes.byteLength) },
+            { label: 'HMAC', value: secret ? 'Включён' : 'Выключен' },
           ],
     digests,
     hmacDigests,
@@ -82,7 +80,7 @@ async function buildHmac(
 ): Promise<string> {
   const subtle = globalThis.crypto?.subtle
   if (!subtle) {
-    throw new Error('Web Crypto недоступен в этом браузере.')
+    throw new Error('Криптография браузера недоступна.')
   }
 
   // Секрет импортируется как raw key, потому что HMAC здесь нужен только

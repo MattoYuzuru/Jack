@@ -16,111 +16,111 @@ public class PdfToolkitCapabilityMatrixService {
 	private static final List<PdfOperationSpec> OPERATION_SPECS = List.of(
 		new PdfOperationSpec(
 			"merge",
-			"Merge PDFs",
-			"Объединяет несколько PDF в один документ с сохранением page order по очереди входов.",
-			List.of("Merge", "Multi-source", "Page stack"),
+			"Объединить PDF",
+			"Собирает несколько PDF в один документ и сохраняет порядок страниц по очереди добавления.",
+			List.of("Объединение", "Несколько файлов", "Страницы"),
 			true,
 			false,
 			false,
 			true,
 			List.of(ProcessingJobType.PDF_TOOLKIT),
-			"PDF merge требует доступного backend PDF_TOOLKIT job."
+			"Операция объединения сейчас недоступна."
 		),
 		new PdfOperationSpec(
 			"split",
-			"Split PDF",
-			"Разрезает PDF по заданным диапазонам страниц и отдаёт bundle как ZIP плюс preview первого part-файла.",
-			List.of("Ranges", "ZIP", "Preview"),
+			"Разделить PDF",
+			"Разбивает документ по указанным диапазонам страниц и сохраняет результат в архив.",
+			List.of("Диапазоны", "Архив", "Фрагменты"),
 			false,
 			true,
 			true,
 			true,
 			List.of(ProcessingJobType.PDF_TOOLKIT),
-			"PDF split требует доступного backend PDF_TOOLKIT job."
+			"Операция разделения сейчас недоступна."
 		),
 		new PdfOperationSpec(
 			"rotate",
-			"Rotate pages",
-			"Поворачивает все или выбранные страницы на 90/180/270 градусов без client-side page mutation.",
-			List.of("Rotate", "Pages", "Layout"),
+			"Повернуть страницы",
+			"Поворачивает все или выбранные страницы на 90, 180 или 270 градусов.",
+			List.of("Поворот", "Страницы", "Ориентация"),
 			false,
 			true,
 			false,
 			true,
 			List.of(ProcessingJobType.PDF_TOOLKIT),
-			"PDF rotate требует доступного backend PDF_TOOLKIT job."
+			"Операция поворота сейчас недоступна."
 		),
 		new PdfOperationSpec(
 			"reorder",
-			"Extract / reorder",
-			"Собирает новый PDF из выбранного page order, поэтому одним действием закрывает и extract, и reorder сценарии.",
-			List.of("Reorder", "Extract", "Subset"),
+			"Выбрать и переставить",
+			"Собирает новый PDF из выбранных страниц в нужном порядке, поэтому одним действием закрывает и выборку, и перестановку.",
+			List.of("Порядок", "Выборка", "Подмножество"),
 			false,
 			true,
 			false,
 			true,
 			List.of(ProcessingJobType.PDF_TOOLKIT),
-			"Page extract/reorder требует доступного backend PDF_TOOLKIT job."
+			"Операция выбора и перестановки сейчас недоступна."
 		),
 		new PdfOperationSpec(
 			"ocr",
 			"OCR",
-			"Рендерит page images и собирает searchable PDF + TXT export поверх Tesseract runtime.",
-			List.of("OCR", "Searchable PDF", "TXT"),
+			"Распознаёт текст на страницах и добавляет в документ поисковый слой вместе с текстовой выгрузкой.",
+			List.of("OCR", "Поиск по тексту", "TXT"),
 			false,
 			false,
 			false,
 			true,
 			List.of(ProcessingJobType.PDF_TOOLKIT),
-			"OCR route требует доступного backend PDF_TOOLKIT job и OCR runtime."
+			"OCR сейчас недоступен."
 		),
 		new PdfOperationSpec(
 			"sign",
-			"E-sign / stamp",
-			"Добавляет видимую signature/stamp-mark разметку как typed или image stamp и явно не притворяется certificate-based digital signature.",
-			List.of("Stamp", "Signature", "Visible mark"),
+			"Подпись и штамп",
+			"Добавляет видимую подпись или штамп в документ как текстовую или графическую отметку.",
+			List.of("Подпись", "Штамп", "Отметка"),
 			false,
 			true,
 			false,
 			true,
 			List.of(ProcessingJobType.PDF_TOOLKIT),
-			"E-sign route требует доступного backend PDF_TOOLKIT job."
+			"Операция подписи сейчас недоступна."
 		),
 		new PdfOperationSpec(
 			"redact",
-			"Redact terms",
-			"Ищет чувствительные термы в text layer и собирает новый rasterized PDF с необратимой term-based redaction.",
-			List.of("Redact", "Privacy", "Rasterized"),
+			"Скрыть фрагменты",
+			"Ищет чувствительные слова в текстовом слое и собирает новый PDF с необратимым скрытием найденных фрагментов.",
+			List.of("Скрытие", "Конфиденциальность", "Защита"),
 			false,
 			true,
 			false,
 			true,
 			List.of(ProcessingJobType.PDF_TOOLKIT),
-			"Redaction route требует доступного backend PDF_TOOLKIT job."
+			"Операция скрытия сейчас недоступна."
 		),
 		new PdfOperationSpec(
 			"protect",
-			"Protect PDF",
-			"Навешивает user/owner password и базовые permission-флаги на итоговый PDF.",
-			List.of("Protect", "Passwords", "Permissions"),
+			"Защитить PDF",
+			"Добавляет пароль на открытие и базовые ограничения на действия с документом.",
+			List.of("Пароль", "Доступ", "Ограничения"),
 			false,
 			false,
 			false,
 			true,
 			List.of(ProcessingJobType.PDF_TOOLKIT),
-			"Protect route требует доступного backend PDF_TOOLKIT job."
+			"Операция защиты сейчас недоступна."
 		),
 		new PdfOperationSpec(
 			"unlock",
-			"Unlock PDF",
-			"Снимает password protection и сохраняет чистый PDF artifact без дальнейших browser-side обходов.",
-			List.of("Unlock", "Decryption", "Reuse"),
+			"Снять защиту",
+			"Снимает парольную защиту и сохраняет чистую копию PDF для дальнейшей работы.",
+			List.of("Пароль", "Разблокировка", "Продолжить работу"),
 			false,
 			false,
 			false,
 			true,
 			List.of(ProcessingJobType.PDF_TOOLKIT),
-			"Unlock route требует доступного backend PDF_TOOLKIT job."
+			"Операция снятия защиты сейчас недоступна."
 		)
 	);
 
@@ -141,14 +141,14 @@ public class PdfToolkitCapabilityMatrixService {
 				"PDF",
 				"document",
 				"direct-pdf",
-				"PDF workspace",
-				"Прямой PDF intake идёт в pdf-toolkit workspace с preview через VIEWER_RESOLVE и дальнейшими edit/protect flows через PDF_TOOLKIT.",
-				List.of("PDF", "Preview", "Edit"),
+				"Прямое открытие PDF",
+				"Документ можно сразу открыть в рабочем окне, просмотреть страницы и перейти к операциям без дополнительной подготовки.",
+				List.of("PDF", "Просмотр", "Операции"),
 				allRequiredJobsAvailable(
 					List.of(ProcessingJobType.PDF_TOOLKIT, ProcessingJobType.DOCUMENT_PREVIEW, ProcessingJobType.VIEWER_RESOLVE),
 					availabilityByJobType
 				),
-				"Прямой PDF intake требует доступных PDF_TOOLKIT, DOCUMENT_PREVIEW и VIEWER_RESOLVE capabilities.",
+				"Прямое открытие PDF сейчас недоступно.",
 				List.of(ProcessingJobType.PDF_TOOLKIT, ProcessingJobType.DOCUMENT_PREVIEW, ProcessingJobType.VIEWER_RESOLVE)
 			)
 		);
@@ -179,7 +179,7 @@ public class PdfToolkitCapabilityMatrixService {
 					source.family(),
 					"convert-to-pdf",
 					resolveImportRouteLabel(source.requiredJobTypes()),
-					"Этот источник не редактируется как PDF напрямую: pdf-toolkit сначала запускает existing converter path до PDF, а уже потом переводит результат в page-aware workspace.",
+					"Этот формат сначала будет аккуратно приведён к PDF, после чего с документом можно продолжить работу в том же окне.",
 					buildImportAccents(source.accents()),
 					true,
 					null,
@@ -212,14 +212,14 @@ public class PdfToolkitCapabilityMatrixService {
 		var availabilityDetail = finalAvailable
 			? null
 			: ocrBlocked
-				? "OCR operation требует доступного `tesseract` runtime в backend окружении."
+			? "OCR недоступен, потому что в текущем окружении не найден движок распознавания текста."
 				: spec.unavailableDetail();
 
 		return new CapabilityMatrixPayloads.PdfToolkitOperationCapability(
 			spec.id(),
 			spec.label(),
 			spec.detail(),
-			finalAvailable ? "PDF toolkit operation" : "Capability unavailable",
+			finalAvailable ? "Готово к запуску" : "Недоступно",
 			spec.accents(),
 			finalAvailable,
 			availabilityDetail,
@@ -233,17 +233,17 @@ public class PdfToolkitCapabilityMatrixService {
 
 	private String resolveImportRouteLabel(List<ProcessingJobType> requiredJobTypes) {
 		if (requiredJobTypes.contains(ProcessingJobType.IMAGE_CONVERT)) {
-			return "IMAGE_CONVERT -> PDF";
+			return "Подготовка изображения в PDF";
 		}
 		if (requiredJobTypes.contains(ProcessingJobType.OFFICE_CONVERT)) {
-			return "OFFICE_CONVERT -> PDF";
+			return "Подготовка документа в PDF";
 		}
-		return "Converter -> PDF";
+		return "Подготовка в PDF";
 	}
 
 	private List<String> buildImportAccents(List<String> sourceAccents) {
 		var accents = new ArrayList<String>();
-		accents.add("Import");
+		accents.add("Импорт");
 		accents.add("PDF");
 		for (String accent : sourceAccents) {
 			if (accents.size() >= 4) {

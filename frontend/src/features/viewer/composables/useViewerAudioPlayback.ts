@@ -24,7 +24,8 @@ export function useViewerAudioPlayback(
       volume.value = 1
       playbackRate.value = 1
       currentTime.value = 0
-      durationSeconds.value = selection.value?.kind === 'audio' ? selection.value.layout.durationSeconds : 0
+      durationSeconds.value =
+        selection.value?.kind === 'audio' ? selection.value.layout.durationSeconds : 0
       isLooping.value = false
       playbackMessage.value = ''
     },

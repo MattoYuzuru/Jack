@@ -100,7 +100,7 @@ public class MetadataProcessingService {
 			"metadata-inspect-manifest.json",
 			manifest
 		);
-		return new MetadataProcessingResult(List.of(artifact), "Image metadata service");
+		return new MetadataProcessingResult(List.of(artifact), "Проверка метаданных изображения");
 	}
 
 	private MetadataProcessingResult inspectAudio(UUID jobId, StoredUpload upload) {
@@ -119,7 +119,7 @@ public class MetadataProcessingService {
 			"metadata-inspect-manifest.json",
 			manifest
 		);
-		return new MetadataProcessingResult(List.of(artifact), "Audio metadata service");
+		return new MetadataProcessingResult(List.of(artifact), "Проверка метаданных аудио");
 	}
 
 	private MetadataProcessingResult exportImage(
@@ -149,10 +149,10 @@ public class MetadataProcessingService {
 				new MetadataPayloads.MetadataExportManifest(
 					"embedded-jpeg",
 					withMetadataSuffix(upload.originalFileName()),
-					List.of("Backend validated editable fields и встроил их в JPEG EXIF контейнер.")
+					List.of("Изменения проверены и встроены прямо в JPEG-файл.")
 				)
 			);
-			return new MetadataProcessingResult(List.of(manifestArtifact, exportArtifact), "Metadata export service");
+			return new MetadataProcessingResult(List.of(manifestArtifact, exportArtifact), "Экспорт метаданных");
 		}
 
 		var sidecarBytes = buildMetadataSidecar(upload, normalizedMetadata);
@@ -170,10 +170,10 @@ public class MetadataProcessingService {
 			new MetadataPayloads.MetadataExportManifest(
 				"json-sidecar",
 				withJsonSuffix(upload.originalFileName()),
-				List.of("Backend сохранил patch как sidecar JSON, потому что для этого контейнера безопаснее не мутировать оригинальный файл.")
+				List.of("Изменения сохранены в отдельный JSON-файл, чтобы не менять оригинальный контейнер.")
 			)
 		);
-		return new MetadataProcessingResult(List.of(manifestArtifact, exportArtifact), "Metadata export service");
+		return new MetadataProcessingResult(List.of(manifestArtifact, exportArtifact), "Экспорт метаданных");
 	}
 
 	private ImageInspectResult readImageMetadata(StoredUpload upload) {
@@ -191,7 +191,7 @@ public class MetadataProcessingService {
 			);
 		}
 		catch (ImageProcessingException | IOException exception) {
-			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Не удалось прочитать image metadata на backend.", exception);
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Не удалось прочитать метаданные изображения.", exception);
 		}
 	}
 
@@ -212,7 +212,7 @@ public class MetadataProcessingService {
 			);
 		}
 		catch (Exception exception) {
-			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Не удалось прочитать audio tags на backend.", exception);
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Не удалось прочитать аудиотеги файла.", exception);
 		}
 	}
 
@@ -695,7 +695,7 @@ public class MetadataProcessingService {
 			case "ICC Profile" -> "ICC Profile";
 			case "Makernote", "Olympus Makernote", "Canon Makernote", "Nikon Makernote", "Sony Makernote", "Panasonic Makernote", "Fujifilm Makernote" -> "Maker Notes";
 			case "Photoshop" -> "Photoshop";
-			case "Exif Thumbnail" -> "Thumbnail";
+			case "Exif Thumbnail" -> "Миниатюра";
 			default -> directoryName;
 		};
 	}

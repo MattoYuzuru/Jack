@@ -155,7 +155,7 @@ export function usePdfToolkitWorkspace() {
   async function openSource(file: File): Promise<void> {
     isLoading.value = true
     errorMessage.value = ''
-    processingMessage.value = 'Подготавливаю PDF toolkit entry point и backend preview...'
+    processingMessage.value = 'Подготавливаю документ к работе в PDF Toolkit...'
 
     try {
       await hydrateCapabilities()
@@ -194,7 +194,7 @@ export function usePdfToolkitWorkspace() {
 
     errorMessage.value = ''
     isProcessing.value = true
-    processingMessage.value = 'Создаю PDF toolkit job...'
+    processingMessage.value = 'Запускаю операцию с PDF...'
 
     try {
       const response = await runServerPdfToolkitJob({
@@ -274,11 +274,11 @@ export function usePdfToolkitWorkspace() {
 
       processingMessage.value =
         response.manifest.operation === 'SPLIT'
-          ? 'Split завершён: ZIP bundle готов, preview первого part-файла доступен справа.'
-          : 'PDF toolkit job завершён.'
+          ? 'Разделение завершено: архив готов, а первый фрагмент уже доступен для просмотра.'
+          : 'Операция с PDF завершена.'
     } catch (error) {
       if (error instanceof ProcessingJobCancelledError) {
-        processingMessage.value = 'PDF toolkit job отменён.'
+        processingMessage.value = 'Операция с PDF остановлена.'
       } else {
         errorMessage.value =
           error instanceof Error ? error.message : 'PDF toolkit завершился с ошибкой.'
@@ -300,10 +300,10 @@ export function usePdfToolkitWorkspace() {
       const cancelledJob = await cancelProcessingJob(activeJobId.value)
       activeJobStatus.value = cancelledJob.status
       activeJobProgressPercent.value = cancelledJob.progressPercent
-      processingMessage.value = cancelledJob.message || 'PDF toolkit job отменён.'
+      processingMessage.value = cancelledJob.message || 'Операция с PDF отменена.'
     } catch (error) {
       errorMessage.value =
-        error instanceof Error ? error.message : 'Не удалось отменить PDF toolkit job.'
+        error instanceof Error ? error.message : 'Не удалось отменить операцию с PDF.'
     } finally {
       isCancelling.value = false
     }

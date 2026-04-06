@@ -20,7 +20,10 @@ export interface ViewerAudioMetadataPayload {
   groups: ViewerMetadataGroup[]
   artworkDataUrl: string | null
   searchableText: string
-  technical: Omit<ViewerAudioTechnicalMetadata, 'mimeType' | 'estimatedBitrateBitsPerSecond' | 'sizeBytes'>
+  technical: Omit<
+    ViewerAudioTechnicalMetadata,
+    'mimeType' | 'estimatedBitrateBitsPerSecond' | 'sizeBytes'
+  >
 }
 
 export type ViewerAudioLayout = {

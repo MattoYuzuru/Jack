@@ -25,26 +25,18 @@ interface ToolCard {
 }
 
 const signalPills = [
-  'Iteration 07',
-  'Viewer workspace',
-  'Converter route',
-  'Compression route',
-  'PDF toolkit route',
-  'Editor route',
-  'Dev tools route',
-  'Processing API client',
-  'Platform reuse matrix',
-  'Backend document intelligence',
-  'Office/PDF conversion',
-  'Media conversion',
-  'Backend metadata service',
-  'Video tooling',
-  'Audio workbench',
-  'Legacy + archive + SQLite adapters',
-  'Server rasterization + artifacts',
-  'AVIF / ICO / PDF targets',
-  'Preset profiles',
-  'PSD / AI / EPS server intake',
+  'Просмотр файлов',
+  'Конвертация форматов',
+  'Сжатие под лимит',
+  'PDF-операции',
+  'Редактор текста',
+  'Dev-инструменты',
+  'Изображения и RAW',
+  'Документы и таблицы',
+  'Видео и аудио',
+  'Метаданные и поиск',
+  'Legacy-форматы',
+  'Быстрый локальный старт',
 ]
 
 const foundationPillars: FoundationPillar[] = [
@@ -59,7 +51,7 @@ const foundationPillars: FoundationPillar[] = [
   {
     name: 'Архитектура',
     detail:
-      'Home, viewer, converter, compression, PDF toolkit, editor и dev tools разведены по маршрутам: file-flows сидят на processing API там, где нужны artifacts и jobs, а browser-native utilities живут локально без лишнего orchestration.',
+      'Каждый модуль решает одну задачу целиком: открыть, преобразовать, уменьшить, отредактировать или быстро проверить данные без блуждания по разным сервисам.',
   },
 ]
 
@@ -69,12 +61,12 @@ const toolCardBlueprints: ToolCard[] = [
     label: '01 · File Viewer',
     title: 'Viewer',
     description:
-      'Рабочий маршрут для preview и анализа: image tooling, backend document intelligence, backend metadata service, video workbench и audio viewer внутри одного workspace.',
+      'Открой файл и сразу разберись, что внутри: изображения, документы, таблицы, видео, аудио и служебные форматы живут в одной рабочей зоне.',
     detail:
-      'Viewer уже закрывает весь стартовый image-format set, document layer, video slice и audio slice целиком: MP4/MOV/WebM и MP3/WAV/OGG/OPUS остаются native, а HEIC/TIFF/RAW, legacy media, весь document stack и non-native audio идут через backend VIEWER_RESOLVE; metadata export остаётся за METADATA_EXPORT, плюс доступны waveform, tag inspector, frame stepping, subtitle sidecars и poster tooling.',
-    status: 'Active route',
+      'Подходит для быстрых проверок, поиска по тексту, чтения метаданных, работы с субтитрами и аккуратного извлечения содержимого в editable копию.',
+    status: 'Доступно',
     route: '/viewer',
-    accents: ['Images', 'Docs', 'Media', 'Search'],
+    accents: ['Изображения', 'Документы', 'Медиа', 'Поиск'],
     span: 'tool-card--wide',
   },
   {
@@ -82,12 +74,12 @@ const toolCardBlueprints: ToolCard[] = [
     label: '02 · Conversion',
     title: 'Converter',
     description:
-      'Backend-first converter отправляет любой поддержанный сценарий в processing pipeline, а браузер держит orchestration, progress UX и preview готового результата.',
+      'Преобразуй изображение, документ, таблицу, презентацию, видео или аудио в нужный формат без ручного подбора обходных путей.',
     detail:
-      'HEIC, TIFF, RAW, PSD, AI/EPS intake и привычные JPG/PNG/WebP сценарии идут через IMAGE_CONVERT, DOC/DOCX/RTF/ODT, CSV/XLSX/ODS, PDF и PPTX office-потоки закрываются через OFFICE_CONVERT, а MOV/MKV/AVI/WebM/MP4 и WAV/FLAC/MP3/M4A delivery-сценарии теперь идут через MEDIA_CONVERT с тем же retry/cancel, manifest и artifact reuse contract.',
-    status: 'Active route',
+      'Есть готовые направления для веба, вложений, офисных сценариев и медиа-экспорта, а результат можно сразу просмотреть и скачать.',
+    status: 'Доступно',
     route: '/converter',
-    accents: ['Image', 'Office', 'Media', 'Presets'],
+    accents: ['Изображения', 'Офисные файлы', 'Медиа', 'Профили'],
     span: 'tool-card--standard',
   },
   {
@@ -95,25 +87,24 @@ const toolCardBlueprints: ToolCard[] = [
     label: '03 · Compression',
     title: 'Compressor',
     description:
-      'Сжатие до практического минимума или под целевой размер с понятной визуализацией давления на файл.',
+      'Уменьши файл до практического минимума или под нужный размер, не теряя контроль над качеством.',
     detail:
-      'Compression route уже работает как отдельный backend-first модуль: size goal, maximum reduction и custom limits собираются в единый manifest/result contract.',
-    status: 'Active route',
+      'Полезно для почты, мессенджеров, CMS и лимитов загрузки, когда важен не формат сам по себе, а итоговый вес.',
+    status: 'Доступно',
     route: '/compression',
-    accents: ['Target size', 'Quality', 'Batch'],
+    accents: ['Лимит размера', 'Качество', 'История'],
     span: 'tool-card--standard',
   },
   {
     id: 'pdf',
     label: '04 · PDF Toolkit',
     title: 'PDF Toolkit',
-    description:
-      'Merge, split, rotate, OCR и сценарии защиты собираются в отдельный модуль с собственной рабочей зоной.',
+    description: 'Собери, разрежь, распознай, подпиши и защити PDF в одном месте.',
     detail:
-      'PDF toolkit уже работает как отдельный backend-first модуль: import-to-PDF, page operations, OCR, term redaction и password flows идут через dedicated PDF_TOOLKIT route.',
-    status: 'Active route',
+      'Здесь удобно готовить итоговые документы: от объединения страниц до OCR, скрытия чувствительных данных и настройки доступа.',
+    status: 'Доступно',
     route: '/pdf-toolkit',
-    accents: ['Merge', 'OCR', 'Protect'],
+    accents: ['Объединение', 'OCR', 'Защита'],
     span: 'tool-card--standard',
   },
   {
@@ -121,12 +112,12 @@ const toolCardBlueprints: ToolCard[] = [
     label: '05 · Multi-Format Editor',
     title: 'Editor',
     description:
-      'Активный split-view редактор для Markdown, HTML, CSS, JavaScript, JSON, YAML и plain text с backend diagnostics и export flow.',
+      'Рабочий редактор для заметок, Markdown, HTML, CSS, JavaScript, JSON, YAML и plain text.',
     detail:
-      'Editor уже работает как отдельный backend-first модуль: browser держит formatting, shortcuts, templates и live preview, а EDITOR_PROCESS собирает diagnostics, outline и ready/plain-text artifacts.',
-    status: 'Active route',
+      'Подходит для быстрых правок, шаблонов, форматирования и проверки черновика перед экспортом или публикацией.',
+    status: 'Доступно',
     route: '/editor',
-    accents: ['Preview', 'Markdown', 'Format'],
+    accents: ['Просмотр', 'Markdown', 'Форматирование'],
     span: 'tool-card--standard',
   },
   {
@@ -134,12 +125,12 @@ const toolCardBlueprints: ToolCard[] = [
     label: '06 · Dev Tools',
     title: 'Dev Utils',
     description:
-      'Набор точечных утилит: декодеры, хеши, JWT, валидаторы и прочие ежедневные сценарии для разработчика.',
+      'Локальный набор быстрых утилит для текста, ссылок, токенов, хешей и структурированных payload.',
     detail:
-      'Новый route остаётся browser-native по архитектуре: encoding/decoding, JWT inspector, SHA/HMAC, link cleanup, validators и quick helpers работают мгновенно и не требуют backend queue.',
-    status: 'Active route',
+      'Под рукой всё, что обычно приходится искать по отдельным сайтам: кодировки, JWT, чистка URL, валидаторы и генераторы.',
+    status: 'Доступно',
     route: '/dev-tools',
-    accents: ['JWT', 'Hashes', 'Validators', 'Links'],
+    accents: ['JWT', 'Хэши', 'Проверка', 'Ссылки'],
     span: 'tool-card--standard',
   },
 ]
@@ -161,7 +152,7 @@ function applyPlatformModule(
   return {
     ...card,
     detail: module.summary,
-    status: module.foundationReady ? 'Queued · Platform ready' : 'Queued · Needs runtime',
+    status: module.foundationReady ? 'Скоро · Основа готова' : 'Скоро · Нужна доработка',
     accents: module.accents.slice(0, 3).length ? module.accents.slice(0, 3) : card.accents,
   }
 }
@@ -184,73 +175,57 @@ void hydrateQueuedModuleCards().catch(() => undefined)
       <div class="brand-lockup">
         <img class="brand-lockup__logo" src="/logo.svg" alt="Логотип Jack" />
         <div class="brand-lockup__copy">
-          <p class="eyebrow">Jack of all trades</p>
-          <p class="brand-lockup__title">Main Workspace</p>
+          <p class="eyebrow">Jack · Workspace</p>
+          <p class="brand-lockup__title">Главное рабочее пространство</p>
         </div>
       </div>
 
       <div class="app-topbar__status">
-        <span class="chip-pill">Iteration 07</span>
-        <span class="chip-pill chip-pill--accent"
-          >Viewer + Converter + Compression + PDF Toolkit + Editor + Dev Tools</span
-        >
+        <span class="chip-pill">6 инструментов</span>
+        <span class="chip-pill chip-pill--accent">Файлы, PDF, текст и dev-задачи</span>
       </div>
     </header>
 
     <section class="hero-grid">
       <article class="panel-surface hero-copy">
-        <p class="eyebrow">Iteration 07 · Dev Tools And Utils Live</p>
+        <p class="eyebrow">Единый набор рабочих инструментов</p>
         <h1>
-          Главный экран Jack теперь ведёт уже в шесть живых маршрутов: viewer, converter,
-          compression, PDF toolkit, editor и dev tools.
+          Открой файл, преобразуй его, уменьши размер, поправь текст или собери PDF без лишних
+          кругов.
         </h1>
         <p class="lead">
-          Home сохраняет soft industrial foundation, но теперь работает как switchboard уже для
-          шести продуктовых маршрутов: viewer отвечает за preview и analysis через unified
-          `VIEWER_RESOLVE`, converter закрывает format-to-format сценарии через `IMAGE_CONVERT`,
-          `OFFICE_CONVERT` и `MEDIA_CONVERT`, а compression решает size-first задачу через новый
-          `FILE_COMPRESS`, где backend сам подбирает candidate ladder и возвращает единый
-          compression manifest/result contract. Поверх этого PDF toolkit заводит import-to-PDF,
-          merge/split/rotate, OCR, visible signature stamps, term redaction и password flows в
-          dedicated `PDF_TOOLKIT` route без browser-side PDF mutation. Новый editor удерживает
-          formatting, snippets, shortcuts и live preview в браузере, а validate/export гонит в
-          `EDITOR_PROCESS`, чтобы diagnostics и artifacts оставались server-owned. Dev tools при
-          этом сознательно не тащит мгновенные encode/hash/JWT/link/validation utilities в backend:
-          этот модуль живёт как browser-native инженерный toolbox внутри того же продуктового
-          foundation.
+          Jack собирает частые рабочие сценарии в один понятный интерфейс. На главном экране можно
+          сразу выбрать, что нужно сделать: быстро просмотреть содержимое, перегнать файл в другой
+          формат, уложиться в лимит по весу, собрать PDF-пакет, править текстовый черновик или
+          воспользоваться ежедневными dev-утилитами без рекламы и внешних сервисов.
         </p>
 
         <div class="signal-row">
           <span v-for="signal in signalPills" :key="signal" class="chip-pill">{{ signal }}</span>
         </div>
 
-        <div class="stats-grid" aria-label="Ключевые показатели foundation">
+        <div class="stats-grid" aria-label="Ключевые возможности Jack">
           <article class="stats-card">
             <strong>7</strong>
-            <span>экрана уже разведены через router</span>
+            <span>рабочих экранов с единым стилем и навигацией</span>
           </article>
           <article class="stats-card">
             <strong>65</strong>
-            <span
-              >conversion-сценариев уже заведены в converter registry вместе с
-              preset-профилями</span
-            >
+            <span>популярных направлений конвертации и экспорта</span>
           </article>
           <article class="stats-card">
-            <strong>9</strong>
-            <span
-              >слоёв foundation: processing client, registry, adapters, compression orchestration,
-              editor diagnostics/export, metadata, browser-native dev utils, workspace state, color
-              lab и media/document UX</span
-            >
+            <strong>100+</strong>
+            <span>форматов и сценариев для файлов, PDF, текста и отладки</span>
           </article>
         </div>
       </article>
 
       <article class="panel-surface foundation-card">
         <div class="foundation-card__glow" aria-hidden="true"></div>
-        <p class="eyebrow">System Notes</p>
-        <h2>Foundation остаётся единым, а новые модули растут поверх него.</h2>
+        <p class="eyebrow">Принципы продукта</p>
+        <h2>
+          Один язык интерфейса, крупные рабочие зоны и понятный следующий шаг на каждом экране.
+        </h2>
 
         <div class="foundation-pillars">
           <article v-for="pillar in foundationPillars" :key="pillar.name" class="foundation-pillar">
@@ -260,9 +235,9 @@ void hydrateQueuedModuleCards().catch(() => undefined)
         </div>
 
         <div class="foundation-footer">
-          <span class="chip-pill">Home grid</span>
-          <span class="chip-pill">Viewer route</span>
-          <span class="chip-pill">Shared tokens</span>
+          <span class="chip-pill">Крупные плитки</span>
+          <span class="chip-pill">Тёплая светлая база</span>
+          <span class="chip-pill">Единый UX-подход</span>
         </div>
       </article>
     </section>
@@ -305,9 +280,9 @@ void hydrateQueuedModuleCards().catch(() => undefined)
               class="action-button action-button--accent"
               :to="card.route"
             >
-              Open {{ card.title }}
+              Открыть {{ card.title }}
             </RouterLink>
-            <span v-else class="tool-card__queued">Roadmap queued</span>
+            <span v-else class="tool-card__queued">Скоро здесь</span>
           </div>
         </div>
       </article>

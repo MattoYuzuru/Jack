@@ -13,7 +13,7 @@ describe('dev tools registry', () => {
   it('resolves a single tool definition by id', () => {
     const tool = resolveDevTool('jwt')
 
-    expect(tool?.title).toBe('JWT Decoder')
-    expect(tool?.accents).toContain('Bearer')
+    expect(tool?.title).toBe('Проверка JWT')
+    expect(tool?.accents).toContain('Auth')
   })
 })
