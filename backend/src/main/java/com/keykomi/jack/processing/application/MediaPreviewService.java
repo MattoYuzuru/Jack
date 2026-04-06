@@ -218,7 +218,7 @@ public class MediaPreviewService {
 					"-movflags",
 					"+faststart"
 				),
-				List.of("Аудиодорожка была отброшена во время backend preview fallback.")
+				List.of("Для просмотра сохранено только видео без аудиодорожки.")
 			),
 			new MediaPreviewProfile(
 				"WebM fallback transcode",
@@ -252,7 +252,7 @@ public class MediaPreviewService {
 					"-b:a",
 					"128k"
 				),
-				List.of("MP4 backend transcode не собрался, поэтому использован WebM fallback.")
+				List.of("Для просмотра использован WebM, потому что MP4-версию подготовить не удалось.")
 			)
 		);
 
@@ -301,7 +301,7 @@ public class MediaPreviewService {
 					"-ac",
 					"2"
 				),
-				List.of("Playback собран через PCM fallback, поэтому preview может оказаться тяжелее исходника.")
+				List.of("Для воспроизведения подготовлен WAV-вариант, поэтому файл предпросмотра может получиться тяжелее исходника.")
 			)
 		);
 
@@ -321,7 +321,7 @@ public class MediaPreviewService {
 				if (!hasRenderableOutput(outputPath)) {
 					throw new ResponseStatusException(
 						HttpStatus.UNPROCESSABLE_ENTITY,
-						"Команда завершилась без итогового media artifact: %s".formatted(profile.runtimeLabel())
+						"Не удалось подготовить результат для режима %s.".formatted(profile.runtimeLabel())
 					);
 				}
 				return new MediaPreviewOutput(
@@ -339,7 +339,7 @@ public class MediaPreviewService {
 
 		throw new ResponseStatusException(
 			HttpStatus.UNPROCESSABLE_ENTITY,
-			"Backend ffmpeg не смог собрать browser-friendly %s preview. %s".formatted(familyLabel, String.join(" ", failures))
+			"Не удалось подготовить %s для просмотра. %s".formatted(familyLabel, String.join(" ", failures))
 		);
 	}
 

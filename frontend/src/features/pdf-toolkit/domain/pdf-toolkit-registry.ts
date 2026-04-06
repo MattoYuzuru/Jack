@@ -44,7 +44,7 @@ export async function getPdfToolkitCapabilityMatrix(): Promise<PdfToolkitCapabil
   const matrix = scope.pdfToolkitMatrix as PdfToolkitCapabilityMatrix | null | undefined
 
   if (!matrix) {
-    throw new Error('Backend pdf-toolkit capability matrix не вернула pdfToolkitMatrix payload.')
+    throw new Error('Не удалось загрузить доступные операции PDF Toolkit.')
   }
 
   return {

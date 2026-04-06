@@ -132,7 +132,7 @@ export class ProcessingJobCancelledError extends Error {
   readonly job: ProcessingJobResponse
 
   constructor(job: ProcessingJobResponse) {
-    super(job.errorMessage || job.message || 'Backend processing job был отменён.')
+    super(job.errorMessage || job.message || 'Операция была остановлена до завершения.')
     this.name = 'ProcessingJobCancelledError'
     this.job = job
   }
@@ -174,7 +174,7 @@ export async function ensureProcessingCapability(
     throw new Error(
       capability?.detail ||
         capability?.notes ||
-        `Backend capability ${jobType} сейчас не активна для scope ${scope}.`,
+        'Этот сценарий сейчас недоступен. Попробуй позже или выбери другой формат.',
     )
   }
 
@@ -195,7 +195,7 @@ export async function getPlatformCapabilityMatrix(): Promise<ProcessingPlatformC
   const scope = await getProcessingCapabilityScope('platform')
 
   if (!scope.platformMatrix) {
-    throw new Error('Backend не вернул platform capability matrix.')
+    throw new Error('Не удалось загрузить конфигурацию модулей Jack.')
   }
 
   return scope.platformMatrix
@@ -233,7 +233,7 @@ export async function awaitProcessingJob(
     reportProgress,
     maxAttempts = DEFAULT_MAX_ATTEMPTS,
     pollIntervalMs = DEFAULT_POLL_INTERVAL_MS,
-    timeoutMessage = 'Backend processing job не завершился в ожидаемое время.',
+    timeoutMessage = 'Операция заняла больше времени, чем ожидалось.',
     onUpdate,
   } = options
   let lastMessage = ''
@@ -252,9 +252,7 @@ export async function awaitProcessingJob(
     }
 
     if (job.status === 'FAILED') {
-      throw new Error(
-        job.errorMessage || job.message || 'Backend processing job завершился с ошибкой.',
-      )
+      throw new Error(job.errorMessage || job.message || 'Операция завершилась с ошибкой.')
     }
 
     if (job.status === 'CANCELLED') {
@@ -278,14 +276,14 @@ export async function runProcessingJob(
     reportProgress,
     maxAttempts,
     pollIntervalMs,
-    uploadMessage = 'Отправляю файл в backend processing pipeline...',
-    createMessage = `Создаю backend ${jobType} job...`,
-    timeoutMessage = `Backend ${jobType} job не завершился в ожидаемое время.`,
+    uploadMessage = 'Загружаю файл...',
+    createMessage = 'Запускаю обработку...',
+    timeoutMessage = 'Обработка заняла больше времени, чем ожидалось.',
     onJobCreated,
     onJobUpdate,
   } = options
 
-  reportProgress?.(`Проверяю, что backend ${jobType} capability доступна для ${scope}...`)
+  reportProgress?.('Проверяю доступность обработки...')
   await ensureProcessingCapability(scope, jobType)
 
   reportProgress?.(uploadMessage)
@@ -333,7 +331,7 @@ async function processingFetch(path: string, init: RequestInit): Promise<Respons
     return await fetch(resolveProcessingApiUrl(path), init)
   } catch {
     throw new Error(
-      'Не удалось связаться с backend processing service. Проверь, что backend запущен и разрешает запросы с frontend origin.',
+      'Не удалось связаться с сервисом обработки. Проверь, что Jack запущен и доступен.',
     )
   }
 }
@@ -365,7 +363,7 @@ async function resolveProcessingApiErrorMessage(response: Response): Promise<str
     return fallbackText.trim()
   }
 
-  return `Backend processing request завершился с HTTP ${response.status}.`
+  return `Сервис обработки вернул HTTP ${response.status}.`
 }
 
 function resolveProcessingApiUrl(path: string): string {

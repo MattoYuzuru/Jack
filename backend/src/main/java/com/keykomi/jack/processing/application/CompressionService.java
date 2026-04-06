@@ -208,7 +208,7 @@ public class CompressionService {
 				var progress = 24 + Math.round(((index + 1) * 52f) / plans.size());
 				progressReporter.report(
 					progress,
-					"Пробую compression candidate %s/%s: %s.".formatted(index + 1, plans.size(), plan.label())
+					"Пробую вариант %s из %s: %s.".formatted(index + 1, plans.size(), plan.label())
 				);
 				var candidate = candidateRunner.run(upload, request, plan);
 				candidates.add(candidate);
@@ -218,7 +218,7 @@ public class CompressionService {
 			}
 
 			var selectedCandidate = selectCandidate(candidates, request.mode());
-			progressReporter.report(84, "Compression candidate выбран, собираю финальный manifest и result artifacts.");
+			progressReporter.report(84, "Лучший вариант выбран, собираю итоговый файл и сводку.");
 			return finalizeCompression(jobId, upload, request, family, selectedCandidate, candidates);
 		}
 		finally {
@@ -356,12 +356,12 @@ public class CompressionService {
 		List<String> warnings = new ArrayList<>(selectedCandidate.warnings());
 		if (request.mode() == CompressionRequest.Mode.TARGET_SIZE && !selectedCandidate.attempt().targetMet()) {
 			warnings.add(
-				"Целевой размер не достигнут: route вернул самый компактный найденный artifact без silent fallback."
+				"Не удалось уложиться в заданный размер. Jack сохранил самый компактный найденный вариант."
 			);
 		}
 		if (selectedCandidate.resultArtifact().sizeBytes() >= upload.sizeBytes()) {
 			warnings.add(
-				"Итоговый artifact не оказался меньше исходника: текущий runtime сохранил лучший найденный delivery-вариант, но выигрыш по размеру не подтвердился."
+				"Итоговый файл не оказался меньше исходного. Jack сохранил лучший найденный вариант без потери результата."
 			);
 		}
 		warnings = deduplicateWarnings(warnings);
@@ -434,7 +434,7 @@ public class CompressionService {
 				: resolveCustomImageTarget(sourceExtension);
 			return List.of(
 				new CompressionAttemptPlan(
-					"Custom image profile",
+					"Ручной профиль изображения",
 					targetExtension,
 					request.maxWidth(),
 					request.maxHeight(),
@@ -445,7 +445,7 @@ public class CompressionService {
 					null,
 					null,
 					null,
-					request.presetLabel() == null ? "Custom image profile" : request.presetLabel()
+					request.presetLabel() == null ? "Ручной профиль изображения" : request.presetLabel()
 				)
 			);
 		}
@@ -453,9 +453,9 @@ public class CompressionService {
 		if (request.mode() == CompressionRequest.Mode.MAX_REDUCTION) {
 			var plans = new ArrayList<CompressionAttemptPlan>();
 			for (String target : targets) {
-				plans.add(imagePlan("Aggressive " + target.toUpperCase(Locale.ROOT), target, 1600, 1600, 0.62, request.backgroundColor(), "Maximum reduction"));
+				plans.add(imagePlan("Максимальное уменьшение · " + target.toUpperCase(Locale.ROOT), target, 1600, 1600, 0.62, request.backgroundColor(), "Максимальное уменьшение"));
 			}
-			plans.add(imagePlan("Micro preview fallback", targets.get(0), 960, 960, 0.54, request.backgroundColor(), "Maximum reduction"));
+			plans.add(imagePlan("Компактный резервный вариант", targets.get(0), 960, 960, 0.54, request.backgroundColor(), "Максимальное уменьшение"));
 			return plans;
 		}
 
@@ -490,13 +490,13 @@ public class CompressionService {
 				var quality = "png".equals(target) || "tiff".equals(target) ? null : qualities.get(index);
 				plans.add(
 					imagePlan(
-						"%s target / pass %s".formatted(target.toUpperCase(Locale.ROOT), index + 1),
+						"%s · проход %s".formatted(target.toUpperCase(Locale.ROOT), index + 1),
 						target,
 						limit.maxWidth(),
 						limit.maxHeight(),
 						quality,
 						request.backgroundColor(),
-						"Target size"
+						"Лимит размера"
 					)
 				);
 			}
@@ -517,7 +517,7 @@ public class CompressionService {
 				: resolveCustomVideoTarget(sourceExtension);
 			return List.of(
 				new CompressionAttemptPlan(
-					"Custom video profile",
+					"Ручной профиль видео",
 					targetExtension,
 					request.maxWidth(),
 					request.maxHeight(),
@@ -528,37 +528,37 @@ public class CompressionService {
 					request.targetFps(),
 					request.videoBitrateKbps() == null ? 2500 : request.videoBitrateKbps(),
 					request.audioBitrateKbps() == null ? 160 : request.audioBitrateKbps(),
-					request.presetLabel() == null ? "Custom video profile" : request.presetLabel()
+					request.presetLabel() == null ? "Ручной профиль видео" : request.presetLabel()
 				)
 			);
 		}
 
 		if (request.mode() == CompressionRequest.Mode.MAX_REDUCTION) {
 			return List.of(
-				videoPlan("Aggressive WebM", targets.get(0), 1280, 720, 24, 1800, 128, "Maximum reduction"),
-				videoPlan("Compact delivery", targets.get(0), 854, 480, 15, 1200, 96, "Maximum reduction"),
-				videoPlan("Smallest fallback", targets.get(0), 640, 360, 12, 800, 64, "Maximum reduction")
+				videoPlan("Максимальное уменьшение", targets.get(0), 1280, 720, 24, 1800, 128, "Максимальное уменьшение"),
+				videoPlan("Компактная версия", targets.get(0), 854, 480, 15, 1200, 96, "Максимальное уменьшение"),
+				videoPlan("Минимальный резервный вариант", targets.get(0), 640, 360, 12, 800, 64, "Максимальное уменьшение")
 			);
 		}
 
 		var pressure = resolveTargetPressure(upload.sizeBytes(), request.targetSizeBytes());
 		var ladders = pressure >= 0.78d
 			? List.of(
-				videoPlan("Light pass", targets.get(0), 1920, 1080, 30, 3500, 160, "Target size"),
-				videoPlan("Balanced pass", targets.get(0), 1280, 720, 24, 2500, 128, "Target size"),
-				videoPlan("Compact pass", targets.get(0), 854, 480, 15, 1200, 96, "Target size")
+				videoPlan("Мягкий проход", targets.get(0), 1920, 1080, 30, 3500, 160, "Лимит размера"),
+				videoPlan("Сбалансированный проход", targets.get(0), 1280, 720, 24, 2500, 128, "Лимит размера"),
+				videoPlan("Компактный проход", targets.get(0), 854, 480, 15, 1200, 96, "Лимит размера")
 			)
 			: List.of(
-				videoPlan("Balanced pass", targets.get(0), 1280, 720, 24, 2500, 128, "Target size"),
-				videoPlan("Compact pass", targets.get(0), 854, 480, 15, 1200, 96, "Target size"),
-				videoPlan("Tight pass", targets.get(0), 640, 360, 12, 800, 64, "Target size")
+				videoPlan("Сбалансированный проход", targets.get(0), 1280, 720, 24, 2500, 128, "Лимит размера"),
+				videoPlan("Компактный проход", targets.get(0), 854, 480, 15, 1200, 96, "Лимит размера"),
+				videoPlan("Жёсткий проход", targets.get(0), 640, 360, 12, 800, 64, "Лимит размера")
 			);
 		if (targets.size() == 1) {
 			return ladders;
 		}
 
 		var plans = new ArrayList<>(ladders);
-		plans.add(videoPlan("Secondary target", targets.get(1), 854, 480, 15, 1200, 96, "Target size"));
+		plans.add(videoPlan("Запасной формат", targets.get(1), 854, 480, 15, 1200, 96, "Лимит размера"));
 		return plans;
 	}
 
@@ -575,7 +575,7 @@ public class CompressionService {
 				: resolveCustomAudioTarget(sourceExtension);
 			return List.of(
 				new CompressionAttemptPlan(
-					"Custom audio profile",
+					"Ручной профиль аудио",
 					targetExtension,
 					null,
 					null,
@@ -586,16 +586,16 @@ public class CompressionService {
 					null,
 					null,
 					request.audioBitrateKbps() == null ? 160 : request.audioBitrateKbps(),
-					request.presetLabel() == null ? "Custom audio profile" : request.presetLabel()
+					request.presetLabel() == null ? "Ручной профиль аудио" : request.presetLabel()
 				)
 			);
 		}
 
 		if (request.mode() == CompressionRequest.Mode.MAX_REDUCTION) {
 			return List.of(
-				audioPlan("Compact AAC profile", targets.get(0), 96, "Maximum reduction"),
-				audioPlan("Aggressive AAC profile", targets.get(0), 64, "Maximum reduction"),
-				audioPlan("Smallest fallback", targets.get(Math.min(1, targets.size() - 1)), 64, "Maximum reduction")
+				audioPlan("Компактный профиль", targets.get(0), 96, "Максимальное уменьшение"),
+				audioPlan("Агрессивное уменьшение", targets.get(0), 64, "Максимальное уменьшение"),
+				audioPlan("Минимальный резервный вариант", targets.get(Math.min(1, targets.size() - 1)), 64, "Максимальное уменьшение")
 			);
 		}
 
@@ -606,7 +606,7 @@ public class CompressionService {
 		var plans = new ArrayList<CompressionAttemptPlan>();
 		for (String target : targets) {
 			for (Integer bitrate : bitrates) {
-				plans.add(audioPlan("%s %sk".formatted(target.toUpperCase(Locale.ROOT), bitrate), target, bitrate, "Target size"));
+				plans.add(audioPlan("%s · %s kbps".formatted(target.toUpperCase(Locale.ROOT), bitrate), target, bitrate, "Лимит размера"));
 			}
 		}
 		return plans;
@@ -762,7 +762,7 @@ public class CompressionService {
 			.findFirst()
 			.orElseThrow(() -> new ResponseStatusException(
 				HttpStatus.INTERNAL_SERVER_ERROR,
-				"Compression route не нашёл обязательный artifact %s у внутреннего candidate job.".formatted(kind)
+				"Не удалось найти обязательный файл результата: %s.".formatted(kind)
 			));
 	}
 
@@ -773,7 +773,7 @@ public class CompressionService {
 		catch (IOException exception) {
 			throw new ResponseStatusException(
 				HttpStatus.INTERNAL_SERVER_ERROR,
-				"Не удалось прочитать internal compression manifest artifact.",
+				"Не удалось прочитать сводку по сжатию.",
 				exception
 			);
 		}
@@ -784,13 +784,13 @@ public class CompressionService {
 		ImageProcessingService.ImageProcessingManifest manifest
 	) {
 		var facts = new ArrayList<DocumentPreviewPayload.DocumentFact>();
-		facts.add(new DocumentPreviewPayload.DocumentFact("Source", upload.originalFileName()));
-		facts.add(new DocumentPreviewPayload.DocumentFact("Format", normalizeExtension(upload.extension()).toUpperCase(Locale.ROOT)));
+		facts.add(new DocumentPreviewPayload.DocumentFact("Файл", upload.originalFileName()));
+		facts.add(new DocumentPreviewPayload.DocumentFact("Формат", normalizeExtension(upload.extension()).toUpperCase(Locale.ROOT)));
 		if (manifest.sourceWidth() != null && manifest.sourceHeight() != null) {
-			facts.add(new DocumentPreviewPayload.DocumentFact("Dimensions", manifest.sourceWidth() + " x " + manifest.sourceHeight()));
+			facts.add(new DocumentPreviewPayload.DocumentFact("Размер кадра", manifest.sourceWidth() + " x " + manifest.sourceHeight()));
 		}
-		facts.add(new DocumentPreviewPayload.DocumentFact("Transparency", manifest.sourceHasTransparency() ? "Yes" : "No"));
-		facts.add(new DocumentPreviewPayload.DocumentFact("Pipeline", manifest.sourceAdapterLabel()));
+		facts.add(new DocumentPreviewPayload.DocumentFact("Прозрачность", manifest.sourceHasTransparency() ? "Есть" : "Нет"));
+		facts.add(new DocumentPreviewPayload.DocumentFact("Подготовка", manifest.sourceAdapterLabel()));
 		return facts;
 	}
 
@@ -798,12 +798,12 @@ public class CompressionService {
 		ImageProcessingService.ImageProcessingManifest manifest
 	) {
 		var facts = new ArrayList<DocumentPreviewPayload.DocumentFact>();
-		facts.add(new DocumentPreviewPayload.DocumentFact("Format", manifest.outputExtension().toUpperCase(Locale.ROOT)));
+		facts.add(new DocumentPreviewPayload.DocumentFact("Формат", manifest.outputExtension().toUpperCase(Locale.ROOT)));
 		if (manifest.width() != null && manifest.height() != null) {
-			facts.add(new DocumentPreviewPayload.DocumentFact("Dimensions", manifest.width() + " x " + manifest.height()));
+			facts.add(new DocumentPreviewPayload.DocumentFact("Размер кадра", manifest.width() + " x " + manifest.height()));
 		}
-		facts.add(new DocumentPreviewPayload.DocumentFact("Media type", manifest.resultMediaType()));
-		facts.add(new DocumentPreviewPayload.DocumentFact("Pipeline", manifest.targetAdapterLabel()));
+		facts.add(new DocumentPreviewPayload.DocumentFact("MIME-тип", manifest.resultMediaType()));
+		facts.add(new DocumentPreviewPayload.DocumentFact("Подготовка", manifest.targetAdapterLabel()));
 		return facts;
 	}
 
@@ -814,19 +814,19 @@ public class CompressionService {
 		boolean targetMet
 	) {
 		var facts = new ArrayList<DocumentPreviewPayload.DocumentFact>();
-		facts.add(new DocumentPreviewPayload.DocumentFact("Mode", switch (request.mode()) {
-			case MAX_REDUCTION -> "Maximum reduction";
-			case TARGET_SIZE -> "Target size";
-			case CUSTOM -> "Custom";
+		facts.add(new DocumentPreviewPayload.DocumentFact("Режим", switch (request.mode()) {
+			case MAX_REDUCTION -> "Максимальное уменьшение";
+			case TARGET_SIZE -> "Лимит размера";
+			case CUSTOM -> "Ручная настройка";
 		}));
-		facts.add(new DocumentPreviewPayload.DocumentFact("Source size", formatBytes(sourceSizeBytes)));
-		facts.add(new DocumentPreviewPayload.DocumentFact("Result size", formatBytes(resultSizeBytes)));
+		facts.add(new DocumentPreviewPayload.DocumentFact("Исходный размер", formatBytes(sourceSizeBytes)));
+		facts.add(new DocumentPreviewPayload.DocumentFact("Размер результата", formatBytes(resultSizeBytes)));
 		var savedBytes = Math.max(0L, sourceSizeBytes - resultSizeBytes);
-		facts.add(new DocumentPreviewPayload.DocumentFact("Saved", formatBytes(savedBytes)));
-		facts.add(new DocumentPreviewPayload.DocumentFact("Reduction", formatReduction(sourceSizeBytes, resultSizeBytes)));
+		facts.add(new DocumentPreviewPayload.DocumentFact("Экономия", formatBytes(savedBytes)));
+		facts.add(new DocumentPreviewPayload.DocumentFact("Снижение", formatReduction(sourceSizeBytes, resultSizeBytes)));
 		if (request.targetSizeBytes() != null) {
-			facts.add(new DocumentPreviewPayload.DocumentFact("Target size", formatBytes(request.targetSizeBytes())));
-			facts.add(new DocumentPreviewPayload.DocumentFact("Target status", targetMet ? "Reached" : "Best effort"));
+			facts.add(new DocumentPreviewPayload.DocumentFact("Целевой размер", formatBytes(request.targetSizeBytes())));
+			facts.add(new DocumentPreviewPayload.DocumentFact("Статус цели", targetMet ? "Достигнут" : "Лучший доступный вариант"));
 		}
 		return facts;
 	}
@@ -835,7 +835,7 @@ public class CompressionService {
 		if (!supportedTargets.contains(targetExtension)) {
 			throw new ResponseStatusException(
 				HttpStatus.BAD_REQUEST,
-				"Compression route не поддерживает %s target %s.".formatted(familyLabel, targetExtension)
+				"Сжатие не поддерживает тип результата %s для категории %s.".formatted(targetExtension, familyLabel)
 			);
 		}
 		return targetExtension;

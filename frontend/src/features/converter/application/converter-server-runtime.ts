@@ -119,13 +119,13 @@ const MEDIA_CONVERT_JOB_TYPE = 'MEDIA_CONVERT'
 export async function runServerImageConvert(
   input: RunServerImageConvertInput,
 ): Promise<ServerImageConvertResult> {
-  input.reportProgress?.('Проверяю backend IMAGE_CONVERT capability для converter route...')
+  input.reportProgress?.('Проверяю доступность конвертации изображения...')
   await ensureProcessingCapability('converter', IMAGE_CONVERT_JOB_TYPE)
 
-  input.reportProgress?.('Отправляю source в backend processing storage...')
+  input.reportProgress?.('Загружаю исходный файл...')
   const upload = await uploadProcessingFile(input.file)
 
-  input.reportProgress?.('Создаю backend IMAGE_CONVERT job для backend-first conversion...')
+  input.reportProgress?.('Запускаю конвертацию...')
   const createdJob = await createProcessingJob({
     uploadId: upload.id,
     jobType: IMAGE_CONVERT_JOB_TYPE,
@@ -144,11 +144,11 @@ export async function runServerImageConvert(
   const completedJob = await awaitProcessingJob(createdJob.id, {
     reportProgress: input.reportProgress,
     timeoutMessage:
-      'Backend IMAGE_CONVERT job не завершился в ожидаемое время. Попробуй более компактный пресет или проверь backend logs.',
+      'Конвертация заняла слишком много времени. Попробуй более компактный профиль или повтори позже.',
     onUpdate: input.onJobUpdate,
   })
 
-  input.reportProgress?.('Загружаю backend result/preview artifacts...')
+  input.reportProgress?.('Загружаю готовый файл и предпросмотр...')
   return downloadServerConvertArtifacts(completedJob)
 }
 
@@ -164,7 +164,7 @@ export async function downloadServerConvertArtifacts(
   )
 
   if (!manifestArtifact || !resultArtifact || !previewArtifact) {
-    throw new Error('Backend IMAGE_CONVERT job завершился без обязательных convert artifacts.')
+    throw new Error('Конвертация завершилась без обязательных файлов результата.')
   }
 
   const [manifest, resultBlob, previewBlob] = await Promise.all([
@@ -187,13 +187,13 @@ export async function downloadServerConvertArtifacts(
 export async function runServerOfficeConvert(
   input: RunServerImageConvertInput,
 ): Promise<ServerOfficeConvertResult> {
-  input.reportProgress?.('Проверяю backend OFFICE_CONVERT capability для office/pdf route...')
+  input.reportProgress?.('Проверяю доступность конвертации документа...')
   await ensureProcessingCapability('converter', OFFICE_CONVERT_JOB_TYPE)
 
-  input.reportProgress?.('Отправляю source в backend processing storage...')
+  input.reportProgress?.('Загружаю исходный файл...')
   const upload = await uploadProcessingFile(input.file)
 
-  input.reportProgress?.('Создаю backend OFFICE_CONVERT job для office/pdf conversion...')
+  input.reportProgress?.('Запускаю конвертацию документа...')
   const createdJob = await createProcessingJob({
     uploadId: upload.id,
     jobType: OFFICE_CONVERT_JOB_TYPE,
@@ -211,24 +211,24 @@ export async function runServerOfficeConvert(
   const completedJob = await awaitProcessingJob(createdJob.id, {
     reportProgress: input.reportProgress,
     timeoutMessage:
-      'Backend OFFICE_CONVERT job не завершился в ожидаемое время. Проверь backend logs или попробуй менее тяжёлый export target.',
+      'Подготовка документа заняла слишком много времени. Попробуй другой формат результата или повтори позже.',
     onUpdate: input.onJobUpdate,
   })
 
-  input.reportProgress?.('Загружаю backend office result/preview artifacts...')
+  input.reportProgress?.('Загружаю готовый файл и предпросмотр...')
   return downloadServerOfficeConvertArtifacts(completedJob)
 }
 
 export async function runServerMediaConvert(
   input: RunServerMediaConvertInput,
 ): Promise<ServerMediaConvertResult> {
-  input.reportProgress?.('Проверяю backend MEDIA_CONVERT capability для video/audio route...')
+  input.reportProgress?.('Проверяю доступность конвертации медиа...')
   await ensureProcessingCapability('converter', MEDIA_CONVERT_JOB_TYPE)
 
-  input.reportProgress?.('Отправляю source в backend processing storage...')
+  input.reportProgress?.('Загружаю исходный файл...')
   const upload = await uploadProcessingFile(input.file)
 
-  input.reportProgress?.('Создаю backend MEDIA_CONVERT job для container/codec transcode...')
+  input.reportProgress?.('Запускаю конвертацию медиа...')
   const createdJob = await createProcessingJob({
     uploadId: upload.id,
     jobType: MEDIA_CONVERT_JOB_TYPE,
@@ -249,11 +249,11 @@ export async function runServerMediaConvert(
   const completedJob = await awaitProcessingJob(createdJob.id, {
     reportProgress: input.reportProgress,
     timeoutMessage:
-      'Backend MEDIA_CONVERT job не завершился в ожидаемое время. Проверь ffmpeg runtime или попробуй более компактный delivery profile.',
+      'Обработка медиа заняла слишком много времени. Попробуй более компактный профиль или повтори позже.',
     onUpdate: input.onJobUpdate,
   })
 
-  input.reportProgress?.('Загружаю backend media result/preview artifacts...')
+  input.reportProgress?.('Загружаю готовый файл и предпросмотр...')
   return downloadServerMediaConvertArtifacts(completedJob)
 }
 
@@ -269,7 +269,7 @@ export async function downloadServerOfficeConvertArtifacts(
   )
 
   if (!manifestArtifact || !resultArtifact || !previewArtifact) {
-    throw new Error('Backend OFFICE_CONVERT job завершился без обязательных convert artifacts.')
+    throw new Error('Конвертация документа завершилась без обязательных файлов результата.')
   }
 
   const [manifest, resultBlob, previewBlob] = await Promise.all([
@@ -301,7 +301,7 @@ export async function downloadServerMediaConvertArtifacts(
   )
 
   if (!manifestArtifact || !resultArtifact || !previewArtifact) {
-    throw new Error('Backend MEDIA_CONVERT job завершился без обязательных convert artifacts.')
+    throw new Error('Конвертация медиа завершилась без обязательных файлов результата.')
   }
 
   const [manifest, resultBlob, previewBlob] = await Promise.all([

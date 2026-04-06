@@ -41,7 +41,7 @@ export async function getViewerCapabilityMatrix(): Promise<ViewerCapabilityMatri
   const matrix = scope.viewerMatrix as ViewerCapabilityMatrix | null | undefined
 
   if (!matrix) {
-    throw new Error('Backend viewer capability matrix не вернула viewerMatrix payload.')
+    throw new Error('Не удалось загрузить доступные форматы Viewer.')
   }
 
   return {
@@ -80,7 +80,9 @@ export async function resolveViewerFormat(
 
   if (normalizedMimeType) {
     const matchByMime = matrix.formats.find((definition) =>
-      definition.mimeTypes.some((candidate) => candidate.trim().toLowerCase() === normalizedMimeType),
+      definition.mimeTypes.some(
+        (candidate) => candidate.trim().toLowerCase() === normalizedMimeType,
+      ),
     )
 
     if (matchByMime) {
@@ -95,8 +97,7 @@ export async function resolveViewerFormat(
 
   return (
     matrix.formats.find(
-      (definition) =>
-        definition.extension === extension || definition.aliases.includes(extension),
+      (definition) => definition.extension === extension || definition.aliases.includes(extension),
     ) ?? null
   )
 }

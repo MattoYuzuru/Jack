@@ -56,8 +56,16 @@ describe('viewer registry', () => {
     expect(documentFormats.map((definition) => definition.extension)).toEqual([
       'pdf',
       'txt',
+      'md',
+      'json',
+      'yaml',
+      'xml',
+      'env',
       'csv',
+      'tsv',
       'html',
+      'log',
+      'sql',
       'rtf',
       'doc',
       'docx',
@@ -71,7 +79,15 @@ describe('viewer registry', () => {
     ])
 
     expect((await resolveViewerFormat('sheet.csv'))?.previewStrategyId).toBe('server-viewer')
+    expect((await resolveViewerFormat('guide.markdown'))?.extension).toBe('md')
+    expect((await resolveViewerFormat('payload.json'))?.previewPipeline).toBe('server-assisted')
+    expect((await resolveViewerFormat('docker-compose.yml'))?.extension).toBe('yaml')
+    expect((await resolveViewerFormat('feed.xml'))?.previewStrategyId).toBe('server-viewer')
+    expect((await resolveViewerFormat('service.env'))?.previewPipeline).toBe('server-assisted')
+    expect((await resolveViewerFormat('table.tsv'))?.previewStrategyId).toBe('server-viewer')
     expect((await resolveViewerFormat('index.htm'))?.extension).toBe('html')
+    expect((await resolveViewerFormat('tail.log'))?.extension).toBe('log')
+    expect((await resolveViewerFormat('schema.sql'))?.previewPipeline).toBe('server-assisted')
     expect((await resolveViewerFormat('legacy.doc'))?.previewStrategyId).toBe('server-viewer')
     expect((await resolveViewerFormat('open.odt'))?.previewStrategyId).toBe('server-viewer')
     expect((await resolveViewerFormat('proposal.docx'))?.previewStrategyId).toBe('server-viewer')

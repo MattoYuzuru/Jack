@@ -89,12 +89,15 @@ export function analyzeLink(input: string, options: LinkToolOptions): LinkAnalys
       error: null,
       warnings,
       facts: [
-        { label: 'Protocol', value: url.protocol.replace(/:$/u, '') || 'n/a' },
-        { label: 'Host', value: url.host || 'n/a' },
-        { label: 'Path', value: url.pathname || '/' },
-        { label: 'Params', value: String([...url.searchParams.keys()].length) },
-        { label: 'Removed', value: String(removedKeys.size) },
-        { label: 'Saved chars', value: String(Math.max(normalizedUrl.length - compact.length, 0)) },
+        { label: 'Протокол', value: url.protocol.replace(/:$/u, '') || 'нет' },
+        { label: 'Хост', value: url.host || 'нет' },
+        { label: 'Путь', value: url.pathname || '/' },
+        { label: 'Параметры', value: String([...url.searchParams.keys()].length) },
+        { label: 'Убрано', value: String(removedKeys.size) },
+        {
+          label: 'Символов сэкономлено',
+          value: String(Math.max(normalizedUrl.length - compact.length, 0)),
+        },
       ],
       normalizedUrl,
       cleanedUrl: compact,
@@ -107,7 +110,7 @@ export function analyzeLink(input: string, options: LinkToolOptions): LinkAnalys
     }
   } catch {
     return buildLinkError(
-      'Ссылка не распозналась как валидный URL. Проверь схему, host и спецсимволы.',
+      'Ссылка не распозналась как валидный URL. Проверь схему, хост и спецсимволы.',
     )
   }
 }

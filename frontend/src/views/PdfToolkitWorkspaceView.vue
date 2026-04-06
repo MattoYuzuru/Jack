@@ -9,6 +9,52 @@ const entryAcceptAttribute = computed(() =>
   [workspace.pdfAcceptAttribute, workspace.importAcceptAttribute].filter(Boolean).join(','),
 )
 
+const jobStatusLabels: Record<string, string> = {
+  QUEUED: 'В очереди',
+  RUNNING: 'В работе',
+  COMPLETED: 'Готово',
+  FAILED: 'Ошибка',
+  CANCELLED: 'Остановлено',
+}
+
+function formatJobStatusLabel(status: string | null | undefined): string {
+  if (!status) {
+    return 'В очереди'
+  }
+
+  return jobStatusLabels[status] ?? status
+}
+
+function formatRuntimeLabel(value: string | null | undefined): string {
+  if (!value) {
+    return 'Подготовка документа'
+  }
+
+  const normalized = value.trim().toLowerCase()
+
+  if (normalized.includes('slideshow')) {
+    return 'Видео из слайдов'
+  }
+
+  if (normalized.includes('contact-sheet')) {
+    return 'Единый лист просмотра'
+  }
+
+  if (normalized.includes('spreadsheet')) {
+    return 'Табличный экспорт'
+  }
+
+  if (normalized.includes('slide') && normalized.includes('pdf')) {
+    return 'PDF из слайдов'
+  }
+
+  if (normalized.includes('pdf')) {
+    return 'Обработка PDF'
+  }
+
+  return value
+}
+
 function handleSourceChange(event: Event): void {
   const input = event.target as HTMLInputElement | null
   const file = input?.files?.[0]
@@ -53,57 +99,55 @@ function formatBytes(value: number): string {
       <div class="brand-lockup">
         <img class="brand-lockup__logo" src="/logo.svg" alt="Логотип Jack" />
         <div class="brand-lockup__copy">
-          <p class="eyebrow">Iteration 05 · PDF Toolkit</p>
-          <p class="brand-lockup__title">PDF Workspace</p>
+          <p class="eyebrow">Jack · PDF Toolkit</p>
+          <p class="brand-lockup__title">Работа с PDF</p>
         </div>
       </div>
 
       <div class="app-topbar__status">
-        <span class="chip-pill">PDF_TOOLKIT + VIEWER_RESOLVE</span>
-        <span class="chip-pill chip-pill--accent">Merge · OCR · Protect</span>
+        <span class="chip-pill">PDF-инструменты</span>
+        <span class="chip-pill chip-pill--accent">Объединение · OCR · Защита</span>
       </div>
     </header>
 
     <section class="pdf-hero-grid">
       <article class="panel-surface pdf-hero-card">
-        <RouterLink class="back-link" to="/">Back to Home</RouterLink>
-        <p class="eyebrow">PDF Toolkit Route</p>
-        <h1>Page-aware PDF операции теперь живут в отдельном backend-first workspace.</h1>
+        <RouterLink class="back-link" to="/">На главную</RouterLink>
+        <p class="eyebrow">PDF без лишних отдельных сервисов</p>
+        <h1>Открой документ, проверь страницы и выполни нужную операцию в одном рабочем окне.</h1>
         <p class="lead">
-          Модуль reuse'ит `VIEWER_RESOLVE` для preview, `IMAGE_CONVERT` и `OFFICE_CONVERT` для
-          import-to-PDF flows, а merge/split/rotate/OCR/redact/protect больше не пытаются жить в
-          браузерных обходах и все идут в `PDF_TOOLKIT`.
+          Здесь собраны основные сценарии работы с PDF: объединение, разбиение, поворот, OCR,
+          защита, снятие защиты, подпись и редактирование чувствительных фрагментов. После каждой
+          операции можно сразу открыть результат и продолжить с ним работу.
         </p>
 
         <div class="hero-chip-row">
-          <span class="chip-pill">Merge stack</span>
-          <span class="chip-pill">Split bundle</span>
-          <span class="chip-pill">OCR text export</span>
-          <span class="chip-pill">Visible e-sign stamp</span>
-          <span class="chip-pill">Term redaction</span>
-          <span class="chip-pill">Password flows</span>
+          <span class="chip-pill">Объединение</span>
+          <span class="chip-pill">Разделение</span>
+          <span class="chip-pill">Текст после OCR</span>
+          <span class="chip-pill">Видимая подпись</span>
+          <span class="chip-pill">Скрытие данных</span>
+          <span class="chip-pill">Пароли и доступ</span>
         </div>
       </article>
 
       <article class="panel-surface intake-card">
-        <p class="eyebrow">Intake</p>
-        <h2>Открой PDF напрямую или заведи совместимый source через import-to-PDF.</h2>
+        <p class="eyebrow">Загрузка</p>
+        <h2>Открой PDF напрямую или сначала приведи совместимый файл к PDF.</h2>
         <p class="intake-copy">
-          Совместимые image/office форматы сначала проходят backend conversion в PDF, а затем
-          автоматически переводятся в этот workspace.
+          Если у тебя изображение или офисный документ, Jack сначала подготовит PDF-версию, а затем
+          сразу откроет её в этом экране.
         </p>
 
         <label class="upload-field">
-          <span>Select source</span>
+          <span>Выбрать файл</span>
           <input :accept="entryAcceptAttribute" type="file" @change="handleSourceChange" />
         </label>
 
         <div class="intake-pills">
+          <span class="chip-pill chip-pill--compact">PDF: {{ workspace.pdfAcceptAttribute }}</span>
           <span class="chip-pill chip-pill--compact"
-            >Direct: {{ workspace.pdfAcceptAttribute }}</span
-          >
-          <span class="chip-pill chip-pill--compact"
-            >Import: {{ workspace.importAcceptAttribute || 'none' }}</span
+            >Импорт: {{ workspace.importAcceptAttribute || 'нет' }}</span
           >
         </div>
 
@@ -118,7 +162,7 @@ function formatBytes(value: number): string {
       <article class="panel-surface preview-card">
         <div class="section-head">
           <div>
-            <p class="eyebrow">Preview</p>
+            <p class="eyebrow">Предпросмотр</p>
             <h2>Текущий PDF</h2>
           </div>
           <button
@@ -127,7 +171,7 @@ function formatBytes(value: number): string {
             type="button"
             @click="workspace.clearDocument"
           >
-            Clear
+            Очистить
           </button>
         </div>
 
@@ -137,22 +181,22 @@ function formatBytes(value: number): string {
             <span class="chip-pill chip-pill--compact chip-pill--accent">
               {{
                 workspace.document.sourceRouteKind === 'convert-to-pdf'
-                  ? 'Imported to PDF'
-                  : 'Direct PDF'
+                  ? 'Собран из другого формата'
+                  : 'Исходный PDF'
               }}
             </span>
             <span v-if="workspace.importedFromLabel" class="chip-pill chip-pill--compact">
-              From {{ workspace.importedFromLabel }}
+              Из {{ workspace.importedFromLabel }}
             </span>
           </div>
 
           <div class="preview-frame">
-            <iframe :src="workspace.document.objectUrl" title="PDF preview" />
+            <iframe :src="workspace.document.objectUrl" title="Предпросмотр PDF" />
           </div>
 
           <div class="facts-grid">
             <article class="fact-block">
-              <h3>Document facts</h3>
+              <h3>Основные сведения</h3>
               <dl>
                 <div v-for="fact in workspace.document.summary" :key="fact.label">
                   <dt>{{ fact.label }}</dt>
@@ -161,9 +205,9 @@ function formatBytes(value: number): string {
               </dl>
             </article>
             <article class="fact-block">
-              <h3>Warnings</h3>
+              <h3>Предупреждения</h3>
               <p v-if="workspace.document.warnings.length === 0" class="muted-copy">
-                Нет backend warnings для текущего preview.
+                Для текущего документа дополнительных предупреждений нет.
               </p>
               <ul v-else class="warning-list">
                 <li v-for="warning in workspace.document.warnings" :key="warning">{{ warning }}</li>
@@ -174,12 +218,10 @@ function formatBytes(value: number): string {
           <article class="search-card">
             <div class="section-head section-head--tight">
               <div>
-                <p class="eyebrow">Search Layer</p>
-                <h3>{{ workspace.document.pageCount ?? 'Unknown' }} pages</h3>
+                <p class="eyebrow">Текст документа</p>
+                <h3>{{ workspace.document.pageCount ?? 'Неизвестно' }} стр.</h3>
               </div>
-              <span class="chip-pill chip-pill--compact">{{
-                workspace.document.previewLabel
-              }}</span>
+              <span class="chip-pill chip-pill--compact">Постраничный просмотр</span>
             </div>
             <textarea
               class="text-preview"
@@ -191,20 +233,20 @@ function formatBytes(value: number): string {
         </template>
 
         <article v-else-if="workspace.lockedDocumentFile" class="locked-card">
-          <p class="eyebrow">Protected PDF</p>
+          <p class="eyebrow">Защищённый PDF</p>
           <h3>{{ workspace.lockedDocumentFile.name }}</h3>
           <p>
-            Preview не поднялся. Обычно это значит, что PDF защищён паролем. Выбери `Unlock PDF`,
-            укажи `current password` и перезапусти документ в workspace.
+            Документ не удалось открыть без пароля. Выбери действие `Снять защиту`, укажи текущий
+            пароль и попробуй снова.
           </p>
         </article>
 
         <article v-else class="empty-card">
-          <p class="eyebrow">No document</p>
-          <h3>Сначала открой PDF или совместимый source.</h3>
+          <p class="eyebrow">Документ ещё не открыт</p>
+          <h3>Сначала выбери PDF или совместимый файл.</h3>
           <p>
-            После intake workspace покажет backend PDF preview, warnings, searchable text и все
-            операции страницы справа.
+            После загрузки здесь появятся страницы документа, извлечённый текст и список доступных
+            операций.
           </p>
         </article>
       </article>
@@ -212,8 +254,8 @@ function formatBytes(value: number): string {
       <article class="panel-surface operations-card">
         <div class="section-head">
           <div>
-            <p class="eyebrow">Operations</p>
-            <h2>PDF control rail</h2>
+            <p class="eyebrow">Операции</p>
+            <h2>Действия с документом</h2>
           </div>
           <span v-if="workspace.activeOperation" class="chip-pill chip-pill--accent">
             {{ workspace.activeOperation.label }}
@@ -239,7 +281,7 @@ function formatBytes(value: number): string {
 
           <div v-if="workspace.activeOperation.id === 'merge'" class="control-stack">
             <label class="upload-field upload-field--secondary">
-              <span>Add PDFs to merge</span>
+              <span>Добавить PDF для объединения</span>
               <input accept=".pdf" multiple type="file" @change="handleMergeChange" />
             </label>
             <div class="file-pill-row">
@@ -255,7 +297,7 @@ function formatBytes(value: number): string {
 
           <div v-if="workspace.activeOperation.id === 'split'" class="control-stack">
             <label class="field-block">
-              <span>Split ranges</span>
+              <span>Диапазоны страниц</span>
               <textarea
                 v-model="workspace.splitRangesInput"
                 rows="4"
@@ -263,7 +305,7 @@ function formatBytes(value: number): string {
               />
             </label>
             <p class="muted-copy">
-              Один диапазон на строку. Если оставить пусто, backend разрежет документ на отдельные
+              Один диапазон на строку. Если оставить пусто, документ будет разбит на отдельные
               страницы.
             </p>
           </div>
@@ -273,11 +315,11 @@ function formatBytes(value: number): string {
             class="control-grid"
           >
             <label class="field-block">
-              <span>Page selection</span>
+              <span>Страницы</span>
               <input v-model="workspace.pageSelection" placeholder="1-3,5" type="text" />
             </label>
             <label v-if="workspace.activeOperation.id === 'rotate'" class="field-block">
-              <span>Rotation</span>
+              <span>Поворот</span>
               <select v-model="workspace.rotationDegrees">
                 <option v-for="value in workspace.rotationOptions" :key="value" :value="value">
                   {{ value }}°
@@ -288,33 +330,33 @@ function formatBytes(value: number): string {
 
           <div v-if="workspace.activeOperation.id === 'reorder'" class="control-stack">
             <label class="field-block">
-              <span>Page order</span>
+              <span>Новый порядок страниц</span>
               <input v-model="workspace.pageOrderInput" placeholder="3,1,2" type="text" />
             </label>
             <p class="muted-copy">
-              Меньший список работает как extract subset. Дубликаты не допускаются.
+              Если указать не все страницы, сервис соберёт только выбранную часть документа.
             </p>
           </div>
 
           <div v-if="workspace.activeOperation.id === 'ocr'" class="control-stack">
             <label class="field-block">
-              <span>OCR language</span>
+              <span>Язык OCR</span>
               <input v-model="workspace.ocrLanguage" placeholder="eng" type="text" />
             </label>
             <p class="muted-copy">
-              Текущий контейнерный профиль по умолчанию рассчитан на `eng`. Дополнительные языки
-              можно подключать через backend runtime.
+              По умолчанию используется `eng`. Если в окружении добавлены другие языки OCR, можно
+              указать их код вручную.
             </p>
           </div>
 
           <div v-if="workspace.activeOperation.id === 'sign'" class="control-stack">
             <div class="control-grid">
               <label class="field-block">
-                <span>Signature text</span>
+                <span>Текст подписи</span>
                 <input v-model="workspace.signatureText" placeholder="Jack QA" type="text" />
               </label>
               <label class="field-block">
-                <span>Placement</span>
+                <span>Расположение</span>
                 <select v-model="workspace.signaturePlacement">
                   <option
                     v-for="placement in workspace.signaturePlacements"
@@ -328,27 +370,27 @@ function formatBytes(value: number): string {
             </div>
 
             <label class="upload-field upload-field--secondary">
-              <span>Optional signature image</span>
+              <span>Изображение подписи</span>
               <input accept="image/*" type="file" @change="handleSignatureImageChange" />
             </label>
 
             <label class="toggle-field">
               <input v-model="workspace.includeSignatureDate" type="checkbox" />
-              <span>Attach signature date metadata inside stamp</span>
+              <span>Добавить дату внутрь штампа</span>
             </label>
           </div>
 
           <div v-if="workspace.activeOperation.id === 'redact'" class="control-stack">
             <label class="field-block">
-              <span>Terms to redact</span>
+              <span>Что скрыть</span>
               <textarea
                 v-model="workspace.redactTermsInput"
                 rows="4"
-                placeholder="Secret token 123&#10;Internal ID"
+                placeholder="Номер договора 123&#10;Внутренний ID"
               />
             </label>
             <p class="muted-copy">
-              Redaction идёт по text layer и пересобирает итоговый PDF как rasterized artifact.
+              Скрытие выполняется по текстовому слою, после чего итоговый PDF собирается заново.
             </p>
           </div>
 
@@ -360,10 +402,10 @@ function formatBytes(value: number): string {
             "
             class="field-block"
           >
-            <span>Current password</span>
+            <span>Текущий пароль</span>
             <input
               v-model="workspace.currentPassword"
-              placeholder="Only if source PDF is protected"
+              placeholder="Нужен только для защищённых PDF"
               type="password"
             />
           </div>
@@ -371,7 +413,7 @@ function formatBytes(value: number): string {
           <div v-if="workspace.activeOperation.id === 'protect'" class="control-stack">
             <div class="control-grid">
               <label class="field-block">
-                <span>Owner password</span>
+                <span>Пароль владельца</span>
                 <input
                   v-model="workspace.ownerPassword"
                   placeholder="owner-secret"
@@ -379,23 +421,27 @@ function formatBytes(value: number): string {
                 />
               </label>
               <label class="field-block">
-                <span>User password</span>
-                <input v-model="workspace.userPassword" placeholder="optional" type="password" />
+                <span>Пароль для открытия</span>
+                <input
+                  v-model="workspace.userPassword"
+                  placeholder="необязательно"
+                  type="password"
+                />
               </label>
             </div>
 
             <div class="toggle-grid">
               <label class="toggle-field">
                 <input v-model="workspace.allowPrinting" type="checkbox" />
-                <span>Allow printing</span>
+                <span>Разрешить печать</span>
               </label>
               <label class="toggle-field">
                 <input v-model="workspace.allowCopying" type="checkbox" />
-                <span>Allow copying</span>
+                <span>Разрешить копирование</span>
               </label>
               <label class="toggle-field">
                 <input v-model="workspace.allowModifying" type="checkbox" />
-                <span>Allow modifying</span>
+                <span>Разрешить изменения</span>
               </label>
             </div>
           </div>
@@ -407,7 +453,7 @@ function formatBytes(value: number): string {
               :disabled="!workspace.canRunOperation"
               @click="workspace.runOperation"
             >
-              Run {{ workspace.activeOperation.label }}
+              Выполнить: {{ workspace.activeOperation.label }}
             </button>
             <button
               class="action-button"
@@ -415,19 +461,20 @@ function formatBytes(value: number): string {
               :disabled="!workspace.activeJobId || workspace.isCancelling"
               @click="workspace.cancelOperation"
             >
-              Cancel Job
+              Остановить
             </button>
           </div>
 
           <div v-if="workspace.activeJobId" class="job-card">
             <p class="job-card__label">
-              Job {{ workspace.activeJobId }} · {{ workspace.activeJobStatus || 'QUEUED' }}
+              Задача {{ workspace.activeJobId }} ·
+              {{ formatJobStatusLabel(workspace.activeJobStatus) }}
             </p>
             <div class="job-progress">
               <span :style="{ width: `${workspace.activeJobProgressPercent}%` }"></span>
             </div>
             <p class="muted-copy">
-              {{ workspace.activeJobProgressPercent }}% complete · {{ workspace.processingMessage }}
+              {{ workspace.activeJobProgressPercent }}% · {{ workspace.processingMessage }}
             </p>
           </div>
         </div>
@@ -438,10 +485,10 @@ function formatBytes(value: number): string {
       <article class="panel-surface history-card">
         <div class="section-head">
           <div>
-            <p class="eyebrow">History</p>
-            <h2>Result rail</h2>
+            <p class="eyebrow">История</p>
+            <h2>Последние результаты</h2>
           </div>
-          <span class="chip-pill">{{ workspace.resultHistory.length }} results</span>
+          <span class="chip-pill">{{ workspace.resultHistory.length }} результатов</span>
         </div>
 
         <div v-if="workspace.hasResultHistory" class="history-list">
@@ -455,19 +502,19 @@ function formatBytes(value: number): string {
           >
             <strong>{{ entry.operation }}</strong>
             <span>{{ entry.fileName }}</span>
-            <small>{{ entry.runtimeLabel }}</small>
+            <small>{{ formatRuntimeLabel(entry.runtimeLabel) }}</small>
           </button>
         </div>
         <p v-else class="muted-copy">
-          После первой операции сюда попадут manifest-driven result entries и follow-up downloads.
+          После первой операции здесь появятся результаты, к которым можно быстро вернуться.
         </p>
       </article>
 
       <article class="panel-surface result-card">
         <div class="section-head">
           <div>
-            <p class="eyebrow">Selected Result</p>
-            <h2>{{ workspace.result?.fileName || 'No result yet' }}</h2>
+            <p class="eyebrow">Текущий результат</p>
+            <h2>{{ workspace.result?.fileName || 'Результата пока нет' }}</h2>
           </div>
           <div class="result-actions">
             <button
@@ -476,7 +523,7 @@ function formatBytes(value: number): string {
               :disabled="!workspace.result"
               @click="workspace.downloadResult()"
             >
-              Download result
+              Скачать результат
             </button>
             <button
               class="action-button"
@@ -484,7 +531,7 @@ function formatBytes(value: number): string {
               :disabled="!workspace.result"
               @click="workspace.loadResultAsCurrent()"
             >
-              Load as current
+              Открыть как текущий
             </button>
           </div>
         </div>
@@ -494,18 +541,20 @@ function formatBytes(value: number): string {
             <iframe
               v-if="workspace.result.previewMimeType === 'application/pdf'"
               :src="workspace.result.previewObjectUrl"
-              title="PDF toolkit result preview"
+              title="Предпросмотр результата PDF Toolkit"
             />
             <div v-else class="empty-card empty-card--compact">
-              <p class="eyebrow">Preview</p>
+              <p class="eyebrow">Просмотр</p>
               <h3>{{ workspace.result.previewFileName }}</h3>
-              <p>Preview artifact не является PDF. Используй download для просмотра.</p>
+              <p>
+                Предпросмотр доступен только для PDF. Для остальных файлов используй скачивание.
+              </p>
             </div>
           </div>
 
           <div class="result-meta-grid">
             <article class="fact-block">
-              <h3>Operation facts</h3>
+              <h3>Параметры операции</h3>
               <dl>
                 <div v-for="fact in workspace.result.operationFacts" :key="fact.label">
                   <dt>{{ fact.label }}</dt>
@@ -514,17 +563,17 @@ function formatBytes(value: number): string {
               </dl>
             </article>
             <article class="fact-block">
-              <h3>Warnings</h3>
+              <h3>Предупреждения</h3>
               <ul v-if="workspace.result.warnings.length" class="warning-list">
                 <li v-for="warning in workspace.result.warnings" :key="warning">{{ warning }}</li>
               </ul>
-              <p v-else class="muted-copy">Нет backend warnings для этого result.</p>
+              <p v-else class="muted-copy">Для этого результата предупреждений нет.</p>
             </article>
           </div>
 
           <div class="download-strip">
             <button class="action-button" type="button" @click="workspace.downloadPreview()">
-              Download preview
+              Скачать предпросмотр
             </button>
             <button
               class="action-button"
@@ -532,7 +581,7 @@ function formatBytes(value: number): string {
               :disabled="!workspace.result.textObjectUrl"
               @click="workspace.downloadTextArtifact()"
             >
-              Download text export
+              Скачать текст
             </button>
             <span class="chip-pill chip-pill--compact">
               {{ formatBytes(workspace.result.resultBlob.size) }}
@@ -544,11 +593,11 @@ function formatBytes(value: number): string {
         </template>
 
         <div v-else class="empty-card">
-          <p class="eyebrow">Idle</p>
-          <h3>Result preview появится здесь.</h3>
+          <p class="eyebrow">Пока пусто</p>
+          <h3>Результат появится здесь.</h3>
           <p>
-            Для PDF outputs можно сразу перезагрузить их в текущий workspace как новый active
-            document.
+            После выполнения операции сюда загрузится новый PDF, который можно сразу открыть и
+            использовать как текущий документ.
           </p>
         </div>
       </article>

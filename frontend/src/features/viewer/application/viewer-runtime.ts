@@ -195,11 +195,11 @@ export function createViewerRuntime(dependencies: ViewerRuntimeDependencies = {}
           kind: 'unknown',
           file,
           extension,
-          headline: 'Формат пока не заведён в viewer registry',
+          headline: 'Этот формат пока не поддерживается в Viewer',
           detail:
-            'Файл загружен, но для него ещё не описаны capability, маршрут preview и fallback-поведение.',
+            'Файл можно сохранить локально, но для него пока не готов безопасный режим предпросмотра.',
           nextStep:
-            'Нужно добавить definition в registry и назначить ему browser-native либо server-assisted стратегию.',
+            'Попробуй открыть файл в подходящем редакторе или вернись позже, когда формат появится в каталоге Viewer.',
         }
       }
 
@@ -208,12 +208,11 @@ export function createViewerRuntime(dependencies: ViewerRuntimeDependencies = {}
           kind: 'unknown',
           file,
           extension,
-          headline: `${format.label} временно недоступен в текущем backend capability matrix`,
+          headline: `${format.label} сейчас временно недоступен`,
           detail:
             format.availabilityDetail ||
-            'Backend отключил этот preview route в текущем окружении, поэтому frontend не будет притворяться, что local registry всё ещё поддерживает формат.',
-          nextStep:
-            'Нужно восстановить соответствующую backend capability или обновить server-owned matrix для этого формата.',
+            'Для этого формата просмотр временно выключен в текущем окружении.',
+          nextStep: 'Повтори позже или используй конвертацию в более универсальный формат.',
         }
       }
 
@@ -362,11 +361,9 @@ function buildPlannedMediaSelection(context: PreviewStrategyContext): ViewerReso
     kind: 'unknown',
     file: context.file,
     extension: context.extension,
-    headline: `${context.format.label} уже распознан в media registry, но playback adapter ещё не поднят`,
-    detail:
-      'Foundation для контейнера уже есть: accept/mime/capability map готовы, но для него пока нет стабильного browser-native или server-assisted playback path.',
-    nextStep:
-      'Нужно добавить format-specific media adapter поверх общего video contract, а не расширять UI точечными fallback-ветками.',
+    headline: `${context.format.label} пока нельзя воспроизвести прямо в браузере`,
+    detail: 'Файл распознан, но для него ещё не готов стабильный режим воспроизведения.',
+    nextStep: 'Сохрани файл или конвертируй его в более универсальный контейнер.',
   }
 }
 
@@ -407,7 +404,7 @@ function defaultInspectNativeImage(objectUrl: string): Promise<{ width: number; 
     }
 
     image.onerror = () => {
-      reject(new Error('Не удалось прочитать dimensions из image preview.'))
+      reject(new Error('Не удалось открыть изображение для просмотра.'))
     }
 
     image.src = objectUrl

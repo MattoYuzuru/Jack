@@ -72,13 +72,13 @@ const EDITOR_PROCESS_JOB_TYPE = 'EDITOR_PROCESS'
 export async function runServerEditorProcess(
   input: RunServerEditorInput,
 ): Promise<ServerEditorResult> {
-  input.reportProgress?.('Проверяю backend EDITOR_PROCESS capability для editor route...')
+  input.reportProgress?.('Проверяю доступность обработки документа...')
   await ensureProcessingCapability('editor', EDITOR_PROCESS_JOB_TYPE)
 
-  input.reportProgress?.('Отправляю текущий draft в backend processing storage...')
+  input.reportProgress?.('Отправляю текущий текст на проверку...')
   const upload = await uploadProcessingFile(input.file)
 
-  input.reportProgress?.('Создаю backend EDITOR_PROCESS job для diagnostics и export artifacts...')
+  input.reportProgress?.('Запускаю проверку и подготовку файлов...')
   const createdJob = await createProcessingJob({
     uploadId: upload.id,
     jobType: EDITOR_PROCESS_JOB_TYPE,
@@ -91,11 +91,11 @@ export async function runServerEditorProcess(
   const completedJob = await awaitProcessingJob(createdJob.id, {
     reportProgress: input.reportProgress,
     timeoutMessage:
-      'Backend EDITOR_PROCESS job не завершился в ожидаемое время. Попробуй меньший документ или проверь backend logs.',
+      'Проверка заняла слишком много времени. Попробуй документ поменьше или повтори запуск позже.',
     onUpdate: input.onJobUpdate,
   })
 
-  input.reportProgress?.('Загружаю editor manifest и export artifacts...')
+  input.reportProgress?.('Загружаю подготовленные файлы...')
   return downloadServerEditorArtifacts(completedJob)
 }
 
@@ -109,7 +109,7 @@ export async function downloadServerEditorArtifacts(
   )
 
   if (!manifestArtifact || !readyArtifact || !plainTextArtifact) {
-    throw new Error('Backend EDITOR_PROCESS job завершился без обязательных editor artifacts.')
+    throw new Error('Проверка завершилась без обязательных файлов результата.')
   }
 
   const [manifest, readyBlob, plainTextBlob] = await Promise.all([

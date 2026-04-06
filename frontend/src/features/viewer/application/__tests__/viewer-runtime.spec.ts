@@ -103,6 +103,7 @@ describe('viewer runtime', () => {
           mode: 'pdf',
           objectUrl: 'blob:pdf-preview',
           pageCount: 3,
+          editableDraft: null,
         },
         previewLabel: 'Server document preview',
       }),
@@ -295,9 +296,7 @@ describe('viewer runtime', () => {
       available: boolean
       availabilityDetail: string | null
     }>
-    const wmvFormat = viewerFormats.find(
-      (definition) => definition.extension === 'wmv',
-    )
+    const wmvFormat = viewerFormats.find((definition) => definition.extension === 'wmv')
 
     if (!wmvFormat) {
       throw new Error('WMV capability fixture is required for this test.')
@@ -314,7 +313,9 @@ describe('viewer runtime', () => {
     )
 
     const runtime = createViewerRuntime()
-    const result = await runtime.resolve(new File(['video'], 'clip.wmv', { type: 'video/x-ms-wmv' }))
+    const result = await runtime.resolve(
+      new File(['video'], 'clip.wmv', { type: 'video/x-ms-wmv' }),
+    )
 
     expect(result.kind).toBe('unknown')
     if (result.kind !== 'unknown') {

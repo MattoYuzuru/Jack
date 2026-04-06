@@ -1,9 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { resetProcessingCapabilityScopeCache } from '../../../processing/application/processing-client'
-import {
-  canEmbedMetadata,
-  exportViewerMetadata,
-} from '../viewer-metadata-writer'
+import { canEmbedMetadata, exportViewerMetadata } from '../viewer-metadata-writer'
 
 const originalFetch = globalThis.fetch
 

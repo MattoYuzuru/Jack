@@ -18,7 +18,7 @@ final class EditorFormatCatalog {
 			"rendered",
 			true,
 			true,
-			"Split view с rendered preview, outline по heading'ам и безопасными export-артефактами.",
+			"Удобный режим для заметок и документации: предпросмотр статьи, структура по заголовкам и безопасный экспорт.",
 			List.of("Preview", "Outline", "Snippets"),
 			List.of(ProcessingJobType.EDITOR_PROCESS),
 			List.of("Headings", "Links", "Code fences")
@@ -32,7 +32,7 @@ final class EditorFormatCatalog {
 			"sandbox",
 			true,
 			true,
-			"Backend валидирует risky tags/attrs, а frontend рендерит sandbox preview без выполнения script payload.",
+			"Можно проверить структуру HTML и посмотреть безопасный предпросмотр без выполнения встроенных скриптов.",
 			List.of("Sandbox", "Sanitize", "Structure"),
 			List.of(ProcessingJobType.EDITOR_PROCESS, ProcessingJobType.DOCUMENT_PREVIEW),
 			List.of("Sections", "Sandbox", "Accessibility")
@@ -46,7 +46,7 @@ final class EditorFormatCatalog {
 			"sandbox",
 			true,
 			true,
-			"Editor даёт live style preview на безопасном sample canvas и предупреждает про risky CSS primitives.",
+			"Подходит для быстрой проверки стилей: есть живой пример и подсказки по потенциально проблемным конструкциям.",
 			List.of("Styles", "Selectors", "Preview"),
 			List.of(ProcessingJobType.EDITOR_PROCESS),
 			List.of("Variables", "Grid", "Media queries")
@@ -60,7 +60,7 @@ final class EditorFormatCatalog {
 			"syntax",
 			true,
 			true,
-			"Фронтенд форматирует код как IDE, а backend поднимает diagnostics по unsafe execution-паттернам и structural issues.",
+			"Удобно для правки скриптов: форматирование, структура файла и подсказки по потенциально опасным местам собраны в одном окне.",
 			List.of("Async", "Diagnostics", "Exports"),
 			List.of(ProcessingJobType.EDITOR_PROCESS),
 			List.of("Functions", "Async", "Fetch")
@@ -74,7 +74,7 @@ final class EditorFormatCatalog {
 			"structured",
 			true,
 			true,
-			"JSON проходит strict parse на backend и получает structured tree preview без browser-side eval.",
+			"JSON можно быстро проверить, привести к аккуратному виду и просмотреть как структурированное дерево.",
 			List.of("Tree", "Strict", "Config"),
 			List.of(ProcessingJobType.EDITOR_PROCESS),
 			List.of("Objects", "Arrays", "Payloads")
@@ -88,7 +88,7 @@ final class EditorFormatCatalog {
 			"structured",
 			true,
 			true,
-			"YAML проходит strict parse через backend parser и получает diagnostics по indentation и key structure.",
+			"YAML удобно проверять на отступы, структуру ключей и общую читаемость без ручного разбора.",
 			List.of("Config", "Indent", "Tree"),
 			List.of(ProcessingJobType.EDITOR_PROCESS),
 			List.of("Mappings", "Lists", "Anchors")
@@ -102,7 +102,7 @@ final class EditorFormatCatalog {
 			"text",
 			false,
 			true,
-			"Быстрый текстовый режим с draft persistence, line stats и безопасным server export contract.",
+			"Простой режим для текста, когда важны быстрые правки, статистика по строкам и аккуратный экспорт.",
 			List.of("Notes", "Drafts", "Stats"),
 			List.of(ProcessingJobType.EDITOR_PROCESS, ProcessingJobType.DOCUMENT_PREVIEW),
 			List.of("Notes", "Checklists", "Quick drafts")

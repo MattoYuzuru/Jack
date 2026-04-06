@@ -127,7 +127,7 @@ export async function openPdfToolkitSource(
   if (!importSource?.available) {
     throw new Error(
       importSource?.availabilityDetail ||
-        'PDF toolkit принимает только PDF или совместимые sources с backend import-to-PDF path.',
+        'PDF Toolkit принимает PDF и форматы, которые можно сначала перевести в PDF.',
     )
   }
 
@@ -146,15 +146,15 @@ export async function openPdfToolkitSource(
 export async function runServerPdfToolkitJob(
   input: RunPdfToolkitJobInput,
 ): Promise<ServerPdfToolkitResult> {
-  input.reportProgress?.('Проверяю backend PDF_TOOLKIT capability для pdf-toolkit route...')
+  input.reportProgress?.('Проверяю доступность инструментов PDF...')
   await ensureProcessingCapability('pdf-toolkit', PDF_TOOLKIT_JOB_TYPE)
 
-  input.reportProgress?.('Отправляю PDF source в backend processing storage...')
+  input.reportProgress?.('Загружаю основной PDF...')
   const primaryUpload = await uploadProcessingFile(input.file)
 
   let additionalUploadIds: string[] | undefined
   if (input.additionalPdfFiles?.length) {
-    input.reportProgress?.('Загружаю дополнительные PDF inputs для merge stack...')
+    input.reportProgress?.('Загружаю дополнительные PDF...')
     const uploads = await Promise.all(
       input.additionalPdfFiles.map((file) => uploadProcessingFile(file)),
     )
@@ -163,12 +163,12 @@ export async function runServerPdfToolkitJob(
 
   let signatureImageUploadId: string | undefined
   if (input.signatureImageFile) {
-    input.reportProgress?.('Загружаю signature image в backend storage...')
+    input.reportProgress?.('Загружаю изображение подписи...')
     const upload = await uploadProcessingFile(input.signatureImageFile)
     signatureImageUploadId = upload.id
   }
 
-  input.reportProgress?.('Создаю backend PDF_TOOLKIT job для page-aware PDF orchestration...')
+  input.reportProgress?.('Запускаю обработку PDF...')
   const createdJob = await createProcessingJob({
     uploadId: primaryUpload.id,
     jobType: PDF_TOOLKIT_JOB_TYPE,
@@ -184,11 +184,11 @@ export async function runServerPdfToolkitJob(
   const completedJob = await awaitProcessingJob(createdJob.id, {
     reportProgress: input.reportProgress,
     timeoutMessage:
-      'Backend PDF_TOOLKIT job не завершился в ожидаемое время. Проверь backend logs или попробуй меньший PDF.',
+      'Обработка PDF заняла слишком много времени. Попробуй меньший файл или повтори позже.',
     onUpdate: input.onJobUpdate,
   })
 
-  input.reportProgress?.('Загружаю PDF toolkit result, preview и дополнительные artifacts...')
+  input.reportProgress?.('Загружаю готовый PDF и материалы результата...')
   return downloadServerPdfToolkitArtifacts(completedJob)
 }
 
@@ -204,7 +204,7 @@ export async function downloadServerPdfToolkitArtifacts(
     job.artifacts.find((artifact) => artifact.kind === 'pdf-toolkit-text') || null
 
   if (!manifestArtifact || !resultArtifact || !previewArtifact) {
-    throw new Error('Backend PDF_TOOLKIT job завершился без обязательных PDF toolkit artifacts.')
+    throw new Error('Операция завершилась без обязательных файлов результата.')
   }
 
   const [manifest, resultBlob, previewBlob, textBlob] = await Promise.all([
@@ -232,7 +232,7 @@ async function convertSourceToPdf(
   importSource: PdfToolkitSourceDefinition,
   reportProgress?: (message: string) => void,
 ): Promise<{ file: File }> {
-  reportProgress?.(`Готовлю ${importSource.label} source к import-to-PDF path...`)
+  reportProgress?.(`Подготавливаю ${importSource.label} к работе с PDF...`)
 
   if (importSource.requiredJobTypes.includes('IMAGE_CONVERT')) {
     const result = await runServerImageConvert({
@@ -240,7 +240,7 @@ async function convertSourceToPdf(
       targetExtension: 'pdf',
       maxWidth: null,
       maxHeight: null,
-      presetLabel: 'PDF Toolkit Import',
+      presetLabel: 'Импорт в PDF',
       reportProgress,
     })
 
@@ -256,7 +256,7 @@ async function convertSourceToPdf(
     targetExtension: 'pdf',
     maxWidth: null,
     maxHeight: null,
-    presetLabel: 'PDF Toolkit Import',
+    presetLabel: 'Импорт в PDF',
     reportProgress,
   })
 
@@ -273,11 +273,11 @@ async function loadPreparedPdfDocument(
   sourceRouteKind: 'direct-pdf' | 'convert-to-pdf',
   reportProgress?: (message: string) => void,
 ): Promise<PdfToolkitDocumentPreview> {
-  reportProgress?.('Подготавливаю PDF preview через backend VIEWER_RESOLVE...')
+  reportProgress?.('Подготавливаю предпросмотр документа...')
   const preview = await resolveServerViewerPreview(file, reportProgress)
 
   if (preview.kind !== 'document' || preview.layout.mode !== 'pdf') {
-    throw new Error('Backend VIEWER_RESOLVE не вернул PDF document payload для pdf-toolkit.')
+    throw new Error('Не удалось получить корректный PDF для предпросмотра.')
   }
 
   return {

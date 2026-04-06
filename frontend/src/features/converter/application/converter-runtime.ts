@@ -120,7 +120,9 @@ type ServerConverterResult =
   | ServerMediaConvertResult
 
 export interface ConverterRuntimeDependencies {
-  decodeNativeRaster?: (prepared: ConverterPreparedSource) => Promise<ConverterDecodedSourceArtifact>
+  decodeNativeRaster?: (
+    prepared: ConverterPreparedSource,
+  ) => Promise<ConverterDecodedSourceArtifact>
   decodeHeicSource?: (prepared: ConverterPreparedSource) => Promise<ConverterDecodedSourceArtifact>
   decodeTiffSource?: (prepared: ConverterPreparedSource) => Promise<ConverterDecodedSourceArtifact>
   decodeRawSource?: (prepared: ConverterPreparedSource) => Promise<ConverterDecodedSourceArtifact>
@@ -235,16 +237,18 @@ export function createConverterRuntime(
       if (!source.available) {
         throw new Error(
           source.availabilityDetail ||
-            `Источник ${source.label} сейчас отключён в backend capability matrix.`,
+            `Формат ${source.label} сейчас недоступен для конвертации в этом окружении.`,
         )
       }
 
       const targets = await listConverterTargetsForSource(file.name, file.type)
-      const scenarios = (await Promise.all([
-        listConverterScenariosByFamily('image'),
-        listConverterScenariosByFamily('document'),
-        listConverterScenariosByFamily('media'),
-      ]))
+      const scenarios = (
+        await Promise.all([
+          listConverterScenariosByFamily('image'),
+          listConverterScenariosByFamily('document'),
+          listConverterScenariosByFamily('media'),
+        ])
+      )
         .flat()
         .filter((scenario) => scenario.sourceExtension === source.extension && scenario.available)
 
@@ -283,20 +287,18 @@ export function createConverterRuntime(
       const preset = await resolveConverterPreset(presetId)
 
       if (!target || !scenario) {
-        throw new Error('Для выбранной пары source/target сценарий пока не зарегистрирован.')
+        throw new Error('Для выбранной пары форматов конвертация пока недоступна.')
       }
 
       if (!target.available && !scenario.available) {
         throw new Error(
-          target.availabilityDetail ||
-            `Target ${target.label} сейчас отключён в backend capability matrix.`,
+          target.availabilityDetail || `Формат ${target.label} сейчас недоступен для результата.`,
         )
       }
 
       if (!scenario.available) {
         throw new Error(
-          scenario.availabilityDetail ||
-            `Сценарий ${scenario.label} сейчас отключён в backend capability matrix.`,
+          scenario.availabilityDetail || `Сценарий ${scenario.label} сейчас временно недоступен.`,
         )
       }
 
@@ -360,7 +362,11 @@ export function createConverterRuntime(
             serverResult.previewBlob.type ||
             target.mimeType,
           previewKind:
-            target.family === 'media' ? 'media' : target.family === 'document' ? 'document' : 'image',
+            target.family === 'media'
+              ? 'media'
+              : target.family === 'document'
+                ? 'document'
+                : 'image',
           preset,
           source: prepared.source,
           target,
@@ -563,38 +569,42 @@ async function defaultDecodeNativeRaster(
 async function defaultDecodeHeicSource(
   _prepared: ConverterPreparedSource,
 ): Promise<ConverterDecodedSourceArtifact> {
-  throw new Error('HEIC local fallback отключён: heavy imaging должен идти через backend IMAGE_CONVERT.')
+  throw new Error('HEIC обрабатывается через серверную конвертацию. Повтори попытку чуть позже.')
 }
 
 async function defaultDecodeTiffSource(
   _prepared: ConverterPreparedSource,
 ): Promise<ConverterDecodedSourceArtifact> {
-  throw new Error('TIFF local fallback отключён: heavy imaging должен идти через backend IMAGE_CONVERT.')
+  throw new Error('TIFF обрабатывается через серверную конвертацию. Повтори попытку чуть позже.')
 }
 
 async function defaultDecodeRawSource(
   _prepared: ConverterPreparedSource,
 ): Promise<ConverterDecodedSourceArtifact> {
-  throw new Error('RAW local fallback отключён: heavy imaging должен идти через backend IMAGE_CONVERT.')
+  throw new Error(
+    'RAW-файлы обрабатываются через серверную конвертацию. Повтори попытку чуть позже.',
+  )
 }
 
 async function defaultDecodePsdSource(
   _prepared: ConverterPreparedSource,
 ): Promise<ConverterDecodedSourceArtifact> {
-  throw new Error('PSD local fallback отключён: heavy imaging должен идти через backend IMAGE_CONVERT.')
+  throw new Error('PSD обрабатывается через серверную конвертацию. Повтори попытку чуть позже.')
 }
 
 async function defaultDecodeIllustrationSource(
   _prepared: ConverterPreparedSource,
 ): Promise<ConverterDecodedSourceArtifact> {
-  throw new Error('AI/EPS local fallback отключён: heavy imaging должен идти через backend IMAGE_CONVERT.')
+  throw new Error(
+    'AI и EPS обрабатываются через серверную конвертацию. Повтори попытку чуть позже.',
+  )
 }
 
 async function defaultDecodeOfficeSource(
   _prepared: ConverterPreparedSource,
 ): Promise<ConverterDecodedSourceArtifact> {
   throw new Error(
-    'Office local fallback отключён: document/spreadsheet/presentation conversion должен идти через backend OFFICE_CONVERT.',
+    'Документы и таблицы обрабатываются через серверную конвертацию. Повтори попытку чуть позже.',
   )
 }
 
@@ -602,7 +612,7 @@ async function defaultDecodeMediaSource(
   _prepared: ConverterPreparedSource,
 ): Promise<ConverterDecodedSourceArtifact> {
   throw new Error(
-    'Media local fallback отключён: video/audio conversion должен идти через backend MEDIA_CONVERT.',
+    'Видео и аудио обрабатываются через серверную конвертацию. Повтори попытку чуть позже.',
   )
 }
 
@@ -625,7 +635,7 @@ async function defaultApplyPreset(
   return {
     raster: resized,
     warnings: [
-      `Preset ${preset.label} уменьшил размерность: ${raster.width}x${raster.height} -> ${resized.width}x${resized.height}.`,
+      `Профиль «${preset.label}» уменьшил размер до ${resized.width} x ${resized.height}.`,
     ],
   }
 }
@@ -677,43 +687,43 @@ async function defaultEncodePdf(_input: {
   quality?: number
   backgroundColor?: string
 }): Promise<ConverterEncodedArtifact> {
-  throw new Error('PDF local fallback отключён: heavy imaging должен идти через backend IMAGE_CONVERT.')
+  throw new Error('PDF собирается через серверную конвертацию. Повтори попытку чуть позже.')
 }
 
 async function defaultEncodeTiff(_input: {
   raster: RasterImageFrame
 }): Promise<ConverterEncodedArtifact> {
-  throw new Error('TIFF local fallback отключён: heavy imaging должен идти через backend IMAGE_CONVERT.')
+  throw new Error('TIFF собирается через серверную конвертацию. Повтори попытку чуть позже.')
 }
 
 async function defaultEncodeAvif(_input: {
   raster: RasterImageFrame
   quality?: number
 }): Promise<ConverterEncodedArtifact> {
-  throw new Error('AVIF local fallback отключён: heavy imaging должен идти через backend IMAGE_CONVERT.')
+  throw new Error('AVIF собирается через серверную конвертацию. Повтори попытку чуть позже.')
 }
 
 async function defaultEncodeSvg(_input: {
   raster: RasterImageFrame
 }): Promise<ConverterEncodedArtifact> {
-  throw new Error('SVG trace local fallback отключён: heavy imaging должен идти через backend IMAGE_CONVERT.')
+  throw new Error('SVG собирается через серверную конвертацию. Повтори попытку чуть позже.')
 }
 
 async function defaultEncodeIco(_input: {
   raster: RasterImageFrame
 }): Promise<ConverterEncodedArtifact> {
-  throw new Error('ICO local fallback отключён: heavy imaging должен идти через backend IMAGE_CONVERT.')
+  throw new Error('ICO собирается через серверную конвертацию. Повтори попытку чуть позже.')
 }
 
 async function defaultEncodeOfficeTarget(): Promise<ConverterEncodedArtifact> {
   throw new Error(
-    'Office local fallback отключён: document/spreadsheet/presentation conversion должен идти через backend OFFICE_CONVERT.',
+    'Документный экспорт собирается через серверную конвертацию. Повтори попытку чуть позже.',
   )
 }
 
 async function defaultEncodeMediaTarget(): Promise<ConverterEncodedArtifact> {
   throw new Error(
-    'Media local fallback отключён: video/audio conversion должен идти через backend MEDIA_CONVERT.',
+    'Медиа-экспорт собирается через серверную конвертацию. Повтори попытку чуть позже.',
   )
 }
 
@@ -817,7 +827,7 @@ function buildLocalRasterSourceFacts(
   return [
     { label: 'Источник', value: source.label },
     { label: 'Файл', value: file.name },
-    { label: 'Blob size', value: new Intl.NumberFormat('ru-RU').format(file.size) + ' bytes' },
+    { label: 'Размер файла', value: new Intl.NumberFormat('ru-RU').format(file.size) + ' байт' },
     { label: 'Размерность', value: `${raster.width} x ${raster.height}` },
   ]
 }
@@ -829,7 +839,7 @@ function buildLocalRasterResultFacts(
   return [
     { label: 'Тип результата', value: target.label },
     { label: 'Размерность', value: `${raster.width} x ${raster.height}` },
-    { label: 'Pipeline', value: target.statusLabel },
+    { label: 'Режим обработки', value: target.statusLabel },
   ]
 }
 
@@ -841,7 +851,7 @@ function buildImageSourceFacts(
   return [
     { label: 'Источник', value: source.label },
     { label: 'Файл', value: file.name },
-    { label: 'Blob size', value: new Intl.NumberFormat('ru-RU').format(file.size) + ' bytes' },
+    { label: 'Размер файла', value: new Intl.NumberFormat('ru-RU').format(file.size) + ' байт' },
     { label: 'Размерность', value: `${manifest.sourceWidth} x ${manifest.sourceHeight}` },
   ]
 }
@@ -853,7 +863,7 @@ function buildImageResultFacts(
   return [
     { label: 'Тип результата', value: target.label },
     { label: 'Размерность', value: `${manifest.width} x ${manifest.height}` },
-    { label: 'Media type', value: manifest.resultMediaType },
+    { label: 'MIME', value: manifest.resultMediaType },
   ]
 }
 

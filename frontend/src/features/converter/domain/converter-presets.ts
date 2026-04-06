@@ -28,10 +28,10 @@ export function resolveConverterPresetFromDefinitions(
   if (!presets.length) {
     return {
       id: 'original',
-      label: 'Original',
-      detail: 'Временный safe preset до загрузки backend capability matrix.',
-      statusLabel: 'No resize',
-      accents: ['Fallback'],
+      label: 'Исходный размер',
+      detail: 'Базовый профиль без изменения размеров и лишних ограничений.',
+      statusLabel: 'Без уменьшения',
+      accents: ['Исходное качество'],
       maxWidth: null,
       maxHeight: null,
       preferredQuality: null,

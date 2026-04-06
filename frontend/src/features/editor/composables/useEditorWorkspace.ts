@@ -1,5 +1,6 @@
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 import { buildEditorLocalPreview, type EditorLocalPreview } from '../application/editor-preview'
+import { consumeEditorIncomingDraft } from '../application/editor-handoff'
 import { canFormatEditorFormat, formatEditorContent } from '../application/editor-formatters'
 import {
   runServerEditorProcess,
@@ -45,23 +46,24 @@ const EDITOR_DRAFT_STORAGE_KEY = 'jack.editor.draft.v1'
 const TEMPLATE_DEFINITIONS: EditorTemplateDefinition[] = [
   {
     id: 'markdown-brief',
-    label: 'Markdown Brief',
+    label: 'План заметки',
     formatId: 'markdown',
     fileName: 'notes.md',
-    content: `# Weekly Brief
+    content: `# План публикации
 
-## Highlights
-- Viewer and converter polish
-- Processing-platform reuse
+## Главное
+- Коротко описать обновление
+- Добавить пользу для пользователя
 
-## Checklist
-- [ ] Validate final copy
-- [ ] Publish update
+## Что проверить
+- [ ] Финальный текст
+- [ ] Ссылки и кнопки
+- [ ] Готовность к публикации
 `,
   },
   {
     id: 'html-landing',
-    label: 'HTML Landing',
+    label: 'HTML Страница',
     formatId: 'html',
     fileName: 'landing.html',
     content: `<!doctype html>
@@ -69,7 +71,7 @@ const TEMPLATE_DEFINITIONS: EditorTemplateDefinition[] = [
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Jack Editor</title>
+    <title>Jack Preview</title>
     <style>
       body { font-family: Manrope, sans-serif; padding: 32px; }
       main { max-width: 720px; margin: 0 auto; }
@@ -77,8 +79,8 @@ const TEMPLATE_DEFINITIONS: EditorTemplateDefinition[] = [
   </head>
   <body>
     <main>
-      <h1>Jack Editor</h1>
-      <p>Structure your HTML draft and validate it with backend diagnostics.</p>
+      <h1>Jack Preview</h1>
+      <p>Собери простую HTML-страницу и сразу проверь, как она выглядит.</p>
     </main>
   </body>
 </html>
@@ -86,7 +88,7 @@ const TEMPLATE_DEFINITIONS: EditorTemplateDefinition[] = [
   },
   {
     id: 'css-showcase',
-    label: 'CSS Showcase',
+    label: 'CSS Сниппет',
     formatId: 'css',
     fileName: 'theme.css',
     content: `:root {
@@ -105,7 +107,7 @@ const TEMPLATE_DEFINITIONS: EditorTemplateDefinition[] = [
   },
   {
     id: 'js-worker',
-    label: 'JS Worker',
+    label: 'JS Функция',
     formatId: 'javascript',
     fileName: 'workspace.js',
     content: `export async function loadWorkspaceSummary(endpoint) {
@@ -120,83 +122,82 @@ const TEMPLATE_DEFINITIONS: EditorTemplateDefinition[] = [
   },
   {
     id: 'json-payload',
-    label: 'JSON Payload',
+    label: 'JSON Ответ',
     formatId: 'json',
     fileName: 'payload.json',
     content: `{
-  "module": "editor",
-  "status": "active",
-  "features": ["preview", "diagnostics", "export"]
+  "title": "Jack",
+  "section": "editor",
+  "published": true
 }
 `,
   },
   {
     id: 'yaml-config',
-    label: 'YAML Config',
+    label: 'YAML Конфиг',
     formatId: 'yaml',
     fileName: 'editor-config.yaml',
     content: `editor:
-  mode: split-view
-  diagnostics: server
-  exports:
-    readyFile: true
-    plainText: true
+  title: Workspace
+  autosave: true
+  preview: split-view
 `,
   },
   {
     id: 'plain-notes',
-    label: 'Plain Notes',
+    label: 'Простые заметки',
     formatId: 'txt',
     fileName: 'draft.txt',
-    content: `SESSION:
-Review editor roadmap coverage
+    content: `ЗАМЕТКИ:
+Подготовить текст к публикации
 
-NOTES:
-- Keep formatting instant on frontend
-- Push validate/export to backend
+ЧТО НУЖНО:
+- проверить структуру
+- вычитать текст
+- сохранить итоговую версию
 `,
   },
 ]
 
 const HELPER_ACTIONS_BY_FORMAT: Record<string, EditorHelperAction[]> = {
   markdown: [
-    { id: 'md-heading', label: 'Heading', detail: '# Section heading' },
-    { id: 'md-bold', label: 'Bold', detail: 'Wrap selection with **bold**', shortcut: 'Mod+B' },
-    { id: 'md-link', label: 'Link', detail: 'Insert markdown link', shortcut: 'Mod+K' },
-    { id: 'md-code', label: 'Code Block', detail: 'Insert fenced code block' },
+    { id: 'md-heading', label: 'Заголовок', detail: 'Добавить заголовок раздела' },
+    { id: 'md-bold', label: 'Жирный', detail: 'Выделить текст жирным', shortcut: 'Mod+B' },
+    { id: 'md-link', label: 'Ссылка', detail: 'Вставить markdown-ссылку', shortcut: 'Mod+K' },
+    { id: 'md-code', label: 'Код', detail: 'Вставить блок кода' },
   ],
   html: [
-    { id: 'html-section', label: 'Section', detail: 'Semantic section scaffold' },
-    { id: 'html-card', label: 'Card', detail: 'Panel article snippet' },
-    { id: 'html-link', label: 'Safe Link', detail: 'Anchor with noopener' },
-    { id: 'html-list', label: 'List', detail: 'Bulleted list markup' },
+    { id: 'html-section', label: 'Секция', detail: 'Добавить базовый section-блок' },
+    { id: 'html-card', label: 'Карточка', detail: 'Вставить компактный блок-карточку' },
+    { id: 'html-link', label: 'Ссылка', detail: 'Безопасная внешняя ссылка' },
+    { id: 'html-list', label: 'Список', detail: 'Маркированный список' },
   ],
   css: [
-    { id: 'css-variables', label: 'Variables', detail: ':root variables block' },
-    { id: 'css-flex', label: 'Flex Center', detail: 'Center content with flex' },
-    { id: 'css-grid', label: 'Grid', detail: 'Responsive grid scaffold' },
-    { id: 'css-media', label: 'Media Query', detail: 'Small-screen breakpoint block' },
+    { id: 'css-variables', label: 'Переменные', detail: 'Блок переменных в :root' },
+    { id: 'css-flex', label: 'Flex', detail: 'Центрирование через flex' },
+    { id: 'css-grid', label: 'Grid', detail: 'Адаптивная сетка' },
+    { id: 'css-media', label: 'Media', detail: 'Правило для маленьких экранов' },
   ],
   javascript: [
-    { id: 'js-async', label: 'Async Fn', detail: 'Async function scaffold' },
-    { id: 'js-fetch', label: 'Fetch Flow', detail: 'Fetch + error handling' },
-    { id: 'js-try', label: 'Try / Catch', detail: 'Error boundary scaffold' },
-    { id: 'js-listener', label: 'Listener', detail: 'Event listener snippet' },
+    { id: 'js-async', label: 'Async', detail: 'Асинхронная функция' },
+    { id: 'js-fetch', label: 'Fetch', detail: 'Запрос с обработкой ошибки' },
+    { id: 'js-try', label: 'Try/Catch', detail: 'Блок обработки ошибок' },
+    { id: 'js-listener', label: 'Listener', detail: 'Обработчик события' },
   ],
   json: [
-    { id: 'json-object', label: 'Object', detail: 'Wrap selection in object' },
-    { id: 'json-array', label: 'Array', detail: 'Wrap selection in array' },
-    { id: 'json-field', label: 'Field', detail: 'Insert key/value pair' },
+    { id: 'json-object', label: 'Object', detail: 'Добавить объект JSON' },
+    { id: 'json-array', label: 'Array', detail: 'Добавить массив JSON' },
+    { id: 'json-field', label: 'Field', detail: 'Вставить пару ключ-значение' },
   ],
   yaml: [
-    { id: 'yaml-map', label: 'Mapping', detail: 'Key / nested mapping scaffold' },
-    { id: 'yaml-list', label: 'List', detail: 'Sequence scaffold' },
-    { id: 'yaml-service', label: 'Service', detail: 'Config block with enabled/port' },
+    { id: 'yaml-map', label: 'Mapping', detail: 'Карта с вложенными полями' },
+    { id: 'yaml-list', label: 'List', detail: 'Список значений' },
+    { id: 'yaml-service', label: 'Config', detail: 'Готовый блок конфигурации' },
   ],
   txt: [
-    { id: 'txt-section', label: 'Section', detail: 'Uppercase section heading' },
-    { id: 'txt-checklist', label: 'Checklist', detail: 'Checkbox note block' },
-    { id: 'txt-divider', label: 'Divider', detail: 'Visual separator' },
+    { id: 'txt-section', label: 'Раздел', detail: 'Заголовок раздела' },
+    { id: 'txt-checklist', label: 'Чеклист', detail: 'Список задач с чекбоксами' },
+    { id: 'txt-divider', label: 'Разделитель', detail: 'Горизонтальный разделитель' },
   ],
 }
 
@@ -341,7 +342,7 @@ export function useEditorWorkspace() {
   const activeJobId = ref('')
   const activeJobStatus = ref<ProcessingJobStatus | ''>('')
   const activeJobProgressPercent = ref(0)
-  const draftPersistenceStatus = ref('Draft autosave idle')
+  const draftPersistenceStatus = ref('Черновик готов к работе')
   const lastValidatedFingerprint = ref('')
   const restoredDraft = ref(false)
   const lastValidatedResult = shallowRef<ServerEditorResult | null>(null)
@@ -415,7 +416,7 @@ export function useEditorWorkspace() {
           templateId: selectedTemplateId.value,
         }),
       )
-      draftPersistenceStatus.value = 'Draft autosaved locally'
+      draftPersistenceStatus.value = 'Черновик сохранён локально'
     }, 220)
   }
 
@@ -423,7 +424,7 @@ export function useEditorWorkspace() {
     if (typeof window !== 'undefined') {
       window.localStorage.removeItem(EDITOR_DRAFT_STORAGE_KEY)
     }
-    draftPersistenceStatus.value = 'Draft cleared from local storage'
+    draftPersistenceStatus.value = 'Локальная копия очищена'
   }
 
   async function hydrateCapabilities(): Promise<void> {
@@ -440,6 +441,24 @@ export function useEditorWorkspace() {
           selectedFormatId.value = availableFormats.value[0]?.id ?? 'markdown'
         }
 
+        const incomingDraft = consumeEditorIncomingDraft()
+        if (incomingDraft) {
+          selectedFormatId.value = availableFormats.value.some(
+            (format) => format.id === incomingDraft.formatId,
+          )
+            ? incomingDraft.formatId
+            : 'txt'
+          fileName.value = incomingDraft.fileName
+          content.value = incomingDraft.content
+          selectedTemplateId.value = ''
+          restoredDraft.value = false
+          draftPersistenceStatus.value = `Открыт черновик из ${incomingDraft.sourceLabel}`
+          lastValidatedResult.value = null
+          lastValidatedFingerprint.value = ''
+          queueDraftPersistence()
+          return
+        }
+
         const persistedDraft = readPersistedDraft()
         if (persistedDraft) {
           selectedFormatId.value = persistedDraft.formatId
@@ -447,7 +466,7 @@ export function useEditorWorkspace() {
           content.value = persistedDraft.content
           selectedTemplateId.value = persistedDraft.templateId
           restoredDraft.value = true
-          draftPersistenceStatus.value = 'Restored local draft'
+          draftPersistenceStatus.value = 'Локальная копия восстановлена'
           return
         }
 
@@ -503,7 +522,7 @@ export function useEditorWorkspace() {
     errorMessage.value = ''
     try {
       content.value = await formatEditorContent(selectedFormatId.value, content.value)
-      draftPersistenceStatus.value = 'Draft formatted locally'
+      draftPersistenceStatus.value = 'Черновик отформатирован'
       queueDraftPersistence()
     } catch (error) {
       errorMessage.value =
@@ -518,7 +537,7 @@ export function useEditorWorkspace() {
 
     errorMessage.value = ''
     isValidating.value = true
-    processingMessage.value = 'Подготавливаю backend editor diagnostics...'
+    processingMessage.value = 'Проверяю документ и собираю итоговые файлы...'
 
     try {
       const result = await runServerEditorProcess({
@@ -540,7 +559,7 @@ export function useEditorWorkspace() {
 
       lastValidatedResult.value = result
       lastValidatedFingerprint.value = currentFingerprint.value
-      draftPersistenceStatus.value = 'Diagnostics synced with backend'
+      draftPersistenceStatus.value = 'Проверка завершена, результат актуален'
       processingMessage.value = ''
 
       if (downloadMode === 'ready') {
@@ -552,12 +571,12 @@ export function useEditorWorkspace() {
       }
     } catch (error) {
       if (error instanceof ProcessingJobCancelledError) {
-        errorMessage.value = 'Editor validate/export job был отменён.'
+        errorMessage.value = 'Проверка документа была отменена.'
       } else {
         errorMessage.value =
           error instanceof Error
             ? error.message
-            : 'Не удалось завершить editor validate/export flow.'
+            : 'Не удалось завершить проверку и подготовку файлов.'
       }
     } finally {
       isValidating.value = false
@@ -601,15 +620,15 @@ export function useEditorWorkspace() {
     }
 
     isCancelling.value = true
-    processingMessage.value = 'Отменяю editor processing job...'
+    processingMessage.value = 'Останавливаю текущую проверку...'
 
     try {
       await cancelProcessingJob(activeJobId.value)
       processingMessage.value = ''
-      errorMessage.value = 'Editor processing job отменён.'
+      errorMessage.value = 'Проверка документа отменена.'
     } catch (error) {
       errorMessage.value =
-        error instanceof Error ? error.message : 'Не удалось отменить editor processing job.'
+        error instanceof Error ? error.message : 'Не удалось отменить текущую проверку.'
     } finally {
       isCancelling.value = false
       activeJobId.value = ''

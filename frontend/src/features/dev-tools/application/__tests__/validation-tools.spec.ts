@@ -7,7 +7,7 @@ describe('validation tools', () => {
 
     expect(result.valid).toBe(true)
     expect(result.normalized).toContain('"iteration": 7')
-    expect(result.facts.find((fact) => fact.label === 'Root type')?.value).toBe('object')
+    expect(result.facts.find((fact) => fact.label === 'Тип корня')?.value).toBe('объект')
   })
 
   it('returns yaml diagnostics for malformed input', () => {

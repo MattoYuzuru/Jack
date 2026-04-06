@@ -13,7 +13,8 @@ public final class ProcessingFileFamilyResolver {
 		"ai", "eps", "ps"
 	);
 	private static final Set<String> DOCUMENT_EXTENSIONS = Set.of(
-		"pdf", "txt", "text", "csv", "html", "htm", "rtf", "doc", "docx",
+		"pdf", "txt", "text", "log", "sql", "md", "markdown", "json", "yaml", "yml",
+		"xml", "env", "csv", "tsv", "html", "htm", "rtf", "doc", "docx",
 		"odt", "xls", "xlsx", "ods", "pptx", "epub", "sqlite", "db"
 	);
 	private static final Set<String> VIDEO_EXTENSIONS = Set.of(

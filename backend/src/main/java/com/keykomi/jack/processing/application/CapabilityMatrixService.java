@@ -28,8 +28,16 @@ public class CapabilityMatrixService {
 		viewerFormat("raw", List.of("dng", "cr2", "cr3", "nef", "arw", "raf", "rw2", "orf", "pef", "srw"), "RAW", "image", List.of(), "server-assisted", "server-viewer", "Server viewer route", "RAW family использует backend VIEWER_RESOLVE поверх preview extraction и metadata pipeline.", List.of(ProcessingJobType.VIEWER_RESOLVE, ProcessingJobType.IMAGE_CONVERT, ProcessingJobType.METADATA_EXPORT), "RAW preview требует доступных VIEWER_RESOLVE, IMAGE_CONVERT и METADATA_EXPORT capabilities."),
 		viewerFormat("pdf", List.of(), "PDF", "document", List.of("application/pdf"), "server-assisted", "server-viewer", "Server viewer route", "PDF preview и searchable layer собираются через backend VIEWER_RESOLVE поверх DOCUMENT_PREVIEW.", List.of(ProcessingJobType.VIEWER_RESOLVE, ProcessingJobType.DOCUMENT_PREVIEW), "PDF preview требует доступных VIEWER_RESOLVE и DOCUMENT_PREVIEW capabilities."),
 		viewerFormat("txt", List.of(), "TXT", "document", List.of("text/plain"), "server-assisted", "server-viewer", "Server viewer route", "Text extraction и search summary идут через backend VIEWER_RESOLVE поверх DOCUMENT_PREVIEW.", List.of(ProcessingJobType.VIEWER_RESOLVE, ProcessingJobType.DOCUMENT_PREVIEW), "TXT preview требует доступных VIEWER_RESOLVE и DOCUMENT_PREVIEW capabilities."),
+		viewerFormat("md", List.of("markdown"), "Markdown", "document", List.of("text/markdown", "text/x-markdown"), "server-assisted", "server-viewer", "Server viewer route", "Markdown рендерится в article preview и даёт outline по heading'ам.", List.of(ProcessingJobType.VIEWER_RESOLVE, ProcessingJobType.DOCUMENT_PREVIEW), "Markdown preview требует доступных VIEWER_RESOLVE и DOCUMENT_PREVIEW capabilities."),
+		viewerFormat("json", List.of(), "JSON", "document", List.of("application/json", "text/json"), "server-assisted", "server-viewer", "Server viewer route", "JSON открывается как structured config preview с pretty-print и quick edit draft.", List.of(ProcessingJobType.VIEWER_RESOLVE, ProcessingJobType.DOCUMENT_PREVIEW), "JSON preview требует доступных VIEWER_RESOLVE и DOCUMENT_PREVIEW capabilities."),
+		viewerFormat("yaml", List.of("yml"), "YAML", "document", List.of("application/yaml", "text/yaml", "text/x-yaml"), "server-assisted", "server-viewer", "Server viewer route", "YAML проходит через config preview с outline по секциям и editable draft.", List.of(ProcessingJobType.VIEWER_RESOLVE, ProcessingJobType.DOCUMENT_PREVIEW), "YAML preview требует доступных VIEWER_RESOLVE и DOCUMENT_PREVIEW capabilities."),
+		viewerFormat("xml", List.of(), "XML", "document", List.of("application/xml", "text/xml"), "server-assisted", "server-viewer", "Server viewer route", "XML открывается как schema-aware preview с безопасным parsing и editable copy.", List.of(ProcessingJobType.VIEWER_RESOLVE, ProcessingJobType.DOCUMENT_PREVIEW), "XML preview требует доступных VIEWER_RESOLVE и DOCUMENT_PREVIEW capabilities."),
+		viewerFormat("env", List.of(), ".env", "document", List.of("text/plain"), "server-assisted", "server-viewer", "Server viewer route", ".env файл разворачивается в key/value table и quick edit draft.", List.of(ProcessingJobType.VIEWER_RESOLVE, ProcessingJobType.DOCUMENT_PREVIEW), ".env preview требует доступных VIEWER_RESOLVE и DOCUMENT_PREVIEW capabilities."),
 		viewerFormat("csv", List.of(), "CSV", "document", List.of("text/csv", "application/csv"), "server-assisted", "server-viewer", "Server viewer route", "CSV preview строится через backend VIEWER_RESOLVE как bounded table payload.", List.of(ProcessingJobType.VIEWER_RESOLVE, ProcessingJobType.DOCUMENT_PREVIEW), "CSV preview требует доступных VIEWER_RESOLVE и DOCUMENT_PREVIEW capabilities."),
+		viewerFormat("tsv", List.of(), "TSV", "document", List.of("text/tab-separated-values"), "server-assisted", "server-viewer", "Server viewer route", "TSV preview строится как bounded table payload с tab-aware quick edit copy.", List.of(ProcessingJobType.VIEWER_RESOLVE, ProcessingJobType.DOCUMENT_PREVIEW), "TSV preview требует доступных VIEWER_RESOLVE и DOCUMENT_PREVIEW capabilities."),
 		viewerFormat("html", List.of("htm"), "HTML", "document", List.of("text/html"), "server-assisted", "server-viewer", "Server viewer route", "HTML проходит через backend VIEWER_RESOLVE с sanitization и outline extraction.", List.of(ProcessingJobType.VIEWER_RESOLVE, ProcessingJobType.DOCUMENT_PREVIEW), "HTML preview требует доступных VIEWER_RESOLVE и DOCUMENT_PREVIEW capabilities."),
+		viewerFormat("log", List.of(), "LOG", "document", List.of("text/plain"), "server-assisted", "server-viewer", "Server viewer route", "LOG-файлы открываются как большой текстовый reader с search layer и draft copy.", List.of(ProcessingJobType.VIEWER_RESOLVE, ProcessingJobType.DOCUMENT_PREVIEW), "LOG preview требует доступных VIEWER_RESOLVE и DOCUMENT_PREVIEW capabilities."),
+		viewerFormat("sql", List.of(), "SQL", "document", List.of("application/sql", "text/plain"), "server-assisted", "server-viewer", "Server viewer route", "SQL script открывается как text-centric preview с search и quick edit draft.", List.of(ProcessingJobType.VIEWER_RESOLVE, ProcessingJobType.DOCUMENT_PREVIEW), "SQL preview требует доступных VIEWER_RESOLVE и DOCUMENT_PREVIEW capabilities."),
 		viewerFormat("rtf", List.of(), "RTF", "document", List.of("application/rtf", "text/rtf"), "server-assisted", "server-viewer", "Server viewer route", "Legacy rich text извлекается через backend VIEWER_RESOLVE поверх DOCUMENT_PREVIEW.", List.of(ProcessingJobType.VIEWER_RESOLVE, ProcessingJobType.DOCUMENT_PREVIEW), "RTF preview требует доступных VIEWER_RESOLVE и DOCUMENT_PREVIEW capabilities."),
 		viewerFormat("doc", List.of(), "DOC", "document", List.of("application/msword"), "server-assisted", "server-viewer", "Server viewer route", "Legacy Word document разбирается через backend VIEWER_RESOLVE поверх DOCUMENT_PREVIEW.", List.of(ProcessingJobType.VIEWER_RESOLVE, ProcessingJobType.DOCUMENT_PREVIEW), "DOC preview требует доступных VIEWER_RESOLVE и DOCUMENT_PREVIEW capabilities."),
 		viewerFormat("docx", List.of(), "DOCX", "document", List.of("application/vnd.openxmlformats-officedocument.wordprocessingml.document"), "server-assisted", "server-viewer", "Server viewer route", "OOXML word payload собирается через backend VIEWER_RESOLVE поверх DOCUMENT_PREVIEW.", List.of(ProcessingJobType.VIEWER_RESOLVE, ProcessingJobType.DOCUMENT_PREVIEW), "DOCX preview требует доступных VIEWER_RESOLVE и DOCUMENT_PREVIEW capabilities."),
@@ -117,78 +125,78 @@ public class CapabilityMatrixService {
 	);
 
 	private static final List<ConverterPresetSpec> CONVERTER_PRESET_SPECS = List.of(
-		new ConverterPresetSpec("original", "Original", "Не меняет размерность и оставляет runtime только target-specific encode решения.", "No resize", List.of("Original size", "Safe base"), null, null, null, "#ffffff"),
-		new ConverterPresetSpec("web-balanced", "Web Balanced", "Практичный пресет для веба с мягким ограничением крупных изображений.", "2560 px cap", List.of("Web", "Balanced"), 2560, 2560, 0.86, "#ffffff"),
-		new ConverterPresetSpec("email-attachment", "Email Attachment", "Агрессивнее ограничивает размерность и bitrate под вложения.", "1600 px cap", List.of("Email", "Compact"), 1600, 1600, 0.78, "#fffaf0"),
-		new ConverterPresetSpec("thumbnail", "Thumbnail", "Миниатюрный профиль для карточек и лёгких превью.", "512 px cap", List.of("Preview", "Small"), 512, 512, 0.72, "#f3ede3")
+		new ConverterPresetSpec("original", "Исходный размер", "Сохраняет исходную геометрию и меняет только формат результата.", "Без уменьшения", List.of("Исходное качество", "Базовый"), null, null, null, "#ffffff"),
+		new ConverterPresetSpec("web-balanced", "Для веба", "Сбалансированный профиль для сайтов, CMS и карточек товаров.", "До 2560 px", List.of("Веб", "Баланс"), 2560, 2560, 0.86, "#ffffff"),
+		new ConverterPresetSpec("email-attachment", "Для вложений", "Помогает уложиться в ограничения почты и мессенджеров.", "До 1600 px", List.of("Почта", "Компактно"), 1600, 1600, 0.78, "#fffaf0"),
+		new ConverterPresetSpec("thumbnail", "Для миниатюр", "Миниатюрный профиль для превью, сеток и лёгких карточек.", "До 512 px", List.of("Превью", "Малый размер"), 512, 512, 0.72, "#f3ede3")
 	);
 
 	private static final List<PlatformModuleSpec> PLATFORM_MODULE_SPECS = List.of(
 		platformModule(
 			"compression",
 			"Compression",
-			"Compression уже поднят как отдельный backend-first route поверх existing image/media jobs и общего artifact lifecycle.",
-			"Compression workspace больше не живёт как queued placeholder: dedicated FILE_COMPRESS orchestration reuse'ит IMAGE_CONVERT и MEDIA_CONVERT как внутренние candidate builders и отдаёт единый size-first manifest/result contract.",
-			List.of("Target size", "Quality", "Batch"),
+			"Отдельный модуль для уменьшения изображений, видео и аудио под реальный лимит по размеру.",
+			"Рабочее окно само подбирает лучший вариант и показывает историю попыток, итоговый файл и понятные факты по уменьшению.",
+			List.of("Лимит размера", "Качество", "История"),
 			List.of("image-processing", "media-processing", "artifact-storage", "capabilities"),
 			List.of(ProcessingJobType.FILE_COMPRESS, ProcessingJobType.IMAGE_CONVERT, ProcessingJobType.MEDIA_CONVERT),
-			List.of("image quality presets", "video/audio bitrate targeting", "batch compression"),
-			"Compression module требует доступных FILE_COMPRESS, IMAGE_CONVERT и MEDIA_CONVERT capabilities."
+			List.of("профили качества", "лимит размера", "история попыток"),
+			"Для модуля Compression нужны доступные сценарии FILE_COMPRESS, IMAGE_CONVERT и MEDIA_CONVERT."
 		),
 		platformModule(
 			"pdf-toolkit",
 			"PDF Toolkit",
-			"PDF toolkit уже поднят как отдельный backend-first route для page operations, OCR, redaction и password flows поверх processing platform.",
-			"Workspace reuse'ит VIEWER_RESOLVE для preview, IMAGE_CONVERT и OFFICE_CONVERT для import-to-PDF entry flows, а все page mutations живут в dedicated PDF_TOOLKIT job без browser-side PDF rewriting.",
+			"Единое рабочее окно для объединения, разрезания, OCR, подписи и защиты PDF.",
+			"Сервис принимает PDF и совместимые исходники, подготавливает просмотр страниц и выполняет все операции в одном потоке работы.",
 			List.of("Merge", "OCR", "Protect"),
 			List.of("document-processing", "image-processing", "office-conversion", "viewer-resolve", "artifact-storage"),
 			List.of(ProcessingJobType.PDF_TOOLKIT, ProcessingJobType.DOCUMENT_PREVIEW, ProcessingJobType.IMAGE_CONVERT, ProcessingJobType.OFFICE_CONVERT, ProcessingJobType.VIEWER_RESOLVE),
-			List.of("term-based redaction", "visible signature stamps", "searchable PDF OCR"),
-			"PDF toolkit требует доступных PDF_TOOLKIT, DOCUMENT_PREVIEW, IMAGE_CONVERT, OFFICE_CONVERT и VIEWER_RESOLVE capabilities."
+			List.of("скрытие данных", "видимая подпись", "OCR с поиском"),
+			"Для PDF Toolkit нужны доступные сценарии PDF_TOOLKIT, DOCUMENT_PREVIEW, IMAGE_CONVERT, OFFICE_CONVERT и VIEWER_RESOLVE."
 		),
 		platformModule(
 			"multi-format-editor",
 			"Multi-Format Editor",
-			"Editor уже поднят как отдельный backend-first route для text-centric diagnostics и export flows поверх processing platform.",
-			"Workspace держит split-view, formatting и shortcuts на клиенте, а backend EDITOR_PROCESS собирает diagnostics, outline и safe export artifacts с reuse DOCUMENT_PREVIEW там, где уже готов structured HTML/text contract.",
-			List.of("Preview", "Validate", "Export"),
+			"Редактор для Markdown, HTML, CSS, JavaScript, JSON, YAML и plain text.",
+			"Здесь можно быстро править текст, смотреть превью, запускать проверку и скачивать готовые файлы без лишних переходов.",
+			List.of("Превью", "Проверка", "Экспорт"),
 			List.of("document-processing", "editor-processing", "artifact-storage"),
 			List.of(ProcessingJobType.EDITOR_PROCESS, ProcessingJobType.DOCUMENT_PREVIEW),
-			List.of("markdown/html preview", "format-aware diagnostics", "safe export"),
-			"Editor module требует доступных EDITOR_PROCESS и DOCUMENT_PREVIEW capabilities."
+			List.of("живое превью", "диагностика", "готовый экспорт"),
+			"Для редактора нужны доступные сценарии EDITOR_PROCESS и DOCUMENT_PREVIEW."
 		),
 		platformModule(
 			"batch-conversion",
 			"Batch Conversion",
-			"Batch conversion теперь не нужно строить с нуля: upload/job/artifact foundation уже умеет orchestrate несколько backend-first scenarios.",
-			"Ключевой следующий шаг для batch-модуля не новый runtime, а поверх existing IMAGE_CONVERT и capability matrix добавить пакетный UX, queue visibility и reuse уже собранных artifacts.",
-			List.of("Queue", "Reuse", "Artifacts"),
+			"Пакетная конвертация для нескольких файлов в одном запуске.",
+			"Следующий шаг развития платформы: собрать очередь, групповой прогресс и общую выдачу результатов поверх уже готовых сценариев преобразования.",
+			List.of("Очередь", "Пакеты", "Групповой экспорт"),
 			List.of("job-orchestration", "image-processing", "artifact-storage", "capabilities"),
 			List.of(ProcessingJobType.IMAGE_CONVERT),
-			List.of("multi-file submit", "queue progress", "bulk download"),
-			"Batch conversion требует доступного IMAGE_CONVERT capability."
+			List.of("много файлов", "общий прогресс", "единая выгрузка"),
+			"Для пакетной конвертации нужен доступный сценарий IMAGE_CONVERT."
 		),
 		platformModule(
 			"ocr",
 			"OCR",
-			"OCR-слой может стартовать поверх существующих document/image intake contracts: ingest, preview, warnings и artifacts уже готовы.",
-			"Нового OCR runtime пока нет, но это уже не причина строить отдельный модуль browser-first. OCR должен reuse'ить DOCUMENT_PREVIEW для document context, IMAGE_CONVERT для page/image preprocessing и общий job/artifact lifecycle.",
-			List.of("Extract", "Search", "Scan"),
+			"Распознавание текста для сканов, изображений и документов без текстового слоя.",
+			"Платформа уже готова принять этот модуль поверх текущих сценариев подготовки страниц и документов.",
+			List.of("Распознавание", "Поиск", "Сканы"),
 			List.of("document-processing", "image-processing", "artifact-storage"),
 			List.of(ProcessingJobType.DOCUMENT_PREVIEW, ProcessingJobType.IMAGE_CONVERT),
-			List.of("scan preprocessing", "searchable PDF", "OCR text layer"),
-			"OCR module требует доступных DOCUMENT_PREVIEW и IMAGE_CONVERT capabilities."
+			List.of("подготовка сканов", "поисковый PDF", "текстовый слой"),
+			"Для OCR нужны доступные сценарии DOCUMENT_PREVIEW и IMAGE_CONVERT."
 		),
 		platformModule(
 			"office-pdf-conversion",
 			"Office/PDF Conversion",
-			"Office/PDF conversion теперь уже живёт как отдельный backend-first route поверх processing platform.",
-			"OFFICE_CONVERT reuse'ит existing upload/job/artifact contracts и document intelligence, а browser держит только orchestration, preview и retry/cancel UX без нового browser-heavy runtime.",
-			List.of("DOCX", "PDF", "Office"),
+			"Преобразование офисных файлов и PDF в отдельном модуле с единым маршрутом обработки.",
+			"Платформа уже умеет собирать документы, таблицы, презентации и PDF в одном понятном рабочем процессе.",
+			List.of("DOCX", "PDF", "Офис"),
 			List.of("document-processing", "job-orchestration", "artifact-storage", "capabilities", "media-processing"),
 			List.of(ProcessingJobType.OFFICE_CONVERT, ProcessingJobType.DOCUMENT_PREVIEW),
-			List.of("docx/pdf roundtrip", "xlsx/csv/ods flows", "presentation export"),
-			"Office/PDF conversion foundation требует доступных OFFICE_CONVERT и DOCUMENT_PREVIEW capabilities."
+			List.of("roundtrip документов", "таблицы", "экспорт презентаций"),
+			"Для Office/PDF Conversion нужны доступные сценарии OFFICE_CONVERT и DOCUMENT_PREVIEW."
 		)
 	);
 
@@ -289,7 +297,7 @@ public class CapabilityMatrixService {
 			spec.mimeTypes(),
 			spec.previewPipeline(),
 			spec.previewStrategyId(),
-			available ? spec.statusLabel() : "Capability unavailable",
+			available ? spec.statusLabel() : "Временно недоступно",
 			spec.notes(),
 			buildAccents(spec.accents(), spec.previewPipeline()),
 			available,
@@ -310,7 +318,7 @@ public class CapabilityMatrixService {
 			spec.family(),
 			spec.mimeTypes(),
 			spec.sourceStrategyId(),
-			available ? spec.statusLabel() : "Capability unavailable",
+			available ? spec.statusLabel() : "Временно недоступно",
 			spec.notes(),
 			buildAccents(spec.accents(), spec.sourceStrategyId().equals("native-raster") ? "browser-native" : "server-assisted"),
 			available,
@@ -333,7 +341,7 @@ public class CapabilityMatrixService {
 			spec.supportsQuality(),
 			spec.supportsTransparency(),
 			spec.defaultQuality(),
-			available ? spec.statusLabel() : "Capability unavailable",
+			available ? spec.statusLabel() : "Временно недоступно",
 			spec.notes(),
 			buildAccents(spec.accents(), "server-assisted"),
 			available,
@@ -378,7 +386,7 @@ public class CapabilityMatrixService {
 			spec.label(),
 			spec.sourceExtension(),
 			spec.targetExtension(),
-			available ? ("server-assisted".equals(spec.executionMode()) ? "Server-assisted" : "Browser-native") : "Capability unavailable",
+			available ? ("server-assisted".equals(spec.executionMode()) ? "Подготовка на сервере" : "Локально") : "Временно недоступно",
 			"server-assisted".equals(spec.executionMode())
 				? resolveScenarioNotes(spec, requiredJobTypes, detail)
 				: "Сценарий закрывается локально через browser-native raster pipeline без backend round-trip.",
@@ -400,7 +408,7 @@ public class CapabilityMatrixService {
 			spec.label(),
 			spec.summary(),
 			spec.detail(),
-			foundationReady ? "Foundation ready" : "Needs extra runtime",
+			foundationReady ? "Готово к запуску" : "Нужна доработка",
 			spec.accents(),
 			spec.reusedDomains(),
 			spec.reusedJobTypes(),
@@ -571,14 +579,14 @@ public class CapabilityMatrixService {
 		List<ProcessingJobType> requiredJobTypes
 	) {
 		if (requiredJobTypes.contains(ProcessingJobType.MEDIA_CONVERT)) {
-			return "%s -> %s требует доступного backend MEDIA_CONVERT capability."
+			return "Сценарий %s -> %s требует доступного MEDIA_CONVERT."
 				.formatted(sourceExtension.toUpperCase(), targetExtension.toUpperCase());
 		}
 		if (requiredJobTypes.contains(ProcessingJobType.OFFICE_CONVERT)) {
-			return "%s -> %s требует доступного backend OFFICE_CONVERT capability."
+			return "Сценарий %s -> %s требует доступного OFFICE_CONVERT."
 				.formatted(sourceExtension.toUpperCase(), targetExtension.toUpperCase());
 		}
-		return "%s -> %s требует доступного backend IMAGE_CONVERT capability."
+		return "Сценарий %s -> %s требует доступного IMAGE_CONVERT."
 			.formatted(sourceExtension.toUpperCase(), targetExtension.toUpperCase());
 	}
 

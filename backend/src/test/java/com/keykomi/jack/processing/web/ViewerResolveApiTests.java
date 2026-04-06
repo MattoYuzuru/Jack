@@ -219,6 +219,32 @@ class ViewerResolveApiTests {
 	}
 
 	@Test
+	void documentViewerResolveKeepsEditableDraftForMarkdown() throws Exception {
+		var uploadId = upload(
+			"notes.md",
+			"text/markdown",
+			"""
+			# Team notes
+
+			## Follow-up
+			- Share recap
+			""".getBytes(StandardCharsets.UTF_8)
+		);
+		var completedJob = awaitJobCompletion(createViewerResolveJob(uploadId));
+		var artifacts = artifactIndex(completedJob);
+
+		var manifest = parseJson(
+			this.mockMvc.perform(get(artifacts.get("viewer-resolve-manifest").path("downloadPath").asText()))
+				.andExpect(status().isOk())
+				.andReturn()
+		);
+		assertThat(manifest.path("kind").asText()).isEqualTo("document");
+		assertThat(manifest.path("documentPayload").path("layout").path("mode").asText()).isEqualTo("html");
+		assertThat(manifest.path("documentPayload").path("layout").path("editableDraft").path("editorFormatId").asText()).isEqualTo("markdown");
+		assertThat(manifest.path("documentPayload").path("layout").path("outline").get(0).path("label").asText()).isEqualTo("Team notes");
+	}
+
+	@Test
 	void videoViewerResolveBuildsUnifiedManifest() throws Exception {
 		var uploadId = upload("legacy.avi", "video/x-msvideo", "video-source".getBytes(StandardCharsets.UTF_8));
 		var completedJob = awaitJobCompletion(createViewerResolveJob(uploadId));

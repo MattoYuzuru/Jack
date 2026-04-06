@@ -16,7 +16,7 @@ export function useViewerWorkspace() {
   const selection = shallowRef<ViewerResolvedEntry | null>(null)
   const isLoading = ref(false)
   const errorMessage = ref('')
-  const loadingMessage = ref('Подготавливаю preview...')
+  const loadingMessage = ref('Подготавливаю просмотр...')
   const viewerAcceptAttribute = ref('')
   const imageFormats = ref<ViewerFormatDefinition[]>([])
   const documentFormats = ref<ViewerFormatDefinition[]>([])
@@ -65,7 +65,7 @@ export function useViewerWorkspace() {
     selection.value = null
     errorMessage.value = ''
     isLoading.value = true
-    loadingMessage.value = 'Подготавливаю preview...'
+    loadingMessage.value = 'Подготавливаю просмотр...'
     resetViewportTransform()
 
     void resolveLoadingMessage(file)
@@ -100,7 +100,7 @@ export function useViewerWorkspace() {
       errorMessage.value =
         error instanceof Error
           ? error.message
-          : 'Не удалось подготовить preview для выбранного файла.'
+          : 'Не удалось подготовить просмотр для выбранного файла.'
     } finally {
       if (selectionRequest === activeSelectionRequest) {
         isLoading.value = false
@@ -114,7 +114,7 @@ export function useViewerWorkspace() {
     selection.value = null
     errorMessage.value = ''
     isLoading.value = false
-    loadingMessage.value = 'Подготавливаю preview...'
+    loadingMessage.value = 'Подготавливаю просмотр...'
     resetViewportTransform()
   }
 
@@ -171,32 +171,32 @@ async function resolveLoadingMessage(file: File): Promise<string> {
   const format = await resolveViewerFormat(file.name, file.type)
 
   if (format?.previewStrategyId === 'server-viewer' && format.family === 'image') {
-    return 'Подготавливаю image preview через backend VIEWER_RESOLVE job. Backend соберёт raster preview и metadata payload, поэтому для больших HEIC/TIFF/RAW upload и server processing могут занять заметное время.'
+    return 'Подготавливаю изображение к просмотру. Для крупных HEIC, TIFF и RAW это может занять немного больше времени.'
   }
 
   if (format?.previewStrategyId === 'server-viewer' && format.family === 'document') {
-    return 'Подготавливаю document preview через backend VIEWER_RESOLVE job. Для больших PDF, офисных документов, EPUB и SQLite upload и server parsing могут занять заметное время.'
+    return 'Подготавливаю документ к просмотру и поиску. Для больших PDF, EPUB, офисных файлов и баз данных это может занять немного больше времени.'
   }
 
   if (format?.previewStrategyId === 'server-viewer' && format.family === 'media') {
-    return 'Подготавливаю video preview через backend VIEWER_RESOLVE job. Backend соберёт unified payload и playback artifact, поэтому для больших контейнеров upload и server transcode могут занять заметное время.'
+    return 'Подготавливаю видео к воспроизведению. Для тяжёлых контейнеров и длинных роликов это может занять немного больше времени.'
   }
 
   if (format?.previewStrategyId === 'server-viewer' && format.family === 'audio') {
-    return 'Подготавливаю audio preview через backend VIEWER_RESOLVE job. Backend соберёт playback artifact, waveform и tag payload, поэтому для длинных lossless-треков upload и server processing могут занять заметное время.'
+    return 'Подготавливаю аудио, волну сигнала и теги. Для длинных lossless-треков это может занять немного больше времени.'
   }
 
   if (format?.family === 'image') {
-    return 'Подготавливаю image preview и metadata payload...'
+    return 'Подготавливаю изображение и метаданные...'
   }
 
   if (format?.family === 'media') {
-    return 'Подготавливаю video preview и playback metadata...'
+    return 'Подготавливаю видео к просмотру...'
   }
 
   if (format?.family === 'audio') {
-    return 'Подготавливаю audio preview, waveform и tag metadata...'
+    return 'Подготавливаю аудио, волну и теги...'
   }
 
-  return 'Подготавливаю preview...'
+  return 'Подготавливаю просмотр...'
 }

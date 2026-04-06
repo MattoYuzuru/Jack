@@ -46,6 +46,12 @@ export interface ViewerDocumentDatabaseTablePreview {
   sample: ViewerDocumentTablePreview
 }
 
+export interface ViewerDocumentEditableDraft {
+  text: string
+  fileName: string
+  editorFormatId: string | null
+}
+
 export interface ViewerDocumentSearchMatch {
   id: string
   excerpt: string
@@ -56,39 +62,46 @@ export type ViewerDocumentLayout =
       mode: 'pdf'
       objectUrl: string
       pageCount: number | null
+      editableDraft: ViewerDocumentEditableDraft | null
     }
   | {
       mode: 'text'
       text: string
       paragraphs: string[]
+      editableDraft: ViewerDocumentEditableDraft | null
     }
   | {
       mode: 'table'
       text: string
       table: ViewerDocumentTablePreview
+      editableDraft: ViewerDocumentEditableDraft | null
     }
   | {
       mode: 'html'
       text: string
       srcDoc: string
       outline: ViewerDocumentOutlineItem[]
+      editableDraft: ViewerDocumentEditableDraft | null
     }
   | {
       mode: 'workbook'
       text: string
       sheets: ViewerDocumentSheetPreview[]
       activeSheetIndex: number
+      editableDraft: ViewerDocumentEditableDraft | null
     }
   | {
       mode: 'slides'
       text: string
       slides: ViewerDocumentSlidePreview[]
+      editableDraft: ViewerDocumentEditableDraft | null
     }
   | {
       mode: 'database'
       text: string
       tables: ViewerDocumentDatabaseTablePreview[]
       activeTableIndex: number
+      editableDraft: ViewerDocumentEditableDraft | null
     }
 
 export interface ViewerDocumentPreviewPayload {

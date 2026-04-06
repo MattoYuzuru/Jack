@@ -127,6 +127,79 @@ class DocumentPreviewApiTests {
 	}
 
 	@Test
+	void markdownPreviewFlowBuildsRenderedArticleAndEditableDraft() throws Exception {
+		var uploadId = upload(
+			"release-notes.md",
+			"text/markdown",
+			"""
+			# Launch plan
+
+			## Checklist
+			- Verify billing
+			- Publish changelog
+			""".getBytes(StandardCharsets.UTF_8)
+		);
+		var completedJob = awaitJobCompletion(createDocumentJob(uploadId));
+		var artifacts = artifactIndex(completedJob);
+		var manifest = parseJson(
+			this.mockMvc.perform(get(artifacts.get("document-preview-manifest").path("downloadPath").asText()))
+				.andExpect(status().isOk())
+				.andReturn()
+		);
+
+		assertThat(manifest.path("layout").path("mode").asText()).isEqualTo("html");
+		assertThat(manifest.path("layout").path("srcDoc").asText()).contains("Launch plan");
+		assertThat(manifest.path("layout").path("outline").get(0).path("label").asText()).isEqualTo("Launch plan");
+		assertThat(manifest.path("layout").path("editableDraft").path("editorFormatId").asText()).isEqualTo("markdown");
+	}
+
+	@Test
+	void envPreviewFlowBuildsKeyValueTableAndEditableDraft() throws Exception {
+		var uploadId = upload(
+			".env",
+			"text/plain",
+			"""
+			APP_NAME=Jack
+			APP_ENV=production
+			# comment
+			APP_PORT=8080
+			""".getBytes(StandardCharsets.UTF_8)
+		);
+		var completedJob = awaitJobCompletion(createDocumentJob(uploadId));
+		var artifacts = artifactIndex(completedJob);
+		var manifest = parseJson(
+			this.mockMvc.perform(get(artifacts.get("document-preview-manifest").path("downloadPath").asText()))
+				.andExpect(status().isOk())
+				.andReturn()
+		);
+
+		assertThat(manifest.path("layout").path("mode").asText()).isEqualTo("table");
+		assertThat(manifest.path("layout").path("table").path("rows")).hasSize(3);
+		assertThat(manifest.path("layout").path("table").path("rows").get(0).get(0).asText()).isEqualTo("APP_NAME");
+		assertThat(manifest.path("layout").path("editableDraft").path("editorFormatId").asText()).isEqualTo("env");
+	}
+
+	@Test
+	void jsonPreviewFallsBackToTextWhenPayloadIsInvalid() throws Exception {
+		var uploadId = upload(
+			"broken.json",
+			"application/json",
+			"{\n  \"service\": \"jack\",\n".getBytes(StandardCharsets.UTF_8)
+		);
+		var completedJob = awaitJobCompletion(createDocumentJob(uploadId));
+		var artifacts = artifactIndex(completedJob);
+		var manifest = parseJson(
+			this.mockMvc.perform(get(artifacts.get("document-preview-manifest").path("downloadPath").asText()))
+				.andExpect(status().isOk())
+				.andReturn()
+		);
+
+		assertThat(manifest.path("layout").path("mode").asText()).isEqualTo("text");
+		assertThat(manifest.path("warnings").get(0).asText()).contains("strict JSON parse");
+		assertThat(manifest.path("layout").path("editableDraft").path("editorFormatId").asText()).isEqualTo("json");
+	}
+
+	@Test
 	void docxPreviewFlowBuildsStructuredHtmlPayload() throws Exception {
 		var uploadId = upload(
 			"proposal.docx",

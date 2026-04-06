@@ -1,8 +1,5 @@
 import { inspectViewerImageMetadata } from './viewer-metadata-client'
-import {
-  createEmptyMetadataPayload,
-  type ViewerMetadataPayload,
-} from './viewer-metadata'
+import { createEmptyMetadataPayload, type ViewerMetadataPayload } from './viewer-metadata'
 
 export interface ViewerBinaryPreview {
   bytes: Uint8Array

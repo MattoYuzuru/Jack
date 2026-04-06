@@ -77,7 +77,7 @@ type SizeUnit = 'KB' | 'MB'
 
 const MAX_RESULT_HISTORY = 6
 const RESOLUTION_OPTIONS: SelectOption[] = [
-  { value: 'original', label: 'Original' },
+  { value: 'original', label: 'Исходный размер' },
   { value: '2160p', label: '2160p / 4K' },
   { value: '1440p', label: '1440p' },
   { value: '1080p', label: '1080p' },
@@ -85,7 +85,7 @@ const RESOLUTION_OPTIONS: SelectOption[] = [
   { value: '480p', label: '480p' },
 ]
 const FPS_OPTIONS: SelectOption[] = [
-  { value: '', label: 'Original FPS' },
+  { value: '', label: 'Исходная частота' },
   { value: '60', label: '60 fps' },
   { value: '30', label: '30 fps' },
   { value: '24', label: '24 fps' },
@@ -93,14 +93,14 @@ const FPS_OPTIONS: SelectOption[] = [
   { value: '12', label: '12 fps' },
 ]
 const VIDEO_BITRATE_OPTIONS: SelectOption[] = [
-  { value: '', label: 'Auto bitrate' },
+  { value: '', label: 'Авто' },
   { value: '5000', label: '5000 kbps' },
   { value: '2500', label: '2500 kbps' },
   { value: '1200', label: '1200 kbps' },
   { value: '800', label: '800 kbps' },
 ]
 const AUDIO_BITRATE_OPTIONS: SelectOption[] = [
-  { value: '', label: 'Auto bitrate' },
+  { value: '', label: 'Авто' },
   { value: '192', label: '192 kbps' },
   { value: '160', label: '160 kbps' },
   { value: '128', label: '128 kbps' },
@@ -191,7 +191,9 @@ export function useCompressionWorkspace() {
       return selectedTargetExtension.value
     }
 
-    return prepared.value?.source.defaultTargetExtension ?? availableTargets.value[0]?.extension ?? ''
+    return (
+      prepared.value?.source.defaultTargetExtension ?? availableTargets.value[0]?.extension ?? ''
+    )
   })
   const activeTarget = computed<CompressionTargetFormatDefinition | null>(
     () =>
@@ -289,7 +291,7 @@ export function useCompressionWorkspace() {
   async function selectFile(file: File): Promise<void> {
     isLoading.value = true
     errorMessage.value = ''
-    processingMessage.value = 'Проверяю compression matrix и подбираю доступные targets...'
+    processingMessage.value = 'Проверяю доступные режимы и форматы сжатия...'
 
     try {
       await hydrateCapabilities()
@@ -297,8 +299,7 @@ export function useCompressionWorkspace() {
       const source = await resolveCompressionSourceFormat(file.name, file.type)
       if (!source || !source.available) {
         throw new Error(
-          source?.availabilityDetail ||
-            'Compression route пока не поддерживает этот файл в текущем backend окружении.',
+          source?.availabilityDetail || 'Этот файл пока нельзя сжать в текущем окружении.',
         )
       }
 
@@ -346,7 +347,7 @@ export function useCompressionWorkspace() {
 
     const targetSizeBytes = parseTargetSizeBytes(targetSizeValue.value, targetSizeUnit.value)
     if (activeMode.value.requiresTargetSize && targetSizeBytes == null) {
-      errorMessage.value = 'Для target-size режима укажи положительный лимит размера.'
+      errorMessage.value = 'Для режима с лимитом размера укажи положительное значение.'
       return
     }
 
@@ -354,7 +355,8 @@ export function useCompressionWorkspace() {
     const request: CompressionRunRequest = {
       file: prepared.value.file,
       mode: activeMode.value.id,
-      targetExtension: selectedTargetExtension.value === 'auto' ? null : selectedTargetExtension.value,
+      targetExtension:
+        selectedTargetExtension.value === 'auto' ? null : selectedTargetExtension.value,
       targetSizeBytes,
       maxWidth: showResolutionControl.value ? sizing.maxWidth : null,
       maxHeight: showResolutionControl.value ? sizing.maxHeight : null,
@@ -373,7 +375,7 @@ export function useCompressionWorkspace() {
     lastRequest.value = request
     errorMessage.value = ''
     isCompressing.value = true
-    processingMessage.value = 'Создаю compression job...'
+    processingMessage.value = 'Запускаю сжатие...'
 
     try {
       const response = await runServerCompression({
@@ -402,14 +404,14 @@ export function useCompressionWorkspace() {
         }
       }
       processingMessage.value = response.manifest.targetMet
-        ? 'Compression завершён и уложился в выбранный size profile.'
-        : 'Compression завершён: backend вернул лучший найденный result в рамках текущих ограничений.'
+        ? 'Сжатие завершено и уложилось в выбранный лимит.'
+        : 'Сжатие завершено. Сервис сохранил лучший найденный вариант в рамках заданных ограничений.'
     } catch (error) {
       if (error instanceof ProcessingJobCancelledError) {
-        processingMessage.value = 'Compression job отменён.'
+        processingMessage.value = 'Сжатие остановлено.'
       } else {
         errorMessage.value =
-          error instanceof Error ? error.message : 'Compression завершился с ошибкой.'
+          error instanceof Error ? error.message : 'Сжатие завершилось с ошибкой.'
         processingMessage.value = ''
       }
     } finally {
@@ -437,10 +439,9 @@ export function useCompressionWorkspace() {
       const cancelledJob = await cancelProcessingJob(activeJobId.value)
       activeJobStatus.value = cancelledJob.status
       activeJobProgressPercent.value = cancelledJob.progressPercent
-      processingMessage.value = cancelledJob.message || 'Compression job отменён.'
+      processingMessage.value = cancelledJob.message || 'Сжатие остановлено.'
     } catch (error) {
-      errorMessage.value =
-        error instanceof Error ? error.message : 'Не удалось отменить compression job.'
+      errorMessage.value = error instanceof Error ? error.message : 'Не удалось остановить сжатие.'
     } finally {
       isCancelling.value = false
     }

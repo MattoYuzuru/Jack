@@ -64,7 +64,8 @@ export function useViewerVideoPlayback(
       volume.value = 1
       playbackRate.value = 1
       currentTime.value = 0
-      durationSeconds.value = selection.value?.kind === 'video' ? selection.value.layout.durationSeconds : 0
+      durationSeconds.value =
+        selection.value?.kind === 'video' ? selection.value.layout.durationSeconds : 0
       isPictureInPictureActive.value = false
       isLooping.value = false
       assumedFrameRate.value = 24
@@ -177,8 +178,8 @@ export function useViewerVideoPlayback(
       'pictureInPictureEnabled' in document &&
       Boolean(document.pictureInPictureEnabled),
   )
-  const activeSubtitleTrack = computed(() =>
-    subtitleTracks.value.find((track) => track.id === activeSubtitleTrackId.value) ?? null,
+  const activeSubtitleTrack = computed(
+    () => subtitleTracks.value.find((track) => track.id === activeSubtitleTrackId.value) ?? null,
   )
   const subtitleCueCount = computed(() =>
     subtitleTracks.value.reduce((total, track) => total + track.cueCount, 0),
@@ -318,7 +319,8 @@ export function useViewerVideoPlayback(
       overflowTracks.forEach((track) => URL.revokeObjectURL(track.objectUrl))
 
       subtitleTracks.value = mergedTracks.slice(-8)
-      activeSubtitleTrackId.value = nextTracks[nextTracks.length - 1]?.id ?? activeSubtitleTrackId.value
+      activeSubtitleTrackId.value =
+        nextTracks[nextTracks.length - 1]?.id ?? activeSubtitleTrackId.value
       subtitleMessage.value = `Subtitle tracks загружены: ${nextTracks.map((track) => track.label).join(', ')}.`
     } else if (rejectedFiles.length) {
       subtitleMessage.value = rejectedFiles.join(' ')

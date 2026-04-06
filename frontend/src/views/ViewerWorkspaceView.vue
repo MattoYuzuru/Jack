@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRouter } from 'vue-router'
 import { useViewerWorkspace } from '../features/viewer/composables/useViewerWorkspace'
 import { useViewerImageTools } from '../features/viewer/composables/useViewerImageTools'
 import {
@@ -25,6 +25,8 @@ import {
   canEmbedMetadata,
   exportViewerMetadata,
 } from '../features/viewer/application/viewer-metadata-writer'
+import { stashEditorIncomingDraft } from '../features/editor/application/editor-handoff'
+import type { ViewerFormatDefinition } from '../features/viewer/domain/viewer-registry'
 
 const fileInput = ref<HTMLInputElement | null>(null)
 const subtitleInput = ref<HTMLInputElement | null>(null)
@@ -45,25 +47,29 @@ const metadataDraft = ref<ViewerEditableMetadata>(createEmptyEditableMetadata())
 const isSavingMetadata = ref(false)
 const metadataSaveMessage = ref('')
 const documentActionMessage = ref('')
+const documentDraftText = ref('')
+const documentDraftBaseline = ref('')
+
+const router = useRouter()
 
 const videoPlaybackRates = [0.5, 0.75, 1, 1.25, 1.5, 2]
 const audioPlaybackRates = [0.75, 1, 1.25, 1.5, 2]
 const videoFrameRateOptions = [23.976, 24, 25, 29.97, 30, 50, 59.94, 60]
 const videoShortcutHints = [
-  { keys: 'Space', description: 'Play / pause' },
-  { keys: '← / →', description: 'Seek -5s / +5s' },
-  { keys: 'Shift + ← / →', description: 'Step one frame назад / вперёд' },
-  { keys: 'M', description: 'Mute / unmute' },
-  { keys: 'L', description: 'Toggle loop' },
-  { keys: 'P', description: 'Picture-in-picture' },
-  { keys: 'C', description: 'Copy current timestamp' },
+  { keys: 'Space', description: 'Пауза / воспроизведение' },
+  { keys: '← / →', description: 'Шаг -5с / +5с' },
+  { keys: 'Shift + ← / →', description: 'Один кадр назад / вперёд' },
+  { keys: 'M', description: 'Вкл / выкл звук' },
+  { keys: 'L', description: 'Вкл / выкл повтор' },
+  { keys: 'P', description: 'Картинка в картинке' },
+  { keys: 'C', description: 'Скопировать текущее время' },
 ]
 const audioShortcutHints = [
-  { keys: 'Space', description: 'Play / pause' },
-  { keys: '← / →', description: 'Seek -10s / +10s' },
-  { keys: 'M', description: 'Mute / unmute' },
-  { keys: 'L', description: 'Toggle loop' },
-  { keys: 'C', description: 'Copy current timestamp' },
+  { keys: 'Space', description: 'Пауза / воспроизведение' },
+  { keys: '← / →', description: 'Шаг -10с / +10с' },
+  { keys: 'M', description: 'Вкл / выкл звук' },
+  { keys: 'L', description: 'Вкл / выкл повтор' },
+  { keys: 'C', description: 'Скопировать текущее время' },
 ]
 
 const browserNativeFormats = computed(() =>
@@ -97,6 +103,108 @@ const activeAudioFormats = computed(() =>
 const plannedAudioFormats = computed(() =>
   audioFormats.value.filter((definition) => definition.previewPipeline === 'planned'),
 )
+
+function formatViewerFormatStatus(format: ViewerFormatDefinition): string {
+  if (!format.available) {
+    return 'Временно недоступно'
+  }
+
+  if (format.previewPipeline === 'planned') {
+    return 'Скоро в Viewer'
+  }
+
+  if (format.previewPipeline === 'browser-native') {
+    return 'Открывается сразу'
+  }
+
+  return format.family === 'document' ? 'Расширенный просмотр' : 'Подготовленный просмотр'
+}
+
+function formatViewerFormatNote(format: ViewerFormatDefinition): string {
+  switch (format.extension) {
+    case 'jpg':
+    case 'jpeg':
+      return 'Подходит для фотографий и быстро открывается вместе с основными метаданными.'
+    case 'png':
+      return 'Удобен для макетов, скриншотов и изображений с прозрачностью.'
+    case 'webp':
+      return 'Хорошо подходит для веб-графики и открывается без дополнительной подготовки.'
+    case 'avif':
+      return 'Современный компактный формат для изображений с высоким качеством.'
+    case 'gif':
+      return 'Сохраняет анимацию и запускается сразу после загрузки.'
+    case 'bmp':
+      return 'Полезен для технических исходников и файлов без сжатия.'
+    case 'svg':
+      return 'Вектор открывается чисто и без потери резкости при масштабировании.'
+    case 'ico':
+      return 'Можно быстро проверить набор иконок и их визуальное качество.'
+    case 'heic':
+      return 'Подходит для фото с iPhone и новых камер: Jack готовит просмотр и метаданные.'
+    case 'tiff':
+      return 'Удобен для сканов и печатных материалов: Jack собирает просмотр и основные сведения.'
+    case 'raw':
+      return 'Подходит для исходников с камеры: Jack извлекает превью и параметры съёмки.'
+    case 'pdf':
+      return 'Открывается постранично, с поиском по тексту и быстрым переходом по документу.'
+    case 'txt':
+      return 'Показывает текст без лишнего оформления и позволяет быстро искать нужные фрагменты.'
+    case 'md':
+      return 'Показывает структуру документа, заголовки и удобный текст для чтения.'
+    case 'json':
+      return 'Помогает быстро проверить структуру данных и рабочую копию для правок.'
+    case 'yaml':
+      return 'Подходит для конфигов: видно секции, структуру и удобную рабочую копию.'
+    case 'xml':
+      return 'Открывает XML как читаемый документ с сохранением структуры.'
+    case 'env':
+      return 'Показывает переменные среды в удобном виде и помогает быстро поправить значения.'
+    case 'csv':
+    case 'tsv':
+      return 'Открывает табличные данные по строкам и колонкам без лишней подготовки.'
+    case 'html':
+      return 'Показывает очищенный HTML с удобным просмотром структуры и текста.'
+    case 'log':
+      return 'Подходит для длинных логов с поиском по содержимому.'
+    case 'sql':
+      return 'Удобно для чтения SQL-скриптов, поиска и быстрой рабочей копии.'
+    case 'rtf':
+    case 'doc':
+    case 'docx':
+    case 'odt':
+      return 'Показывает текст документа, структуру и удобный режим чтения.'
+    case 'xls':
+    case 'xlsx':
+      return 'Открывает листы и помогает быстро проверить таблицы и значения.'
+    case 'pptx':
+      return 'Показывает слайды и текстовую структуру презентации.'
+    case 'epub':
+      return 'Подходит для чтения книги по главам и поиска по содержимому.'
+    case 'db':
+    case 'sqlite':
+      return 'Показывает таблицы, поля и примеры строк без отдельного клиента базы данных.'
+    case 'mp4':
+    case 'mov':
+    case 'webm':
+      return 'Видео запускается сразу с навигацией по времени, кадрам и субтитрам.'
+    case 'avi':
+    case 'mkv':
+    case 'wmv':
+    case 'flv':
+      return 'Jack подготавливает стабильное воспроизведение даже для тяжёлых контейнеров.'
+    case 'mp3':
+    case 'wav':
+    case 'ogg':
+    case 'opus':
+      return 'Сразу доступны воспроизведение, длительность, волна и основные теги.'
+    case 'aac':
+    case 'flac':
+    case 'aiff':
+      return 'Jack готовит волну, обложку и теги для компактных и lossless-дорожек.'
+    default:
+      return format.notes
+  }
+}
 
 const {
   selection,
@@ -231,6 +339,143 @@ watch(
   },
 )
 
+watch(
+  () => (selection.value?.kind === 'document' ? selection.value.layout.editableDraft : null),
+  (editableDraft) => {
+    documentDraftText.value = editableDraft?.text ?? ''
+    documentDraftBaseline.value = editableDraft?.text ?? ''
+  },
+  { immediate: true },
+)
+
+function formatSelectionPreviewLabel(): string {
+  if (!selection.value) {
+    return ''
+  }
+
+  if (selection.value.kind === 'image') {
+    return selection.value.format.previewPipeline === 'browser-native'
+      ? 'Мгновенный просмотр'
+      : 'Подготовленный просмотр'
+  }
+
+  if (selection.value.kind === 'video') {
+    return 'Видеоплеер'
+  }
+
+  if (selection.value.kind === 'audio') {
+    return 'Аудиоплеер'
+  }
+
+  if (selection.value.kind !== 'document') {
+    return 'Просмотр'
+  }
+
+  switch (selection.value.layout.mode) {
+    case 'pdf':
+      return 'Постраничный просмотр'
+    case 'table':
+      return 'Табличный просмотр'
+    case 'html':
+      return 'Веб-предпросмотр'
+    case 'workbook':
+      return 'Рабочая книга'
+    case 'slides':
+      return 'Просмотр слайдов'
+    case 'database':
+      return 'Структура базы'
+    default:
+      return 'Текстовый просмотр'
+  }
+}
+
+function formatViewerFactLabel(label: string): string {
+  switch (label) {
+    case 'Headings':
+      return 'Заголовки'
+    case 'Delimiter':
+      return 'Разделитель'
+    case 'Sandbox':
+      return 'Режим HTML'
+    case 'Top-level keys':
+      return 'Ключи верхнего уровня'
+    case 'Root node':
+      return 'Корневой узел'
+    case 'Outline entries':
+      return 'Элементы структуры'
+    case 'Sheets':
+      return 'Листы'
+    case 'Rows':
+      return 'Строки'
+    case 'Columns':
+      return 'Колонки'
+    case 'Views':
+      return 'Представления'
+    case 'Triggers':
+      return 'Триггеры'
+    case 'Sections':
+      return 'Разделы'
+    case 'Blocks':
+      return 'Блоки'
+    case 'Top-level symbols':
+      return 'Символы верхнего уровня'
+    case 'Root':
+      return 'Корень'
+    case 'Режим preview':
+      return 'Режим просмотра'
+    default:
+      return label
+  }
+}
+
+function formatViewerFactValue(_label: string, value: string): string {
+  switch (value) {
+    case 'Browser preview only':
+      return 'Без извлечения текста'
+    case 'Backend srcdoc':
+      return 'Безопасный встроенный просмотр'
+    case 'Backend PDF text extraction':
+      return 'С поиском по тексту'
+    case 'Rendered article':
+      return 'Статья'
+    case 'Structured config':
+      return 'Структурный просмотр'
+    case 'Config review':
+      return 'Проверка конфигурации'
+    case 'Schema read':
+      return 'Просмотр структуры'
+    case 'Config table':
+      return 'Таблица переменных'
+    case 'Delimited table preview':
+      return 'Табличный просмотр'
+    case 'Tabbed table preview':
+      return 'Таблица с таб-разделителями'
+    case 'PDF server preview':
+      return 'Постраничный просмотр'
+    case 'HTML sanitized preview':
+      return 'Безопасный HTML'
+    case 'Markdown reading preview':
+      return 'Чтение Markdown'
+    case 'JSON structured preview':
+      return 'Структурный JSON'
+    case 'YAML structured preview':
+      return 'Структурный YAML'
+    case 'XML structure preview':
+      return 'Структура XML'
+    case 'Environment config preview':
+      return 'Переменные окружения'
+    default:
+      return value
+  }
+}
+
+function normalizeViewerFacts(facts: Array<{ label: string; value: string }>) {
+  return facts.map((fact) => ({
+    label: formatViewerFactLabel(fact.label),
+    value: formatViewerFactValue(fact.label, fact.value),
+  }))
+}
+
 const selectionFacts = computed(() => {
   if (!selection.value) {
     return []
@@ -240,9 +485,9 @@ const selectionFacts = computed(() => {
     { label: 'Имя файла', value: selection.value.file.name },
     {
       label: 'Размер',
-      value: new Intl.NumberFormat('ru-RU').format(selection.value.file.size) + ' bytes',
+      value: new Intl.NumberFormat('ru-RU').format(selection.value.file.size) + ' байт',
     },
-    { label: 'Расширение', value: selection.value.extension || 'unknown' },
+    { label: 'Расширение', value: selection.value.extension || 'неизвестно' },
     { label: 'MIME', value: selection.value.file.type || 'Не определён' },
   ]
 
@@ -252,34 +497,34 @@ const selectionFacts = computed(() => {
       value: `${selection.value.dimensions.width} x ${selection.value.dimensions.height}`,
     })
     items.push({
-      label: 'Preview path',
-      value: selection.value.previewLabel,
+      label: 'Режим просмотра',
+      value: formatSelectionPreviewLabel(),
     })
-    items.push(...selection.value.metadata.summary)
+    items.push(...normalizeViewerFacts(selection.value.metadata.summary))
   }
 
   if (selection.value.kind === 'document') {
     items.push({
-      label: 'Preview path',
-      value: selection.value.previewLabel,
+      label: 'Режим просмотра',
+      value: formatSelectionPreviewLabel(),
     })
-    items.push(...selection.value.summary)
+    items.push(...normalizeViewerFacts(selection.value.summary))
   }
 
   if (selection.value.kind === 'video') {
     items.push({
-      label: 'Preview path',
-      value: selection.value.previewLabel,
+      label: 'Режим просмотра',
+      value: formatSelectionPreviewLabel(),
     })
-    items.push(...selection.value.summary)
+    items.push(...normalizeViewerFacts(selection.value.summary))
   }
 
   if (selection.value.kind === 'audio') {
     items.push({
-      label: 'Preview path',
-      value: selection.value.previewLabel,
+      label: 'Режим просмотра',
+      value: formatSelectionPreviewLabel(),
     })
-    items.push(...selection.value.summary)
+    items.push(...normalizeViewerFacts(selection.value.summary))
   }
 
   return items
@@ -349,10 +594,12 @@ const videoStageMetrics = computed(() => {
   }
 
   return [
-    `Duration: ${formatViewerVideoDuration(selection.value.layout.durationSeconds)}`,
-    `Frame: ${selection.value.layout.width} x ${selection.value.layout.height}`,
-    `Aspect: ${selection.value.layout.metadata.aspectRatio}`,
-    subtitleTracks.value.length ? `Subs: ${subtitleTracks.value.length}` : 'Subs: off',
+    `Длительность: ${formatViewerVideoDuration(selection.value.layout.durationSeconds)}`,
+    `Кадр: ${selection.value.layout.width} x ${selection.value.layout.height}`,
+    `Пропорции: ${selection.value.layout.metadata.aspectRatio}`,
+    subtitleTracks.value.length
+      ? `Субтитры: ${subtitleTracks.value.length}`
+      : 'Субтитры: выключены',
   ]
 })
 
@@ -363,32 +610,32 @@ const videoMetadataCards = computed(() => {
 
   return [
     {
-      label: 'Aspect Ratio',
+      label: 'Пропорции кадра',
       value: selection.value.layout.metadata.aspectRatio,
     },
     {
-      label: 'Orientation',
+      label: 'Ориентация',
       value: selection.value.layout.metadata.orientation,
     },
     {
-      label: 'Estimated Bitrate',
+      label: 'Оценка битрейта',
       value: formatViewerVideoBitrate(
         selection.value.layout.metadata.estimatedBitrateBitsPerSecond,
       ),
     },
     {
-      label: 'Approx Frame',
-      value: approximateFrameNumber.value ? `#${approximateFrameNumber.value}` : 'n/a',
+      label: 'Текущий кадр',
+      value: approximateFrameNumber.value ? `#${approximateFrameNumber.value}` : '—',
     },
     {
-      label: 'Subtitles',
+      label: 'Субтитры',
       value: subtitleTracks.value.length
-        ? `${subtitleTracks.value.length} tracks / ${subtitleCueCount.value} cues`
-        : 'No sidecar loaded',
+        ? `${subtitleTracks.value.length} дорожек / ${subtitleCueCount.value} реплик`
+        : 'Не подключены',
     },
     {
-      label: 'Poster Gallery',
-      value: posterCaptures.value.length ? `${posterCaptures.value.length} captures` : 'Empty',
+      label: 'Кадры',
+      value: posterCaptures.value.length ? `${posterCaptures.value.length} сохранено` : 'Пусто',
     },
   ]
 })
@@ -423,10 +670,10 @@ const audioStageMetrics = computed(() => {
   }
 
   return [
-    `Duration: ${formatViewerAudioDuration(selection.value.layout.durationSeconds)}`,
-    `Rate: ${formatViewerSampleRate(selection.value.layout.metadata.sampleRate)}`,
-    `Channels: ${formatViewerChannelLayout(selection.value.layout.metadata.channelCount)}`,
-    selection.value.artworkDataUrl ? 'Artwork: embedded' : 'Artwork: none',
+    `Длительность: ${formatViewerAudioDuration(selection.value.layout.durationSeconds)}`,
+    `Частота: ${formatViewerSampleRate(selection.value.layout.metadata.sampleRate)}`,
+    `Каналы: ${formatViewerChannelLayout(selection.value.layout.metadata.channelCount)}`,
+    selection.value.artworkDataUrl ? 'Обложка: есть' : 'Обложка: нет',
   ]
 })
 
@@ -437,32 +684,32 @@ const audioMetadataCards = computed(() => {
 
   return [
     {
-      label: 'Estimated Bitrate',
+      label: 'Оценка битрейта',
       value: formatViewerAudioBitrate(
         selection.value.layout.metadata.estimatedBitrateBitsPerSecond,
       ),
     },
     {
-      label: 'Sample Rate',
+      label: 'Частота',
       value: formatViewerSampleRate(selection.value.layout.metadata.sampleRate),
     },
     {
-      label: 'Channels',
+      label: 'Каналы',
       value: formatViewerChannelLayout(selection.value.layout.metadata.channelCount),
     },
     {
-      label: 'Codec',
-      value: selection.value.layout.metadata.codec ?? 'n/a',
+      label: 'Кодек',
+      value: selection.value.layout.metadata.codec ?? '—',
     },
     {
-      label: 'Container',
-      value: selection.value.layout.metadata.container ?? 'n/a',
+      label: 'Контейнер',
+      value: selection.value.layout.metadata.container ?? '—',
     },
     {
-      label: 'Waveform',
+      label: 'Волна',
       value: selection.value.layout.waveform.length
-        ? `${selection.value.layout.waveform.length} buckets`
-        : 'Unavailable',
+        ? `${selection.value.layout.waveform.length} сегментов`
+        : 'Недоступно',
     },
   ]
 })
@@ -539,22 +786,65 @@ const activeDocumentDatabaseTable = computed(() => {
   return documentDatabase.value.tables[safeIndex] ?? null
 })
 
+const activeDocumentEditableDraft = computed(() =>
+  selection.value?.kind === 'document' ? selection.value.layout.editableDraft : null,
+)
+
+const canQuickEditDocument = computed(() => Boolean(activeDocumentEditableDraft.value?.text))
+
+const documentDraftFileName = computed(
+  () => activeDocumentEditableDraft.value?.fileName || selection.value?.file.name || 'document.txt',
+)
+
+const documentDraftEditorFormatId = computed(
+  () => activeDocumentEditableDraft.value?.editorFormatId || 'txt',
+)
+
+const documentDraftIsDirty = computed(
+  () => canQuickEditDocument.value && documentDraftText.value !== documentDraftBaseline.value,
+)
+
+const documentDraftFacts = computed(() => {
+  if (!canQuickEditDocument.value) {
+    return []
+  }
+
+  return [
+    {
+      label: 'Рабочий файл',
+      value: documentDraftFileName.value,
+    },
+    {
+      label: 'Строк',
+      value: String(documentDraftText.value ? documentDraftText.value.split('\n').length : 0),
+    },
+    {
+      label: 'Символов',
+      value: String(documentDraftText.value.length),
+    },
+    {
+      label: 'Статус',
+      value: documentDraftIsDirty.value ? 'Есть правки' : 'Без изменений',
+    },
+  ]
+})
+
 const documentModeLabel = computed(() => {
   if (selection.value?.kind !== 'document') {
     return ''
   }
 
   const labelMap: Record<string, string> = {
-    pdf: 'PDF Embed',
-    text: 'Text Reader',
-    table: 'Table Preview',
-    html: 'HTML Canvas',
-    workbook: 'Workbook Preview',
-    slides: 'Slide Deck',
-    database: 'Database Preview',
+    pdf: 'PDF',
+    text: 'Текст',
+    table: 'Таблица',
+    html: 'HTML',
+    workbook: 'Листы',
+    slides: 'Слайды',
+    database: 'База данных',
   }
 
-  return labelMap[selection.value.layout.mode] ?? 'Document Preview'
+  return labelMap[selection.value.layout.mode] ?? 'Документ'
 })
 
 const documentStageMetrics = computed(() => {
@@ -567,20 +857,20 @@ const documentStageMetrics = computed(() => {
 
 const documentSearchPlaceholder = computed(() => {
   if (selection.value?.kind !== 'document') {
-    return 'Search document...'
+    return 'Найти по документу...'
   }
 
   const placeholderMap: Record<string, string> = {
-    pdf: 'invoice, total, section...',
-    text: 'paragraph, keyword, note...',
-    table: 'column, customer, value...',
-    html: 'heading, link text, paragraph...',
-    workbook: 'sheet name, cell value, total...',
-    slides: 'slide title, bullet, agenda...',
-    database: 'table, column, schema, value...',
+    pdf: 'договор, сумма, раздел...',
+    text: 'абзац, слово, заметка...',
+    table: 'колонка, клиент, значение...',
+    html: 'заголовок, ссылка, абзац...',
+    workbook: 'лист, ячейка, итог...',
+    slides: 'заголовок, пункт, повестка...',
+    database: 'таблица, поле, схема, значение...',
   }
 
-  return placeholderMap[selection.value.layout.mode] ?? 'Search document...'
+  return placeholderMap[selection.value.layout.mode] ?? 'Найти по документу...'
 })
 
 const activeDocumentMatch = computed(
@@ -661,7 +951,7 @@ async function saveMetadataDraft() {
     metadataSaveMessage.value =
       result.mode === 'embedded-jpeg'
         ? 'Новый JPEG с обновлёнными EXIF-полями собран и скачан.'
-        : 'Metadata sidecar JSON собран и скачан.'
+        : 'JSON-файл с изменениями метаданных собран и скачан.'
   } catch (error) {
     metadataSaveMessage.value =
       error instanceof Error ? error.message : 'Не удалось собрать metadata export.'
@@ -711,6 +1001,56 @@ function downloadDocumentText() {
     `${baseName}.jack-extracted.txt`,
   )
   documentActionMessage.value = 'Извлечённый text layer собран в отдельный `.txt` файл.'
+}
+
+async function copyDocumentDraft() {
+  if (!canQuickEditDocument.value) {
+    return
+  }
+
+  if (!navigator.clipboard) {
+    documentActionMessage.value = 'Clipboard API недоступен в текущем окружении.'
+    return
+  }
+
+  await navigator.clipboard.writeText(documentDraftText.value)
+  documentActionMessage.value = 'Рабочая копия документа скопирована в буфер.'
+}
+
+function downloadDocumentDraft() {
+  if (!canQuickEditDocument.value) {
+    return
+  }
+
+  downloadBlob(
+    new Blob([documentDraftText.value], { type: 'text/plain;charset=utf-8' }),
+    documentDraftFileName.value,
+  )
+  documentActionMessage.value = `Рабочая копия сохранена как ${documentDraftFileName.value}.`
+}
+
+function resetDocumentDraft() {
+  if (!canQuickEditDocument.value) {
+    return
+  }
+
+  documentDraftText.value = documentDraftBaseline.value
+  documentActionMessage.value = 'Рабочая копия возвращена к исходному содержимому.'
+}
+
+async function openDocumentDraftInEditor() {
+  if (!canQuickEditDocument.value) {
+    return
+  }
+
+  stashEditorIncomingDraft({
+    formatId: documentDraftEditorFormatId.value,
+    fileName: documentDraftFileName.value,
+    content: documentDraftText.value,
+    sourceLabel: selection.value?.file.name || 'viewer',
+  })
+
+  await router.push('/editor')
 }
 
 function clearDocumentSearch() {
@@ -809,31 +1149,29 @@ onBeforeUnmount(() => {
       <div class="brand-lockup">
         <img class="brand-lockup__logo" src="/logo.svg" alt="Логотип Jack" />
         <div class="brand-lockup__copy">
-          <p class="eyebrow">Jack of all trades</p>
-          <p class="brand-lockup__title">Viewer Workspace</p>
+          <p class="eyebrow">Jack · Viewer</p>
+          <p class="brand-lockup__title">Просмотр файлов</p>
         </div>
       </div>
 
       <div class="app-topbar__status">
-        <RouterLink class="back-link" to="/">Back to Home</RouterLink>
-        <span class="chip-pill">Images + Docs + Media</span>
-        <span class="chip-pill chip-pill--accent">Audio Workbench</span>
+        <RouterLink class="back-link" to="/">На главную</RouterLink>
+        <span class="chip-pill">Изображения, документы, медиа</span>
+        <span class="chip-pill chip-pill--accent">Видео и аудио в одном экране</span>
       </div>
     </header>
 
     <section class="viewer-hero-grid">
       <article class="panel-surface viewer-intro">
-        <p class="eyebrow">Iteration 03 · File Viewer</p>
+        <p class="eyebrow">Открыть, просмотреть, найти нужное</p>
         <h1>
-          Viewer теперь закрывает и audio slice: waveform, tag metadata и точный playback внутри
-          того же workspace.
+          Viewer помогает быстро разобраться с файлом: открыть документ, прослушать трек, посмотреть
+          видео или изучить изображение без прыжков между разными инструментами.
         </h1>
         <p class="lead">
-          Архитектура остаётся registry-driven: image, document, video и audio семьи живут в одном
-          маршруте, но backend теперь собирает для всех non-native форматов единый
-          `VIEWER_RESOLVE` payload/artifact contract. На клиенте остаются stage, interaction
-          tooling и native rendering, а heavy image/document/media/audio orchestration больше не
-          размазана по format-specific веткам.
+          Один экран закрывает основные сценарии просмотра: документы с поиском и структурой, видео
+          с точной навигацией, аудио с волной и тегами, изображения с цветовым и метаданным
+          разбором. Для сложных форматов Jack сам подготавливает удобное представление.
         </p>
 
         <div
@@ -860,12 +1198,11 @@ onBeforeUnmount(() => {
           />
 
           <div class="viewer-dropzone__copy">
-            <strong>Загрузить файл в viewer</strong>
+            <strong>Открой файл для просмотра</strong>
             <span>
-              Viewer уже держит image и document roadmap, video workbench и теперь закрывает весь
-              audio slice: `mp3`, `wav`, `aac`, `flac`, `ogg`, `opus`, `aiff` сходятся в один
-              workspace через native path или unified backend viewer route, а поверх этого работают
-              waveform, artwork, keyboard flow и richer tag metadata inspector.
+              Поддерживаются изображения, документы, таблицы, презентации, PDF, видео и аудио. После
+              загрузки Jack сразу покажет подходящий режим просмотра, быстрые действия и полезные
+              детали именно для этого типа файла.
             </span>
           </div>
 
@@ -875,7 +1212,7 @@ onBeforeUnmount(() => {
               type="button"
               @click="openFilePicker"
             >
-              Pick File
+              Выбрать файл
             </button>
             <button
               class="action-button"
@@ -883,24 +1220,24 @@ onBeforeUnmount(() => {
               :disabled="!selection"
               @click="clearSelection"
             >
-              Clear
+              Очистить
             </button>
           </div>
         </div>
 
         <div class="signal-row">
-          <span class="chip-pill">Image tooling live</span>
-          <span class="chip-pill">Document stack complete</span>
-          <span class="chip-pill">Video precision controls</span>
-          <span class="chip-pill">Audio waveform + tags</span>
-          <span class="chip-pill">Legacy media covered</span>
+          <span class="chip-pill">Изображения и метаданные</span>
+          <span class="chip-pill">Документы с поиском</span>
+          <span class="chip-pill">Видео с точной навигацией</span>
+          <span class="chip-pill">Аудио с волной и тегами</span>
+          <span class="chip-pill">Быстрый переход в editor</span>
         </div>
       </article>
 
       <article class="panel-surface viewer-stage-card">
         <div class="viewer-stage-card__header">
           <div>
-            <p class="eyebrow">Preview Stage</p>
+            <p class="eyebrow">Экран просмотра</p>
             <h2>{{ selection?.file.name ?? 'Выбери файл для просмотра' }}</h2>
           </div>
 
@@ -927,7 +1264,7 @@ onBeforeUnmount(() => {
               :disabled="selection?.kind !== 'image'"
               @click="rotateLeft"
             >
-              Left
+              Влево
             </button>
             <button
               class="icon-button"
@@ -935,7 +1272,7 @@ onBeforeUnmount(() => {
               :disabled="selection?.kind !== 'image'"
               @click="rotateRight"
             >
-              Right
+              Вправо
             </button>
             <button
               class="icon-button"
@@ -943,7 +1280,7 @@ onBeforeUnmount(() => {
               :disabled="selection?.kind !== 'image'"
               @click="resetViewportTransform"
             >
-              Reset
+              Сброс
             </button>
             <button
               class="icon-button"
@@ -951,7 +1288,7 @@ onBeforeUnmount(() => {
               :disabled="!selection"
               @click="toggleFullscreen"
             >
-              {{ isFullscreen ? 'Exit FS' : 'Fullscreen' }}
+              {{ isFullscreen ? 'Выйти из полного экрана' : 'Полный экран' }}
             </button>
             <button
               class="icon-button"
@@ -959,7 +1296,7 @@ onBeforeUnmount(() => {
               :disabled="selection?.kind !== 'image'"
               @click="toggleTransparencyGrid"
             >
-              {{ isTransparencyGridVisible ? 'Hide Grid' : 'Show Grid' }}
+              {{ isTransparencyGridVisible ? 'Скрыть сетку' : 'Показать сетку' }}
             </button>
           </div>
         </div>
@@ -972,12 +1309,12 @@ onBeforeUnmount(() => {
           }"
         >
           <div v-if="isLoading" class="viewer-empty-state">
-            <strong>Подготавливаю preview...</strong>
+            <strong>Подготавливаю просмотр...</strong>
             <span>{{ loadingMessage }}</span>
           </div>
 
           <div v-else-if="errorMessage" class="viewer-empty-state viewer-empty-state--warning">
-            <strong>Preview не собран</strong>
+            <strong>Не удалось подготовить просмотр</strong>
             <span>{{ errorMessage }}</span>
           </div>
 
@@ -1011,26 +1348,26 @@ onBeforeUnmount(() => {
 
               <div class="document-stage-hud__actions">
                 <button class="action-button" type="button" @click="togglePlayback">
-                  {{ isVideoPlaying ? 'Pause' : 'Play' }}
+                  {{ isVideoPlaying ? 'Пауза' : 'Воспроизвести' }}
                 </button>
                 <button class="action-button" type="button" @click="stepFrame(-1)">-1f</button>
                 <button class="action-button" type="button" @click="stepFrame(1)">+1f</button>
                 <button class="action-button" type="button" @click="seekBy(-5)">-5s</button>
                 <button class="action-button" type="button" @click="seekBy(5)">+5s</button>
                 <button class="action-button" type="button" @click="toggleLoop">
-                  {{ isLooping ? 'Loop On' : 'Loop Off' }}
+                  {{ isLooping ? 'Повтор включён' : 'Повтор выключен' }}
                 </button>
                 <button class="action-button" type="button" @click="openSubtitlePicker">
-                  Subtitles
+                  Субтитры
                 </button>
-                <button class="action-button" type="button" @click="capturePoster">Poster</button>
+                <button class="action-button" type="button" @click="capturePoster">Кадр</button>
                 <button
                   class="action-button"
                   type="button"
                   :disabled="!canUsePictureInPicture"
                   @click="togglePictureInPicture"
                 >
-                  {{ isPictureInPictureActive ? 'Exit PiP' : 'PiP' }}
+                  {{ isPictureInPictureActive ? 'Выйти из PiP' : 'PiP' }}
                 </button>
               </div>
             </div>
@@ -1080,7 +1417,7 @@ onBeforeUnmount(() => {
 
               <div class="video-control-row">
                 <label class="video-slider">
-                  <span>Volume</span>
+                  <span>Громкость</span>
                   <input
                     type="range"
                     min="0"
@@ -1091,10 +1428,10 @@ onBeforeUnmount(() => {
                   />
                 </label>
                 <button class="action-button" type="button" @click="toggleMute">
-                  {{ isVideoMuted ? 'Unmute' : 'Mute' }}
+                  {{ isVideoMuted ? 'Со звуком' : 'Без звука' }}
                 </button>
                 <label class="video-rate">
-                  <span>Speed</span>
+                  <span>Скорость</span>
                   <select :value="videoPlaybackRate" @change="onVideoRateChange">
                     <option v-for="rate in videoPlaybackRates" :key="rate" :value="rate">
                       {{ rate }}x
@@ -1102,7 +1439,7 @@ onBeforeUnmount(() => {
                   </select>
                 </label>
                 <label class="video-rate">
-                  <span>Frame Rate</span>
+                  <span>FPS</span>
                   <select :value="assumedFrameRate" @change="onVideoFrameRateChange">
                     <option v-for="rate in videoFrameRateOptions" :key="rate" :value="rate">
                       {{ rate }} fps
@@ -1114,20 +1451,20 @@ onBeforeUnmount(() => {
                 </span>
                 <span class="chip-pill chip-pill--compact"> {{ frameStepLabel }} / frame </span>
                 <span class="chip-pill chip-pill--compact">
-                  {{ approximateFrameNumber ? `Frame #${approximateFrameNumber}` : 'Frame n/a' }}
+                  {{ approximateFrameNumber ? `Кадр #${approximateFrameNumber}` : 'Кадр —' }}
                 </span>
               </div>
 
               <div class="video-control-row">
                 <div class="viewer-dropzone__actions">
                   <button class="action-button" type="button" @click="copyCurrentTimestamp">
-                    Copy Timestamp
+                    Скопировать время
                   </button>
                   <button class="action-button" type="button" @click="capturePoster">
-                    Capture Poster
+                    Сохранить кадр
                   </button>
                   <button class="action-button" type="button" @click="openSubtitlePicker">
-                    Add Subtitles
+                    Добавить субтитры
                   </button>
                   <button
                     class="action-button"
@@ -1135,23 +1472,25 @@ onBeforeUnmount(() => {
                     :disabled="!subtitleTracks.length"
                     @click="clearSubtitleTracks"
                   >
-                    Clear Subs
+                    Очистить
                   </button>
                 </div>
                 <div class="document-stage-hud__meta">
                   <span class="chip-pill chip-pill--compact">
-                    {{ isLooping ? 'Looping' : 'Loop once' }}
+                    {{ isLooping ? 'Повтор включён' : 'Один проход' }}
                   </span>
                   <span class="chip-pill chip-pill--compact">
                     {{
-                      activeSubtitleTrack ? `Active: ${activeSubtitleTrack.label}` : 'Subtitles off'
+                      activeSubtitleTrack
+                        ? `Активно: ${activeSubtitleTrack.label}`
+                        : 'Субтитры выключены'
                     }}
                   </span>
                   <span class="chip-pill chip-pill--compact chip-pill--accent">
                     {{
                       posterCaptures.length
-                        ? `${posterCaptures.length} posters`
-                        : 'Poster rail empty'
+                        ? `${posterCaptures.length} кадров`
+                        : 'Кадры ещё не сохранены'
                     }}
                   </span>
                 </div>
@@ -1176,15 +1515,15 @@ onBeforeUnmount(() => {
 
               <div class="document-stage-hud__actions">
                 <button class="action-button" type="button" @click="toggleAudioPlayback">
-                  {{ isAudioPlaying ? 'Pause' : 'Play' }}
+                  {{ isAudioPlaying ? 'Пауза' : 'Воспроизвести' }}
                 </button>
                 <button class="action-button" type="button" @click="seekAudioBy(-10)">-10s</button>
                 <button class="action-button" type="button" @click="seekAudioBy(10)">+10s</button>
                 <button class="action-button" type="button" @click="toggleAudioLoop">
-                  {{ isAudioLooping ? 'Loop On' : 'Loop Off' }}
+                  {{ isAudioLooping ? 'Повтор включён' : 'Повтор выключен' }}
                 </button>
                 <button class="action-button" type="button" @click="copyAudioTimestamp">
-                  Copy Time
+                  Скопировать время
                 </button>
               </div>
             </div>
@@ -1196,21 +1535,20 @@ onBeforeUnmount(() => {
                 </div>
                 <div v-else class="audio-stage-artwork audio-stage-artwork--empty">
                   <strong>{{ selection.format.label }}</strong>
-                  <span>No embedded cover art</span>
+                  <span>Обложка не найдена</span>
                 </div>
 
                 <div class="audio-stage-copy">
-                  <p class="eyebrow">Audio Stage</p>
+                  <p class="eyebrow">Аудио</p>
                   <h3>{{ selection.file.name }}</h3>
                   <p>
-                    Browser-native player, waveform rail и metadata inspector живут в одном
-                    workspace, а non-native containers нормализуются в тот же контракт через
-                    backend VIEWER_RESOLVE.
+                    Здесь можно быстро прослушать дорожку, проверить длительность, теги, обложку и
+                    визуально оценить форму сигнала без отдельного плеера.
                   </p>
                 </div>
               </div>
 
-              <div class="audio-waveform" aria-label="Audio waveform preview">
+              <div class="audio-waveform" aria-label="Волна аудио">
                 <div
                   v-for="(bucket, bucketIndex) in selection.layout.waveform"
                   :key="`wave-${bucketIndex}`"
@@ -1247,7 +1585,7 @@ onBeforeUnmount(() => {
 
                 <div class="video-control-row">
                   <label class="video-slider">
-                    <span>Volume</span>
+                    <span>Громкость</span>
                     <input
                       type="range"
                       min="0"
@@ -1258,10 +1596,10 @@ onBeforeUnmount(() => {
                     />
                   </label>
                   <button class="action-button" type="button" @click="toggleAudioMute">
-                    {{ isAudioMuted ? 'Unmute' : 'Mute' }}
+                    {{ isAudioMuted ? 'Со звуком' : 'Без звука' }}
                   </button>
                   <label class="video-rate">
-                    <span>Speed</span>
+                    <span>Скорость</span>
                     <select :value="audioPlaybackRate" @change="onAudioRateChange">
                       <option v-for="rate in audioPlaybackRates" :key="rate" :value="rate">
                         {{ rate }}x
@@ -1272,12 +1610,10 @@ onBeforeUnmount(() => {
                     {{ audioProgressPercent.toFixed(0) }}%
                   </span>
                   <span class="chip-pill chip-pill--compact">
-                    {{ isAudioLooping ? 'Looping' : 'Loop once' }}
+                    {{ isAudioLooping ? 'Повтор включён' : 'Один проход' }}
                   </span>
                   <span class="chip-pill chip-pill--compact chip-pill--accent">
-                    {{
-                      selection.layout.waveform.length ? 'Waveform ready' : 'Waveform unavailable'
-                    }}
+                    {{ selection.layout.waveform.length ? 'Волна готова' : 'Волна недоступна' }}
                   </span>
                 </div>
               </div>
@@ -1304,10 +1640,18 @@ onBeforeUnmount(() => {
 
               <div class="document-stage-hud__actions">
                 <button class="action-button" type="button" @click="copyDocumentText">
-                  Copy Text
+                  Скопировать текст
                 </button>
                 <button class="action-button" type="button" @click="downloadDocumentText">
-                  Download Text
+                  Скачать текст
+                </button>
+                <button
+                  v-if="canQuickEditDocument"
+                  class="action-button action-button--accent"
+                  type="button"
+                  @click="openDocumentDraftInEditor"
+                >
+                  Открыть в Editor
                 </button>
                 <button
                   class="action-button"
@@ -1315,7 +1659,7 @@ onBeforeUnmount(() => {
                   :disabled="!documentQuery"
                   @click="clearDocumentSearch"
                 >
-                  Clear Search
+                  Сбросить поиск
                 </button>
               </div>
             </div>
@@ -1341,8 +1685,8 @@ onBeforeUnmount(() => {
 
             <div v-else-if="selection.layout.mode === 'table'" class="document-table">
               <div class="document-table__summary">
-                <strong>{{ selection.layout.table.totalRows }} rows</strong>
-                <span>{{ selection.layout.table.totalColumns }} columns</span>
+                <strong>{{ selection.layout.table.totalRows }} строк</strong>
+                <span>{{ selection.layout.table.totalColumns }} колонок</span>
               </div>
               <div class="document-table__scroll">
                 <table>
@@ -1380,8 +1724,8 @@ onBeforeUnmount(() => {
 
               <div v-if="activeDocumentSheet" class="document-table">
                 <div class="document-table__summary">
-                  <strong>{{ activeDocumentSheet.table.totalRows }} rows</strong>
-                  <span>{{ activeDocumentSheet.table.totalColumns }} columns</span>
+                  <strong>{{ activeDocumentSheet.table.totalRows }} строк</strong>
+                  <span>{{ activeDocumentSheet.table.totalColumns }} колонок</span>
                 </div>
                 <div class="document-table__scroll">
                   <table>
@@ -1427,18 +1771,18 @@ onBeforeUnmount(() => {
                 <div class="document-table__summary">
                   <strong>{{
                     activeDocumentDatabaseTable.rowCount == null
-                      ? 'Rows: n/a'
-                      : `${activeDocumentDatabaseTable.rowCount} rows`
+                      ? 'Строк: нет данных'
+                      : `${activeDocumentDatabaseTable.rowCount} строк`
                   }}</strong>
-                  <span>{{ activeDocumentDatabaseTable.columns.length }} columns</span>
+                  <span>{{ activeDocumentDatabaseTable.columns.length }} колонок</span>
                 </div>
                 <pre>{{ activeDocumentDatabaseTable.schemaSql }}</pre>
               </article>
 
               <div v-if="activeDocumentDatabaseTable" class="document-table">
                 <div class="document-table__summary">
-                  <strong>{{ activeDocumentDatabaseTable.sample.totalRows }} rows</strong>
-                  <span>{{ activeDocumentDatabaseTable.sample.totalColumns }} columns</span>
+                  <strong>{{ activeDocumentDatabaseTable.sample.totalRows }} строк</strong>
+                  <span>{{ activeDocumentDatabaseTable.sample.totalColumns }} колонок</span>
                 </div>
                 <div class="document-table__scroll">
                   <table>
@@ -1466,7 +1810,7 @@ onBeforeUnmount(() => {
                 </div>
               </div>
 
-              <p v-else class="viewer-panel__empty">В этой базе не найдено таблиц для preview.</p>
+              <p v-else class="viewer-panel__empty">В этой базе не найдено таблиц для просмотра.</p>
             </div>
 
             <div v-else-if="selection.layout.mode === 'slides'" class="document-slide-grid">
@@ -1476,14 +1820,14 @@ onBeforeUnmount(() => {
               >
                 <div class="document-slide-card__meta">
                   <span class="chip-pill chip-pill--compact chip-pill--accent">
-                    Focused Slide {{ documentSlideIndex + 1 }}
+                    Активный слайд {{ documentSlideIndex + 1 }}
                   </span>
                 </div>
                 <h3>{{ activeDocumentSlide.title }}</h3>
                 <ul v-if="activeDocumentSlide.bullets.length" class="document-slide-card__list">
                   <li v-for="bullet in activeDocumentSlide.bullets" :key="bullet">{{ bullet }}</li>
                 </ul>
-                <p v-else class="viewer-panel__empty">На выбранном слайде нет bullet-пунктов.</p>
+                <p v-else class="viewer-panel__empty">На выбранном слайде нет пунктов списка.</p>
               </article>
 
               <div class="document-slide-rail">
@@ -1507,7 +1851,7 @@ onBeforeUnmount(() => {
                 @click="selectDocumentSlide(slideIndex)"
               >
                 <div class="document-slide-card__meta">
-                  <span class="chip-pill chip-pill--compact">Slide {{ slideIndex + 1 }}</span>
+                  <span class="chip-pill chip-pill--compact">Слайд {{ slideIndex + 1 }}</span>
                 </div>
                 <h3>{{ slide.title }}</h3>
                 <ul v-if="slide.bullets.length" class="document-slide-card__list">
@@ -1536,11 +1880,10 @@ onBeforeUnmount(() => {
           </div>
 
           <div v-else class="viewer-empty-state">
-            <strong>Viewer готов к первой загрузке</strong>
+            <strong>Экран готов к работе</strong>
             <span>
-              Сейчас уже работают image formats, весь document roadmap, video workbench и audio
-              viewer для `mp3`, `wav`, `aac`, `flac`, `ogg`, `opus`, `aiff` с waveform и tag
-              metadata.
+              Перетащи файл или открой его через кнопку выше, чтобы сразу увидеть подходящий режим
+              просмотра, поиск, метаданные и быстрые действия.
             </span>
           </div>
         </div>
@@ -1561,7 +1904,7 @@ onBeforeUnmount(() => {
             "
             class="chip-pill chip-pill--compact chip-pill--accent"
           >
-            {{ selection.previewLabel }}
+            {{ formatSelectionPreviewLabel() }}
           </span>
         </div>
       </article>
@@ -1589,16 +1932,20 @@ onBeforeUnmount(() => {
           </div>
 
           <div class="color-lab__loupe-row">
-            <img class="color-lab__loupe" :src="activeSample.loupeDataUrl" alt="Loupe preview" />
+            <img
+              class="color-lab__loupe"
+              :src="activeSample.loupeDataUrl"
+              alt="Увеличенный фрагмент"
+            />
             <div class="color-lab__actions">
               <button class="action-button" type="button" @click="copyActiveSample('hex')">
-                Copy HEX
+                HEX
               </button>
               <button class="action-button" type="button" @click="copyActiveSample('rgb')">
-                Copy RGB
+                RGB
               </button>
               <button class="action-button" type="button" @click="copyActiveSample('hsl')">
-                Copy HSL
+                HSL
               </button>
               <button
                 class="action-button action-button--accent"
@@ -1606,7 +1953,7 @@ onBeforeUnmount(() => {
                 :disabled="!canUseTools"
                 @click="storeActiveSwatch"
               >
-                Save Swatch
+                Сохранить цвет
               </button>
             </div>
           </div>
@@ -1667,8 +2014,8 @@ onBeforeUnmount(() => {
       </article>
 
       <article class="panel-surface viewer-panel">
-        <p class="eyebrow">Metadata</p>
-        <h2>Summary и быстрый inspector</h2>
+        <p class="eyebrow">Сведения</p>
+        <h2>Основная информация о файле</h2>
         <dl class="facts-grid">
           <template v-for="fact in selectionFacts" :key="fact.label">
             <dt>{{ fact.label }}</dt>
@@ -1676,30 +2023,34 @@ onBeforeUnmount(() => {
           </template>
         </dl>
         <p v-if="!selectionFacts.length" class="viewer-panel__empty">
-          После выбора файла сюда подтянутся базовые metadata и текущий preview path.
+          После загрузки здесь появятся основные параметры файла и текущий режим просмотра.
         </p>
         <img
           v-if="metadataThumbnail"
           class="metadata-thumbnail"
           :src="metadataThumbnail"
-          alt="Embedded thumbnail"
+          alt="Встроенная миниатюра"
         />
       </article>
 
       <article class="panel-surface viewer-panel">
-        <p class="eyebrow">Inspector</p>
-        <h2>EXIF, ICC и другие metadata группы</h2>
+        <p class="eyebrow">Инспектор</p>
+        <h2>EXIF, ICC и другие группы метаданных</h2>
 
         <label class="metadata-search">
-          <span>Filter tags</span>
-          <input v-model="metadataQuery" type="text" placeholder="Orientation, ICC, Lens..." />
+          <span>Фильтр по тегам</span>
+          <input
+            v-model="metadataQuery"
+            type="text"
+            placeholder="Например: ориентация, ICC, объектив"
+          />
         </label>
 
         <div class="metadata-group-stack">
           <article v-for="group in filteredMetadataGroups" :key="group.id" class="metadata-group">
             <div class="metadata-group__header">
               <strong>{{ group.label }}</strong>
-              <span class="chip-pill chip-pill--compact">{{ group.entries.length }} tags</span>
+              <span class="chip-pill chip-pill--compact">{{ group.entries.length }} тегов</span>
             </div>
             <dl class="metadata-group__list">
               <template v-for="entry in group.entries" :key="`${group.id}-${entry.label}`">
@@ -1716,31 +2067,35 @@ onBeforeUnmount(() => {
       </article>
 
       <article class="panel-surface viewer-panel">
-        <p class="eyebrow">Metadata Editor</p>
-        <h2>Common metadata fields и экспорт изменений</h2>
+        <p class="eyebrow">Редактор метаданных</p>
+        <h2>Подправь описание, автора и дату съёмки</h2>
 
         <form class="metadata-editor" @submit.prevent="saveMetadataDraft">
           <label>
-            <span>Description</span>
+            <span>Описание</span>
             <textarea
               v-model="metadataDraft.description"
               rows="4"
-              placeholder="Image description / title"
+              placeholder="Краткое описание изображения"
             ></textarea>
           </label>
 
           <label>
-            <span>Artist</span>
-            <input v-model="metadataDraft.artist" type="text" placeholder="Author / photographer" />
+            <span>Автор</span>
+            <input v-model="metadataDraft.artist" type="text" placeholder="Автор или фотограф" />
           </label>
 
           <label>
-            <span>Copyright</span>
-            <input v-model="metadataDraft.copyright" type="text" placeholder="Copyright notice" />
+            <span>Авторские права</span>
+            <input
+              v-model="metadataDraft.copyright"
+              type="text"
+              placeholder="Правообладатель или лицензия"
+            />
           </label>
 
           <label>
-            <span>Captured at</span>
+            <span>Дата съёмки</span>
             <input v-model="metadataDraft.capturedAt" type="datetime-local" />
           </label>
 
@@ -1748,8 +2103,8 @@ onBeforeUnmount(() => {
             <p class="metadata-editor__mode">
               {{
                 metadataEmbeddingAvailable
-                  ? 'Для JPEG backend соберёт новый файл с обновлёнными EXIF-полями.'
-                  : 'Для этого формата backend соберёт sidecar JSON с metadata patch.'
+                  ? 'Для JPEG будет собран новый файл с обновлёнными EXIF-полями.'
+                  : 'Для этого формата изменения будут сохранены отдельным JSON-файлом.'
               }}
             </p>
             <button
@@ -1757,7 +2112,7 @@ onBeforeUnmount(() => {
               type="submit"
               :disabled="isSavingMetadata"
             >
-              {{ isSavingMetadata ? 'Building...' : 'Export Metadata' }}
+              {{ isSavingMetadata ? 'Готовлю файл...' : 'Сохранить изменения' }}
             </button>
           </div>
         </form>
@@ -1768,8 +2123,8 @@ onBeforeUnmount(() => {
       </article>
 
       <article class="panel-surface viewer-panel viewer-panel--wide">
-        <p class="eyebrow">Capability Map</p>
-        <h2>Форматы и runtime-path внутри image viewer</h2>
+        <p class="eyebrow">Поддержка форматов</p>
+        <h2>Что можно открыть в режиме просмотра изображений</h2>
         <div class="capability-columns">
           <div class="format-grid">
             <article
@@ -1779,9 +2134,11 @@ onBeforeUnmount(() => {
             >
               <div class="format-card__meta">
                 <strong>{{ format.label }}</strong>
-                <span class="chip-pill chip-pill--compact">{{ format.statusLabel }}</span>
+                <span class="chip-pill chip-pill--compact">{{
+                  formatViewerFormatStatus(format)
+                }}</span>
               </div>
-              <p>{{ format.notes }}</p>
+              <p>{{ formatViewerFormatNote(format) }}</p>
             </article>
           </div>
 
@@ -1794,24 +2151,24 @@ onBeforeUnmount(() => {
               <div class="format-card__meta">
                 <strong>{{ format.label }}</strong>
                 <span class="chip-pill chip-pill--compact chip-pill--accent">
-                  {{ format.statusLabel }}
+                  {{ formatViewerFormatStatus(format) }}
                 </span>
               </div>
-              <p>{{ format.notes }}</p>
+              <p>{{ formatViewerFormatNote(format) }}</p>
             </article>
           </div>
         </div>
         <p v-if="!plannedMediaFormats.length" class="viewer-panel__empty">
-          Для video roadmap в текущем срезе больше нет planned-only слотов: все заявленные форматы
-          уже сводятся к native path или unified backend viewer route внутри одного workspace.
+          Все заявленные графические форматы уже открываются в этом экране без отдельных обходных
+          сценариев.
         </p>
       </article>
     </section>
 
     <section v-else-if="selection?.kind === 'video'" class="viewer-detail-grid">
       <article class="panel-surface viewer-panel">
-        <p class="eyebrow">Video Summary</p>
-        <h2>Playback facts, warnings и browser-native metadata</h2>
+        <p class="eyebrow">Видео</p>
+        <h2>Основные параметры и предупреждения</h2>
         <div class="document-summary-row">
           <span class="chip-pill chip-pill--compact chip-pill--accent">{{
             selection.format.label
@@ -1819,10 +2176,10 @@ onBeforeUnmount(() => {
           <span class="chip-pill chip-pill--compact"
             >{{ videoCurrentTimeLabel }} / {{ videoDurationLabel }}</span
           >
+          <span class="chip-pill chip-pill--compact">{{ isVideoPlaying ? 'Идёт' : 'Пауза' }}</span>
           <span class="chip-pill chip-pill--compact">{{
-            isVideoPlaying ? 'Playing' : 'Paused'
+            isLooping ? 'Повтор включён' : 'Повтор выключен'
           }}</span>
-          <span class="chip-pill chip-pill--compact">{{ isLooping ? 'Loop On' : 'Loop Off' }}</span>
         </div>
         <dl class="facts-grid">
           <template v-for="fact in selectionFacts" :key="fact.label">
@@ -1838,8 +2195,8 @@ onBeforeUnmount(() => {
       </article>
 
       <article class="panel-surface viewer-panel">
-        <p class="eyebrow">Precision</p>
-        <h2>Frame stepping, rate assumptions и session tooling</h2>
+        <p class="eyebrow">Точная навигация</p>
+        <h2>Кадры, скорость и быстрые ориентиры</h2>
         <div class="outline-stack">
           <article v-for="card in videoMetadataCards" :key="card.label" class="outline-card">
             <strong>{{ card.label }}</strong>
@@ -1849,15 +2206,15 @@ onBeforeUnmount(() => {
       </article>
 
       <article class="panel-surface viewer-panel">
-        <p class="eyebrow">Subtitles</p>
-        <h2>Sidecar tracks, cue count и quick switching</h2>
+        <p class="eyebrow">Субтитры</p>
+        <h2>Подключай дорожки и быстро переключайся между ними</h2>
         <div class="viewer-dropzone__actions">
           <button
             class="action-button action-button--accent"
             type="button"
             @click="openSubtitlePicker"
           >
-            Add Subtitle File
+            Добавить файл субтитров
           </button>
           <button
             class="action-button"
@@ -1865,7 +2222,7 @@ onBeforeUnmount(() => {
             :class="{ 'action-button--accent': activeSubtitleTrackId === 'off' }"
             @click="setActiveSubtitleTrack('off')"
           >
-            Turn Off
+            Выключить
           </button>
           <button
             class="action-button"
@@ -1873,7 +2230,7 @@ onBeforeUnmount(() => {
             :disabled="!subtitleTracks.length"
             @click="clearSubtitleTracks"
           >
-            Clear All
+            Очистить всё
           </button>
         </div>
         <div v-if="subtitleTracks.length" class="subtitle-track-grid">
@@ -1890,7 +2247,7 @@ onBeforeUnmount(() => {
             >
               <strong>{{ track.label }}</strong>
               <span
-                >{{ track.language.toUpperCase() }} · {{ track.cueCount }} cues ·
+                >{{ track.language.toUpperCase() }} · {{ track.cueCount }} реплик ·
                 {{ track.format.toUpperCase() }}</span
               >
             </button>
@@ -1899,25 +2256,25 @@ onBeforeUnmount(() => {
               type="button"
               @click="removeSubtitleTrack(track.id)"
             >
-              Remove
+              Удалить
             </button>
           </article>
         </div>
         <p v-else class="viewer-panel__empty">
-          В viewer можно подложить `.vtt` или `.srt` как session subtitle tracks без пересборки
-          самого файла.
+          Можно временно подключить `.vtt` или `.srt`, чтобы посмотреть видео с субтитрами без
+          изменения исходного файла.
         </p>
       </article>
 
       <article class="panel-surface viewer-panel viewer-panel--wide">
-        <p class="eyebrow">Poster Lab</p>
-        <h2>Frame-derived stills, timestamp export и quick review rail</h2>
+        <p class="eyebrow">Сохранённые кадры</p>
+        <h2>Выбирай удачные моменты и сохраняй их как отдельные изображения</h2>
         <div class="viewer-dropzone__actions">
           <button class="action-button action-button--accent" type="button" @click="capturePoster">
-            Capture Current Frame
+            Сохранить текущий кадр
           </button>
           <button class="action-button" type="button" @click="copyCurrentTimestamp">
-            Copy Timestamp
+            Скопировать время
           </button>
         </div>
         <div v-if="posterCaptures.length" class="poster-capture-grid">
@@ -1929,30 +2286,30 @@ onBeforeUnmount(() => {
             </div>
             <div class="viewer-dropzone__actions">
               <button class="action-button" type="button" @click="seekTo(capture.timeSeconds)">
-                Jump
+                Перейти
               </button>
               <button
                 class="action-button"
                 type="button"
                 @click="downloadPosterCapture(capture.id)"
               >
-                Download
+                Скачать
               </button>
               <button class="action-button" type="button" @click="removePosterCapture(capture.id)">
-                Remove
+                Удалить
               </button>
             </div>
           </article>
         </div>
         <p v-else class="viewer-panel__empty">
-          Poster rail пока пуст. Захват кадра полезен для cover-image, handoff в converter и быстрых
-          visual checks без отдельного export-пайплайна.
+          Здесь будут собираться кадры, которые стоит сохранить как обложку, иллюстрацию или
+          промежуточный референс.
         </p>
       </article>
 
       <article class="panel-surface viewer-panel">
-        <p class="eyebrow">Shortcuts</p>
-        <h2>Keyboard flow для точной навигации</h2>
+        <p class="eyebrow">Горячие клавиши</p>
+        <h2>Быстрая навигация по видео с клавиатуры</h2>
         <div class="outline-stack">
           <article v-for="shortcut in videoShortcutHints" :key="shortcut.keys" class="outline-card">
             <strong>{{ shortcut.keys }}</strong>
@@ -1962,8 +2319,8 @@ onBeforeUnmount(() => {
       </article>
 
       <article class="panel-surface viewer-panel viewer-panel--wide">
-        <p class="eyebrow">Capability Map</p>
-        <h2>Video runtime и текущие playback paths</h2>
+        <p class="eyebrow">Поддержка форматов</p>
+        <h2>Какие видео открываются в этом режиме</h2>
         <div class="capability-columns">
           <div class="format-grid">
             <article
@@ -1974,10 +2331,10 @@ onBeforeUnmount(() => {
               <div class="format-card__meta">
                 <strong>{{ format.label }}</strong>
                 <span class="chip-pill chip-pill--compact chip-pill--accent">
-                  {{ format.statusLabel }}
+                  {{ formatViewerFormatStatus(format) }}
                 </span>
               </div>
-              <p>{{ format.notes }}</p>
+              <p>{{ formatViewerFormatNote(format) }}</p>
             </article>
           </div>
 
@@ -1989,9 +2346,11 @@ onBeforeUnmount(() => {
             >
               <div class="format-card__meta">
                 <strong>{{ format.label }}</strong>
-                <span class="chip-pill chip-pill--compact">{{ format.statusLabel }}</span>
+                <span class="chip-pill chip-pill--compact">{{
+                  formatViewerFormatStatus(format)
+                }}</span>
               </div>
-              <p>{{ format.notes }}</p>
+              <p>{{ formatViewerFormatNote(format) }}</p>
             </article>
           </div>
         </div>
@@ -2000,8 +2359,8 @@ onBeforeUnmount(() => {
 
     <section v-else-if="selection?.kind === 'audio'" class="viewer-detail-grid">
       <article class="panel-surface viewer-panel">
-        <p class="eyebrow">Audio Summary</p>
-        <h2>Playback facts, warnings и technical metadata</h2>
+        <p class="eyebrow">Аудио</p>
+        <h2>Параметры дорожки и важные замечания</h2>
         <div class="document-summary-row">
           <span class="chip-pill chip-pill--compact chip-pill--accent">{{
             selection.format.label
@@ -2009,11 +2368,9 @@ onBeforeUnmount(() => {
           <span class="chip-pill chip-pill--compact"
             >{{ audioCurrentTimeLabel }} / {{ audioDurationLabel }}</span
           >
+          <span class="chip-pill chip-pill--compact">{{ isAudioPlaying ? 'Идёт' : 'Пауза' }}</span>
           <span class="chip-pill chip-pill--compact">{{
-            isAudioPlaying ? 'Playing' : 'Paused'
-          }}</span>
-          <span class="chip-pill chip-pill--compact">{{
-            isAudioLooping ? 'Loop On' : 'Loop Off'
+            isAudioLooping ? 'Повтор включён' : 'Повтор выключен'
           }}</span>
         </div>
         <dl class="facts-grid">
@@ -2030,8 +2387,8 @@ onBeforeUnmount(() => {
       </article>
 
       <article class="panel-surface viewer-panel">
-        <p class="eyebrow">Playback</p>
-        <h2>Waveform, speed control и session flow</h2>
+        <p class="eyebrow">Воспроизведение</p>
+        <h2>Волна сигнала, скорость и параметры звучания</h2>
         <div class="outline-stack">
           <article v-for="card in audioMetadataCards" :key="card.label" class="outline-card">
             <strong>{{ card.label }}</strong>
@@ -2041,8 +2398,8 @@ onBeforeUnmount(() => {
       </article>
 
       <article class="panel-surface viewer-panel">
-        <p class="eyebrow">Metadata</p>
-        <h2>Artwork, tags и quick filter</h2>
+        <p class="eyebrow">Теги и обложка</p>
+        <h2>Быстро найди нужные поля и проверь карточку трека</h2>
 
         <div class="audio-metadata-hero">
           <div v-if="selection.artworkDataUrl" class="audio-metadata-hero__artwork">
@@ -2050,23 +2407,24 @@ onBeforeUnmount(() => {
           </div>
           <div v-else class="audio-metadata-hero__artwork audio-metadata-hero__artwork--empty">
             <strong>{{ selection.format.label }}</strong>
-            <span>No cover art</span>
+            <span>Нет встроенной обложки</span>
           </div>
 
           <div class="audio-metadata-hero__copy">
             <span class="chip-pill chip-pill--compact chip-pill--accent">
-              {{ filteredAudioMetadataGroups.length }} groups
+              {{ filteredAudioMetadataGroups.length }} групп
             </span>
-            <p>
-              Viewer поднимает common tags, technical summary и native tag groups без отдельного
-              backend round-trip.
-            </p>
+            <p>Здесь собраны основные теги, технические параметры и дополнительные поля дорожки.</p>
           </div>
         </div>
 
         <label class="metadata-search">
-          <span>Filter tags</span>
-          <input v-model="audioMetadataQuery" type="text" placeholder="artist, album, codec..." />
+          <span>Фильтр по тегам</span>
+          <input
+            v-model="audioMetadataQuery"
+            type="text"
+            placeholder="Например: артист, альбом, кодек"
+          />
         </label>
 
         <div class="metadata-group-stack">
@@ -2077,7 +2435,7 @@ onBeforeUnmount(() => {
           >
             <div class="metadata-group__header">
               <strong>{{ group.label }}</strong>
-              <span class="chip-pill chip-pill--compact">{{ group.entries.length }} tags</span>
+              <span class="chip-pill chip-pill--compact">{{ group.entries.length }} тегов</span>
             </div>
             <dl class="metadata-group__list">
               <template v-for="entry in group.entries" :key="`${group.id}-${entry.label}`">
@@ -2094,8 +2452,8 @@ onBeforeUnmount(() => {
       </article>
 
       <article class="panel-surface viewer-panel">
-        <p class="eyebrow">Shortcuts</p>
-        <h2>Keyboard flow для аудио-навигации</h2>
+        <p class="eyebrow">Горячие клавиши</p>
+        <h2>Управление воспроизведением с клавиатуры</h2>
         <div class="outline-stack">
           <article v-for="shortcut in audioShortcutHints" :key="shortcut.keys" class="outline-card">
             <strong>{{ shortcut.keys }}</strong>
@@ -2105,8 +2463,8 @@ onBeforeUnmount(() => {
       </article>
 
       <article class="panel-surface viewer-panel viewer-panel--wide">
-        <p class="eyebrow">Capability Map</p>
-        <h2>Audio runtime и текущие playback paths</h2>
+        <p class="eyebrow">Поддержка форматов</p>
+        <h2>Какие аудиофайлы открываются в этом режиме</h2>
         <div class="capability-columns">
           <div class="format-grid">
             <article
@@ -2117,10 +2475,10 @@ onBeforeUnmount(() => {
               <div class="format-card__meta">
                 <strong>{{ format.label }}</strong>
                 <span class="chip-pill chip-pill--compact chip-pill--accent">
-                  {{ format.statusLabel }}
+                  {{ formatViewerFormatStatus(format) }}
                 </span>
               </div>
-              <p>{{ format.notes }}</p>
+              <p>{{ formatViewerFormatNote(format) }}</p>
             </article>
           </div>
 
@@ -2132,29 +2490,31 @@ onBeforeUnmount(() => {
             >
               <div class="format-card__meta">
                 <strong>{{ format.label }}</strong>
-                <span class="chip-pill chip-pill--compact">{{ format.statusLabel }}</span>
+                <span class="chip-pill chip-pill--compact">{{
+                  formatViewerFormatStatus(format)
+                }}</span>
               </div>
-              <p>{{ format.notes }}</p>
+              <p>{{ formatViewerFormatNote(format) }}</p>
             </article>
           </div>
         </div>
         <p v-if="!plannedAudioFormats.length" class="viewer-panel__empty">
-          Для audio roadmap в этой итерации больше нет planned-only слотов: все заявленные форматы
-          теперь идут через реальные playback strategies.
+          Все заявленные аудиоформаты уже открываются в этом экране без отдельного обходного
+          сценария.
         </p>
       </article>
     </section>
 
     <section v-else-if="selection?.kind === 'document'" class="viewer-detail-grid">
       <article class="panel-surface viewer-panel">
-        <p class="eyebrow">Document Summary</p>
-        <h2>Статистика, warnings и preview facts</h2>
+        <p class="eyebrow">Документ</p>
+        <h2>Ключевые параметры и замечания</h2>
         <div class="document-summary-row">
           <span class="chip-pill chip-pill--compact chip-pill--accent">{{
             selection.format.label
           }}</span>
           <span class="chip-pill chip-pill--compact">{{ documentModeLabel }}</span>
-          <span class="chip-pill chip-pill--compact">Matches: {{ documentMatches.length }}</span>
+          <span class="chip-pill chip-pill--compact">Совпадений: {{ documentMatches.length }}</span>
         </div>
         <dl class="facts-grid">
           <template v-for="fact in selectionFacts" :key="fact.label">
@@ -2170,18 +2530,18 @@ onBeforeUnmount(() => {
       </article>
 
       <article class="panel-surface viewer-panel">
-        <p class="eyebrow">Quick Find</p>
-        <h2>Search layer поверх нормализованного document text</h2>
+        <p class="eyebrow">Быстрый поиск</p>
+        <h2>Найди нужный фрагмент по всему доступному тексту документа</h2>
         <label class="metadata-search">
-          <span>Search document</span>
+          <span>Поиск</span>
           <input v-model="documentQuery" type="text" :placeholder="documentSearchPlaceholder" />
         </label>
         <div class="document-search-toolbar">
           <span class="chip-pill chip-pill--compact">
-            {{ documentQuery ? `${documentMatches.length} matches` : 'Search ready' }}
+            {{ documentQuery ? `${documentMatches.length} совпадений` : 'Поиск готов' }}
           </span>
           <span v-if="activeDocumentMatch" class="chip-pill chip-pill--compact chip-pill--accent">
-            Match {{ activeDocumentMatchIndex + 1 }}
+            Фрагмент {{ activeDocumentMatchIndex + 1 }}
           </span>
         </div>
         <div v-if="documentMatches.length" class="search-match-stack">
@@ -2193,7 +2553,7 @@ onBeforeUnmount(() => {
             type="button"
             @click="focusDocumentMatch(matchIndex)"
           >
-            <strong>Result {{ matchIndex + 1 }}</strong>
+            <strong>Результат {{ matchIndex + 1 }}</strong>
             <span>{{ match.excerpt }}</span>
           </button>
         </div>
@@ -2201,14 +2561,65 @@ onBeforeUnmount(() => {
           {{
             documentQuery
               ? 'Совпадения не найдены.'
-              : 'Search panel работает для legacy, OOXML, archive/reflow и SQLite document adapters.'
+              : 'Поиск работает по тексту, который Jack смог извлечь из документа.'
           }}
         </p>
       </article>
 
+      <article v-if="canQuickEditDocument" class="panel-surface viewer-panel">
+        <p class="eyebrow">Рабочая копия</p>
+        <h2>Рабочая копия для правок, заметок и передачи в editor</h2>
+        <p class="viewer-panel__copy">
+          Здесь редактируется безопасная копия содержимого. Исходный файл не меняется, поэтому можно
+          быстро подчистить текст, собрать выдержку или отправить материал в editor для
+          форматирования и экспорта.
+        </p>
+
+        <div class="fact-grid">
+          <article v-for="fact in documentDraftFacts" :key="fact.label" class="fact-chip">
+            <span>{{ fact.label }}</span>
+            <strong>{{ fact.value }}</strong>
+          </article>
+        </div>
+
+        <label class="metadata-search metadata-search--stacked">
+          <span>Рабочая копия</span>
+          <textarea
+            v-model="documentDraftText"
+            class="document-draft-textarea"
+            rows="12"
+            spellcheck="false"
+          />
+        </label>
+
+        <div class="document-draft-actions">
+          <button
+            class="action-button"
+            type="button"
+            :disabled="!documentDraftIsDirty"
+            @click="resetDocumentDraft"
+          >
+            Сбросить
+          </button>
+          <button class="action-button" type="button" @click="copyDocumentDraft">
+            Скопировать
+          </button>
+          <button class="action-button" type="button" @click="downloadDocumentDraft">
+            Скачать
+          </button>
+          <button
+            class="action-button action-button--accent"
+            type="button"
+            @click="openDocumentDraftInEditor"
+          >
+            Продолжить в Editor
+          </button>
+        </div>
+      </article>
+
       <article class="panel-surface viewer-panel">
-        <p class="eyebrow">Structure</p>
-        <h2>Outline, table hints и content slices</h2>
+        <p class="eyebrow">Структура</p>
+        <h2>Заголовки, листы, таблицы и другие части документа</h2>
 
         <div v-if="documentOutline.length" class="outline-stack">
           <article
@@ -2224,7 +2635,7 @@ onBeforeUnmount(() => {
 
         <div v-else-if="documentTable" class="outline-stack">
           <article v-for="column in documentTable.columns" :key="column" class="outline-card">
-            <strong>Column</strong>
+            <strong>Колонка</strong>
             <span>{{ column }}</span>
           </article>
         </div>
@@ -2237,8 +2648,8 @@ onBeforeUnmount(() => {
             :class="{ 'outline-card--active': documentSheetIndex === sheetIndex }"
             @click="selectDocumentSheet(sheetIndex)"
           >
-            <strong>Sheet</strong>
-            <span>{{ sheet.name }} · {{ sheet.table.totalRows }} rows</span>
+            <strong>Лист</strong>
+            <span>{{ sheet.name }} · {{ sheet.table.totalRows }} строк</span>
           </article>
         </div>
 
@@ -2263,9 +2674,9 @@ onBeforeUnmount(() => {
             :class="{ 'outline-card--active': documentDatabaseTableIndex === tableIndex }"
             @click="selectDocumentDatabaseTable(tableIndex)"
           >
-            <strong>Table</strong>
+            <strong>Таблица</strong>
             <span>{{
-              table.rowCount == null ? table.name : `${table.name} · ${table.rowCount} rows`
+              table.rowCount == null ? table.name : `${table.name} · ${table.rowCount} строк`
             }}</span>
           </article>
         </div>
@@ -2281,13 +2692,13 @@ onBeforeUnmount(() => {
         </div>
 
         <p v-else class="viewer-panel__empty">
-          Для этого document mode структурная панель пока ограничена summary и search layer.
+          Для этого типа документа доступны только основные сведения и поиск по тексту.
         </p>
       </article>
 
       <article class="panel-surface viewer-panel viewer-panel--wide">
-        <p class="eyebrow">Capability Map</p>
-        <h2>Document foundation и текущие preview paths</h2>
+        <p class="eyebrow">Поддержка форматов</p>
+        <h2>Какие документы уже открываются в этом режиме</h2>
         <div class="capability-columns">
           <div class="format-grid">
             <article
@@ -2298,10 +2709,10 @@ onBeforeUnmount(() => {
               <div class="format-card__meta">
                 <strong>{{ format.label }}</strong>
                 <span class="chip-pill chip-pill--compact chip-pill--accent">
-                  {{ format.statusLabel }}
+                  {{ formatViewerFormatStatus(format) }}
                 </span>
               </div>
-              <p>{{ format.notes }}</p>
+              <p>{{ formatViewerFormatNote(format) }}</p>
             </article>
           </div>
 
@@ -2313,62 +2724,60 @@ onBeforeUnmount(() => {
             >
               <div class="format-card__meta">
                 <strong>{{ format.label }}</strong>
-                <span class="chip-pill chip-pill--compact">{{ format.statusLabel }}</span>
+                <span class="chip-pill chip-pill--compact">{{
+                  formatViewerFormatStatus(format)
+                }}</span>
               </div>
-              <p>{{ format.notes }}</p>
+              <p>{{ formatViewerFormatNote(format) }}</p>
             </article>
           </div>
         </div>
         <p v-if="!plannedDocumentFormats.length" class="viewer-panel__empty">
-          Для document roadmap в этой итерации больше нет planned-only слотов: все заявленные
-          форматы теперь идут через реальные preview strategies.
+          Все заявленные документные форматы уже открываются в этом экране без отдельного обходного
+          сценария.
         </p>
       </article>
 
       <article class="panel-surface viewer-panel viewer-panel--wide">
-        <p class="eyebrow">Architecture</p>
-        <h2>Document viewer строится поверх того же workspace, а не рядом с ним.</h2>
+        <p class="eyebrow">Почему это удобно</p>
+        <h2>
+          Один и тот же экран подстраивается под разные типы документов, а не заставляет
+          переключаться между разными страницами.
+        </h2>
         <div class="architecture-grid">
           <article class="architecture-card">
-            <strong>Format Registry</strong>
+            <strong>Единый вход</strong>
+            <p>PDF, таблицы, презентации, EPUB и базы данных открываются из одного места.</p>
+          </article>
+          <article class="architecture-card">
+            <strong>Подходящий режим</strong>
             <p>
-              Теперь знает не только image family, но и весь document capability map без
-              foundation-only хвостов в текущем срезе.
+              Jack сам выбирает, показать ли текст, таблицу, HTML, листы, слайды или структуру базы.
             </p>
           </article>
           <article class="architecture-card">
-            <strong>Strategy Runtime</strong>
+            <strong>Поиск по содержимому</strong>
+            <p>Можно быстро найти нужный фрагмент, не думая о внутреннем формате документа.</p>
+          </article>
+          <article class="architecture-card">
+            <strong>Быстрая редактура</strong>
             <p>
-              Каждый документ идёт через свой adapter, но результат сводится к одному document
-              selection contract.
+              Для текстовых форматов доступна рабочая копия, которую можно поправить и сразу открыть
+              в editor.
             </p>
           </article>
           <article class="architecture-card">
-            <strong>Layout Modes</strong>
+            <strong>Честное отображение</strong>
             <p>
-              PDF embed, plain text, tabular preview, sandbox HTML и database inspection живут как
-              mode-подтипы одной модели.
+              Если формат нельзя показать идеально, Jack всё равно даёт полезное и понятное
+              представление вместо пустого экрана.
             </p>
           </article>
           <article class="architecture-card">
-            <strong>Search Layer</strong>
+            <strong>Один сценарий</strong>
             <p>
-              Quick find работает по нормализованному text layer, а не зависит от конкретного
-              renderer или DOM.
-            </p>
-          </article>
-          <article class="architecture-card">
-            <strong>Capability Honesty</strong>
-            <p>
-              Legacy, archive и SQLite paths честно показывают упрощённый preview там, где faithful
-              render неразумен, вместо ложной promise-поддержки.
-            </p>
-          </article>
-          <article class="architecture-card">
-            <strong>Shared Workspace</strong>
-            <p>
-              Маршрут остаётся один: stage, fullscreen, drag-and-drop и summary-панели
-              переиспользуются между семьями.
+              Загрузка, полноэкранный режим, поиск и сводка работают одинаково для разных семейств
+              файлов.
             </p>
           </article>
         </div>
@@ -3288,6 +3697,7 @@ h2 {
 }
 
 .metadata-search input,
+.metadata-search textarea,
 .metadata-editor input,
 .metadata-editor textarea {
   width: 100%;
@@ -3300,10 +3710,34 @@ h2 {
 }
 
 .metadata-search input:focus-visible,
+.metadata-search textarea:focus-visible,
 .metadata-editor input:focus-visible,
 .metadata-editor textarea:focus-visible {
   outline: 2px solid rgba(29, 92, 85, 0.32);
   outline-offset: 2px;
+}
+
+.metadata-search--stacked {
+  align-content: start;
+}
+
+.document-draft-textarea {
+  min-height: 220px;
+  resize: vertical;
+  font-family: var(--font-mono);
+  line-height: 1.55;
+}
+
+.document-draft-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.viewer-panel__copy {
+  margin: 0;
+  color: var(--text-main);
+  line-height: 1.65;
 }
 
 .metadata-editor label {

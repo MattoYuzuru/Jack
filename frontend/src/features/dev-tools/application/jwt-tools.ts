@@ -70,12 +70,12 @@ function buildJwtWarnings(
   now: number,
 ): string[] {
   const warnings: string[] = [
-    'Inspector не проверяет криптографическую подпись и не подтверждает доверие к issuer.',
+    'Проверка не подтверждает криптографическую подпись и не удостоверяет доверие к issuer.',
   ]
   const algorithm = stringifyClaim(header.alg)
 
   if (!signature) {
-    warnings.push('Signature segment отсутствует или пустой.')
+    warnings.push('Сегмент подписи отсутствует или пустой.')
   }
   if (algorithm?.toLowerCase() === 'none') {
     warnings.push(
@@ -116,13 +116,13 @@ function buildJwtFacts(
 
   return [
     { label: 'Сегментов', value: String(segmentCount) },
-    { label: 'alg', value: stringifyClaim(header.alg) ?? 'unknown' },
-    { label: 'typ', value: stringifyClaim(header.typ) ?? 'n/a' },
-    { label: 'kid', value: stringifyClaim(header.kid) ?? 'n/a' },
-    { label: 'iss', value: stringifyClaim(payload.iss) ?? 'n/a' },
-    { label: 'sub', value: stringifyClaim(payload.sub) ?? 'n/a' },
-    { label: 'aud', value: audienceValue ?? 'n/a' },
-    { label: 'Signature', value: signature ? 'Present' : 'Missing' },
+    { label: 'alg', value: stringifyClaim(header.alg) ?? 'неизвестно' },
+    { label: 'typ', value: stringifyClaim(header.typ) ?? 'нет' },
+    { label: 'kid', value: stringifyClaim(header.kid) ?? 'нет' },
+    { label: 'iss', value: stringifyClaim(payload.iss) ?? 'нет' },
+    { label: 'sub', value: stringifyClaim(payload.sub) ?? 'нет' },
+    { label: 'aud', value: audienceValue ?? 'нет' },
+    { label: 'Подпись', value: signature ? 'Есть' : 'Нет' },
   ]
 }
 
@@ -191,7 +191,7 @@ function decodeJwtJsonSegment(segment: string, label: string): Record<string, un
 
     return parsed as Record<string, unknown>
   } catch {
-    throw new Error(`JWT ${label} segment не удалось декодировать как JSON object.`)
+    throw new Error(`Сегмент JWT ${label} не удалось декодировать как JSON-объект.`)
   }
 }
 

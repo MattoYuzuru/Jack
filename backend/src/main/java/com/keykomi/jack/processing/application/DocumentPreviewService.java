@@ -1,5 +1,8 @@
 package com.keykomi.jack.processing.application;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.keykomi.jack.processing.domain.DocumentPreviewPayload;
 import com.keykomi.jack.processing.domain.StoredArtifact;
 import com.keykomi.jack.processing.domain.StoredUpload;
@@ -24,11 +27,13 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.DefaultStyledDocument;
 import javax.swing.text.rtf.RTFEditorKit;
+import javax.xml.XMLConstants;
 import javax.xml.parsers.DocumentBuilderFactory;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
@@ -62,6 +67,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 import org.w3c.dom.Node;
 import org.xml.sax.InputSource;
+import org.yaml.snakeyaml.Yaml;
 
 @Service
 public class DocumentPreviewService {
@@ -74,14 +80,27 @@ public class DocumentPreviewService {
 	private static final int SQLITE_SAMPLE_COLUMN_LIMIT = 12;
 	private static final int SQLITE_MAX_PREVIEW_TABLES = 12;
 	private static final String SQLITE_HEADER = "SQLite format 3\u0000";
-	private static final Set<String> TEXT_EXTENSIONS = Set.of("txt", "text");
+	private static final Pattern MARKDOWN_HEADING_PATTERN = Pattern.compile("(?m)^(#{1,6})\\s+(.+?)\\s*$");
+	private static final Pattern ENV_LINE_PATTERN = Pattern.compile("^\\s*(?:export\\s+)?([A-Za-z_][A-Za-z0-9_]*)\\s*=\\s*(.*)\\s*$");
+	private static final Pattern XML_TAG_PATTERN = Pattern.compile("(?m)^\\s*<([A-Za-z_][\\w:.-]*)");
+	private static final Set<String> TEXT_EXTENSIONS = Set.of("txt", "text", "log", "sql");
+	private static final Set<String> MARKDOWN_EXTENSIONS = Set.of("md", "markdown");
+	private static final Set<String> JSON_EXTENSIONS = Set.of("json");
+	private static final Set<String> YAML_EXTENSIONS = Set.of("yaml", "yml");
+	private static final Set<String> XML_EXTENSIONS = Set.of("xml");
+	private static final Set<String> ENV_EXTENSIONS = Set.of("env");
+	private static final Set<String> DELIMITED_TABLE_EXTENSIONS = Set.of("csv", "tsv");
 	private static final Set<String> HTML_EXTENSIONS = Set.of("html", "htm");
 	private static final Set<String> SQLITE_EXTENSIONS = Set.of("sqlite", "db");
 
 	private final ArtifactStorageService artifactStorageService;
+	private final ObjectMapper objectMapper;
+	private final Yaml yaml;
 
-	public DocumentPreviewService(ArtifactStorageService artifactStorageService) {
+	public DocumentPreviewService(ArtifactStorageService artifactStorageService, ObjectMapper objectMapper) {
 		this.artifactStorageService = artifactStorageService;
+		this.objectMapper = objectMapper;
+		this.yaml = new Yaml();
 	}
 
 	public boolean isAvailable() {
@@ -116,7 +135,7 @@ public class DocumentPreviewService {
 			);
 		}
 
-		return new DocumentPreviewResult(artifacts, "Document intelligence service");
+		return new DocumentPreviewResult(artifacts, "Подготовка просмотра документа");
 	}
 
 	public DocumentPreviewPayload analyze(StoredUpload upload) {
@@ -124,7 +143,8 @@ public class DocumentPreviewService {
 
 		return switch (extension) {
 			case "pdf" -> buildPdfPreview(upload);
-			case "csv" -> buildCsvPreview(upload);
+			case "csv" -> buildDelimitedTablePreview(upload, ',', "CSV", "Delimited table preview");
+			case "tsv" -> buildDelimitedTablePreview(upload, '\t', "TSV", "Tabbed table preview");
 			case "rtf" -> buildRtfPreview(upload);
 			case "doc" -> buildDocPreview(upload);
 			case "docx" -> buildDocxPreview(upload);
@@ -133,9 +153,16 @@ public class DocumentPreviewService {
 			case "xlsx" -> buildWorkbookPreview(upload, "XLSX", "XLSX workbook adapter", false);
 			case "pptx" -> buildPptxPreview(upload);
 			case "epub" -> buildEpubPreview(upload);
+			case "json" -> buildJsonPreview(upload);
+			case "yaml", "yml" -> buildYamlPreview(upload);
+			case "xml" -> buildXmlPreview(upload);
+			case "env" -> buildEnvPreview(upload);
 			default -> {
 				if (TEXT_EXTENSIONS.contains(extension)) {
 					yield buildTextPreview(upload);
+				}
+				if (MARKDOWN_EXTENSIONS.contains(extension)) {
+					yield buildMarkdownPreview(upload);
 				}
 				if (HTML_EXTENSIONS.contains(extension)) {
 					yield buildHtmlPreview(upload);
@@ -179,7 +206,8 @@ public class DocumentPreviewService {
 					null,
 					null,
 					null,
-					null
+					null,
+					buildEditableDraft(upload, searchableText, "txt", buildDocumentArtifactName(upload, "txt"))
 				),
 				"PDF server preview"
 			);
@@ -192,7 +220,7 @@ public class DocumentPreviewService {
 	private DocumentPreviewPayload buildTextPreview(StoredUpload upload) {
 		var text = readDocumentText(upload.storagePath());
 		return new DocumentPreviewPayload(
-			buildTextSummary("TXT", text),
+			buildTextSummary(resolveTextKindLabel(upload.extension()), text),
 			text,
 			List.of(),
 			new DocumentPreviewPayload.DocumentLayoutPayload(
@@ -207,27 +235,33 @@ public class DocumentPreviewService {
 				null,
 				null,
 				null,
-				null
+				null,
+				buildEditableDraft(upload, text, "txt", null)
 			),
 			"Text decode adapter"
 		);
 	}
 
-	private DocumentPreviewPayload buildCsvPreview(StoredUpload upload) {
+	private DocumentPreviewPayload buildDelimitedTablePreview(
+		StoredUpload upload,
+		char preferredDelimiter,
+		String label,
+		String previewLabel
+	) {
 		var text = readDocumentText(upload.storagePath());
-		var table = parseDelimitedTextDocument(text);
+		var table = parseDelimitedTextDocument(text, preferredDelimiter);
 		var warnings = new ArrayList<String>();
 
 		if (table.totalRows() > table.rows().size()) {
 			warnings.add(
-				"CSV preview ограничен первыми %s строками, полная таблица остаётся в backend searchable text layer."
-					.formatted(CSV_PREVIEW_ROW_LIMIT)
+				"%s показывает первые %s строк. Полное содержимое по-прежнему доступно для поиска и проверки."
+					.formatted(label, CSV_PREVIEW_ROW_LIMIT)
 			);
 		}
 
 		return new DocumentPreviewPayload(
 			List.of(
-				new DocumentPreviewPayload.DocumentFact("Тип документа", "CSV"),
+				new DocumentPreviewPayload.DocumentFact("Тип документа", label),
 				new DocumentPreviewPayload.DocumentFact("Колонки", String.valueOf(table.totalColumns())),
 				new DocumentPreviewPayload.DocumentFact("Строки", String.valueOf(table.totalRows())),
 				new DocumentPreviewPayload.DocumentFact("Delimiter", describeDelimiter(table.delimiter()))
@@ -246,9 +280,10 @@ public class DocumentPreviewService {
 				null,
 				null,
 				null,
-				null
+				null,
+				buildEditableDraft(upload, text, "txt", null)
 			),
-			"Delimited table preview"
+			previewLabel
 		);
 	}
 
@@ -261,7 +296,7 @@ public class DocumentPreviewService {
 				new DocumentPreviewPayload.DocumentFact("Тип документа", "HTML"),
 				new DocumentPreviewPayload.DocumentFact("Headings", String.valueOf(preview.outline().size())),
 				new DocumentPreviewPayload.DocumentFact("Текстовых символов", String.valueOf(preview.textContent().length())),
-				new DocumentPreviewPayload.DocumentFact("Sandbox", "Backend srcdoc")
+				new DocumentPreviewPayload.DocumentFact("Режим просмотра", "Безопасный встроенный просмотр")
 			),
 			preview.textContent(),
 			preview.warnings(),
@@ -277,9 +312,291 @@ public class DocumentPreviewService {
 				null,
 				null,
 				null,
-				null
+				null,
+				buildEditableDraft(upload, raw, "html", null)
 			),
 			"HTML sanitized preview"
+		);
+	}
+
+	private DocumentPreviewPayload buildMarkdownPreview(StoredUpload upload) {
+		var markdown = readDocumentText(upload.storagePath());
+		var outline = extractMarkdownOutline(markdown);
+
+		return new DocumentPreviewPayload(
+			List.of(
+				new DocumentPreviewPayload.DocumentFact("Тип документа", "Markdown"),
+				new DocumentPreviewPayload.DocumentFact("Headings", String.valueOf(outline.size())),
+				new DocumentPreviewPayload.DocumentFact("Строки", String.valueOf(countLines(markdown))),
+				new DocumentPreviewPayload.DocumentFact("Режим preview", "Rendered article")
+			),
+			markdown,
+			List.of(),
+			new DocumentPreviewPayload.DocumentLayoutPayload(
+				"html",
+				null,
+				markdown,
+				null,
+				null,
+				wrapDocumentHtml(renderMarkdownBody(markdown)),
+				outline,
+				null,
+				null,
+				null,
+				null,
+				null,
+				buildEditableDraft(upload, markdown, "markdown", null)
+			),
+			"Markdown reading preview"
+		);
+	}
+
+	private DocumentPreviewPayload buildJsonPreview(StoredUpload upload) {
+		var raw = readDocumentText(upload.storagePath());
+
+		try {
+			var node = this.objectMapper.readTree(raw);
+			var pretty = this.objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(node);
+			var outline = extractJsonOutline(node);
+			return buildStructuredPreview(
+				upload,
+				"JSON",
+				pretty,
+				outline,
+				List.of(
+					new DocumentPreviewPayload.DocumentFact("Top-level keys", String.valueOf(countJsonTopLevelEntries(node))),
+					new DocumentPreviewPayload.DocumentFact("Режим preview", "Structured config")
+				),
+				"json",
+				"JSON structured preview"
+			);
+		}
+		catch (JsonProcessingException exception) {
+			return buildStructuredFallbackPreview(
+				upload,
+				"JSON",
+				raw,
+				List.of("Файл не прошёл strict JSON parse, поэтому открыт как текстовая копия без структурного дерева."),
+				"json"
+			);
+		}
+	}
+
+	private DocumentPreviewPayload buildYamlPreview(StoredUpload upload) {
+		var raw = readDocumentText(upload.storagePath());
+
+		try {
+			var parsed = this.yaml.load(raw);
+			var normalized = normalizeExtractedText(Optional.ofNullable(this.yaml.dump(parsed)).orElse(raw));
+			var outline = extractYamlOutline(normalized);
+			return buildStructuredPreview(
+				upload,
+				"YAML",
+				normalized,
+				outline,
+				List.of(
+					new DocumentPreviewPayload.DocumentFact("Разделов", String.valueOf(outline.size())),
+					new DocumentPreviewPayload.DocumentFact("Режим preview", "Config review")
+				),
+				"yaml",
+				"YAML structured preview"
+			);
+		}
+		catch (Exception exception) {
+			return buildStructuredFallbackPreview(
+				upload,
+				"YAML",
+				raw,
+				List.of("YAML не удалось разобрать безопасно, поэтому открыт текстовый draft без структурного дерева."),
+				"yaml"
+			);
+		}
+	}
+
+	private DocumentPreviewPayload buildXmlPreview(StoredUpload upload) {
+		var raw = readDocumentText(upload.storagePath());
+
+		try {
+			var document = parseXml(raw);
+			var outline = extractXmlOutline(document);
+			var rootName = Optional.ofNullable(document.getDocumentElement())
+				.map(org.w3c.dom.Element::getTagName)
+				.orElse("XML");
+
+			return new DocumentPreviewPayload(
+				List.of(
+					new DocumentPreviewPayload.DocumentFact("Тип документа", "XML"),
+					new DocumentPreviewPayload.DocumentFact("Root node", rootName),
+					new DocumentPreviewPayload.DocumentFact("Outline entries", String.valueOf(outline.size())),
+					new DocumentPreviewPayload.DocumentFact("Режим preview", "Schema read")
+				),
+				raw,
+				List.of(),
+				new DocumentPreviewPayload.DocumentLayoutPayload(
+					"html",
+					null,
+					raw,
+					null,
+					null,
+					wrapStructuredConfigHtml("""
+						<section class="config-sheet">
+						  <div class="config-sheet__meta">
+						    <span>Root node</span>
+						    <strong>%s</strong>
+						  </div>
+						  <pre>%s</pre>
+						</section>
+						""".formatted(escapeHtml(rootName), escapeHtml(raw))),
+					outline,
+					null,
+					null,
+					null,
+					null,
+					null,
+					buildEditableDraft(upload, raw, "xml", null)
+				),
+				"XML structure preview"
+			);
+		}
+		catch (ResponseStatusException exception) {
+			return buildStructuredFallbackPreview(
+				upload,
+				"XML",
+				raw,
+				List.of("XML не удалось разобрать безопасно, поэтому открыт текстовый draft для ручной проверки."),
+				"xml"
+			);
+		}
+	}
+
+	private DocumentPreviewPayload buildEnvPreview(StoredUpload upload) {
+		var raw = readDocumentText(upload.storagePath());
+		var rows = new ArrayList<List<String>>();
+		var warnings = new ArrayList<String>();
+
+		for (String line : raw.split("\\R")) {
+			var trimmed = line.trim();
+			if (trimmed.isBlank() || trimmed.startsWith("#")) {
+				continue;
+			}
+
+			var matcher = ENV_LINE_PATTERN.matcher(line);
+			if (!matcher.matches()) {
+				warnings.add("Некоторые строки .env не похожи на KEY=value и оставлены только в raw draft.");
+				break;
+			}
+
+			rows.add(List.of(matcher.group(1), trimEnvValue(matcher.group(2))));
+		}
+
+		var previewRows = rows.stream().limit(CSV_PREVIEW_ROW_LIMIT).toList();
+		var table = new DocumentPreviewPayload.DocumentTablePreview(
+			List.of("Key", "Value"),
+			previewRows,
+			rows.size(),
+			2,
+			"="
+		);
+
+		return new DocumentPreviewPayload(
+			List.of(
+				new DocumentPreviewPayload.DocumentFact("Тип документа", ".env"),
+				new DocumentPreviewPayload.DocumentFact("Ключей", String.valueOf(rows.size())),
+				new DocumentPreviewPayload.DocumentFact("Комментарии", raw.contains("#") ? "Есть" : "Нет"),
+				new DocumentPreviewPayload.DocumentFact("Режим preview", "Config table")
+			),
+			raw,
+			warnings,
+			new DocumentPreviewPayload.DocumentLayoutPayload(
+				"table",
+				null,
+				raw,
+				null,
+				table,
+				null,
+				null,
+				null,
+				null,
+				null,
+				null,
+				null,
+				buildEditableDraft(upload, raw, "env", null)
+			),
+			"Environment config preview"
+		);
+	}
+
+	private DocumentPreviewPayload buildStructuredPreview(
+		StoredUpload upload,
+		String kind,
+		String normalizedText,
+		List<DocumentPreviewPayload.DocumentOutlineItem> outline,
+		List<DocumentPreviewPayload.DocumentFact> extraFacts,
+		String editorFormatId,
+		String previewLabel
+	) {
+		var facts = new ArrayList<DocumentPreviewPayload.DocumentFact>();
+		facts.add(new DocumentPreviewPayload.DocumentFact("Тип документа", kind));
+		facts.add(new DocumentPreviewPayload.DocumentFact("Строки", String.valueOf(countLines(normalizedText))));
+		facts.add(new DocumentPreviewPayload.DocumentFact("Символы", String.valueOf(normalizedText.length())));
+		facts.addAll(extraFacts);
+
+		return new DocumentPreviewPayload(
+			List.copyOf(facts),
+			normalizedText,
+			List.of(),
+			new DocumentPreviewPayload.DocumentLayoutPayload(
+				"html",
+				null,
+				normalizedText,
+				null,
+				null,
+				wrapStructuredConfigHtml("""
+					<section class="config-sheet">
+					  <pre>%s</pre>
+					</section>
+					""".formatted(escapeHtml(normalizedText))),
+				outline,
+				null,
+				null,
+				null,
+				null,
+				null,
+				buildEditableDraft(upload, normalizedText, editorFormatId, null)
+			),
+			previewLabel
+		);
+	}
+
+	private DocumentPreviewPayload buildStructuredFallbackPreview(
+		StoredUpload upload,
+		String kind,
+		String raw,
+		List<String> warnings,
+		String editorFormatId
+	) {
+		var normalized = normalizeExtractedText(raw);
+
+		return new DocumentPreviewPayload(
+			buildTextSummary(kind, normalized),
+			normalized,
+			warnings,
+			new DocumentPreviewPayload.DocumentLayoutPayload(
+				"text",
+				null,
+				normalized,
+				splitParagraphs(normalized, TEXT_PARAGRAPH_LIMIT),
+				null,
+				null,
+				null,
+				null,
+				null,
+				null,
+				null,
+				null,
+				buildEditableDraft(upload, normalized, editorFormatId, null)
+			),
+			kind + " text fallback"
 		);
 	}
 
@@ -295,7 +612,7 @@ public class DocumentPreviewService {
 			return new DocumentPreviewPayload(
 				buildTextSummary("RTF", text),
 				text,
-				List.of("RTF сейчас проходит через backend text extraction path: форматирование и вложенные объекты не рендерятся как layout."),
+				List.of("Показан текст документа без исходного оформления и вложенных объектов."),
 				new DocumentPreviewPayload.DocumentLayoutPayload(
 					"text",
 					null,
@@ -308,7 +625,8 @@ public class DocumentPreviewService {
 					null,
 					null,
 					null,
-					null
+					null,
+					buildEditableDraft(upload, text, "txt", buildDocumentArtifactName(upload, "txt"))
 				),
 				"RTF text extraction"
 			);
@@ -326,7 +644,7 @@ public class DocumentPreviewService {
 			return new DocumentPreviewPayload(
 				buildTextSummary("DOC", text),
 				text,
-				List.of("Legacy DOC проходит через backend binary text extraction path: точная вёрстка, изображения и revision marks не воспроизводятся как native layout."),
+				List.of("Для старого DOC доступен текст и базовая структура, но сложное оформление, изображения и правки могут отличаться от оригинала."),
 				new DocumentPreviewPayload.DocumentLayoutPayload(
 					"text",
 					null,
@@ -339,7 +657,8 @@ public class DocumentPreviewService {
 					null,
 					null,
 					null,
-					null
+					null,
+					buildEditableDraft(upload, text, "txt", buildDocumentArtifactName(upload, "txt"))
 				),
 				"DOC legacy text adapter"
 			);
@@ -381,7 +700,7 @@ public class DocumentPreviewService {
 					new DocumentPreviewPayload.DocumentFact("Таблицы", String.valueOf(tableCount))
 				),
 				searchableText,
-				List.of("DOCX preview строится на backend из OOXML content layer: сложные стили, изображения и колонтитулы сводятся к упрощённому document HTML."),
+				List.of("Показано содержание документа и таблицы, но сложные стили, колонтитулы и изображения могут быть упрощены."),
 				new DocumentPreviewPayload.DocumentLayoutPayload(
 					"html",
 					null,
@@ -394,7 +713,8 @@ public class DocumentPreviewService {
 					null,
 					null,
 					null,
-					null
+					null,
+					buildEditableDraft(upload, searchableText, "txt", buildDocumentArtifactName(upload, "txt"))
 				),
 				"DOCX OOXML adapter"
 			);
@@ -439,8 +759,8 @@ public class DocumentPreviewService {
 				.map(sheet -> sheet.name() + "\n" + renderTableRowsForSearch(sheet.table()))
 				.collect(java.util.stream.Collectors.joining("\n\n"));
 			var warnings = legacyWorkbook
-				? List.of("Legacy XLS декодируется через backend workbook adapter: sheet data сохраняется, но стили, диаграммы и макросы не воспроизводятся как Excel layout.")
-				: List.of("XLSX preview показывает sheet data, но не воспроизводит formulas, styles, merged cells и charts как native spreadsheet layout.");
+				? List.of("Для XLS показаны данные листов, но макросы, стили и диаграммы в просмотр не входят.")
+				: List.of("Для XLSX показаны данные листов, но формулы, объединённые ячейки, стили и диаграммы могут отличаться от исходника.");
 
 			return new DocumentPreviewPayload(
 				List.of(
@@ -461,6 +781,7 @@ public class DocumentPreviewService {
 					null,
 					sheets,
 					0,
+					null,
 					null,
 					null,
 					null
@@ -511,7 +832,7 @@ public class DocumentPreviewService {
 					)
 				),
 				searchableText,
-				List.of("PPTX preview сводит deck к slide text contract: titles и bullet content сохраняются, но layout, media, animations и theme styles не рендерятся как PowerPoint."),
+				List.of("Показаны заголовки и основные пункты слайдов, но оформление, анимации и встроенные медиа в просмотр не входят."),
 				new DocumentPreviewPayload.DocumentLayoutPayload(
 					"slides",
 					null,
@@ -524,7 +845,8 @@ public class DocumentPreviewService {
 					null,
 					slides,
 					null,
-					null
+					null,
+					buildEditableDraft(upload, searchableText, "txt", buildDocumentArtifactName(upload, "txt"))
 				),
 				"PPTX slide adapter"
 			);
@@ -561,7 +883,7 @@ public class DocumentPreviewService {
 					new DocumentPreviewPayload.DocumentFact("Таблицы", String.valueOf(tableCount))
 				),
 				searchableText,
-				List.of("ODT preview собирается server-side из archive/xml content layer: текст, headings и таблицы читаются, но стили, изображения и footnotes сводятся к упрощённому HTML."),
+				List.of("Показан текст, заголовки и таблицы, но оформление, изображения и сноски могут быть упрощены."),
 				new DocumentPreviewPayload.DocumentLayoutPayload(
 					"html",
 					null,
@@ -574,7 +896,8 @@ public class DocumentPreviewService {
 					null,
 					null,
 					null,
-					null
+					null,
+					buildEditableDraft(upload, searchableText, "txt", buildDocumentArtifactName(upload, "txt"))
 				),
 				"ODT archive adapter"
 			);
@@ -650,7 +973,7 @@ public class DocumentPreviewService {
 					new DocumentPreviewPayload.DocumentFact("Главы", String.valueOf(chapterCount))
 				),
 				searchableText,
-				List.of("EPUB preview рендерится как backend reflow reading layer: главы и headings сохраняются, но исходные CSS-темы, annotations и media overlays не воспроизводятся."),
+				List.of("Показано содержимое книги в режиме чтения, но тема оформления, заметки и медиа-слои не воспроизводятся полностью."),
 				new DocumentPreviewPayload.DocumentLayoutPayload(
 					"html",
 					null,
@@ -663,7 +986,8 @@ public class DocumentPreviewService {
 					null,
 					null,
 					null,
-					null
+					null,
+					buildEditableDraft(upload, searchableText, "txt", buildDocumentArtifactName(upload, "txt"))
 				),
 				"EPUB reading adapter"
 			);
@@ -711,10 +1035,10 @@ public class DocumentPreviewService {
 					.collect(java.util.stream.Collectors.joining("\n\n"));
 
 				var warnings = new ArrayList<String>();
-				warnings.add("SQLite preview работает только в read-only introspection mode: backend читает schema и sample rows, но не исполняет произвольные пользовательские запросы и не модифицирует базу.");
+				warnings.add("Просмотр базы доступен только для чтения: можно изучить структуру и примеры строк без изменения файла.");
 				if (tableEntries.size() > SQLITE_MAX_PREVIEW_TABLES) {
 					warnings.add(
-						"Для производительности preview показывает первые %s таблиц из %s; полная структура всё равно остаётся в searchable text layer."
+						"Для скорости показаны первые %s таблиц из %s, а полный список остаётся доступен через поиск по содержимому."
 							.formatted(SQLITE_MAX_PREVIEW_TABLES, tableEntries.size())
 					);
 				}
@@ -740,7 +1064,8 @@ public class DocumentPreviewService {
 						null,
 						null,
 						tables,
-						0
+						0,
+						null
 					),
 					"SQLite database adapter"
 				);
@@ -751,8 +1076,8 @@ public class DocumentPreviewService {
 		}
 	}
 
-	private DocumentPreviewPayload.DocumentTablePreview parseDelimitedTextDocument(String text) {
-		var delimiter = detectDelimiter(text);
+	private DocumentPreviewPayload.DocumentTablePreview parseDelimitedTextDocument(String text, char preferredDelimiter) {
+		var delimiter = detectDelimiter(text, preferredDelimiter);
 		var rows = new ArrayList<List<String>>();
 
 		try (var parser = CSVParser.parse(
@@ -821,7 +1146,7 @@ public class DocumentPreviewService {
 			.toList();
 		var textContent = normalizeExtractedText(cleanedDocument.text());
 		var warnings = hadUnsafeNodes
-			? List.of("HTML preview проходит через backend sanitization: потенциально опасные script/style/embed узлы вырезаются перед рендером.")
+			? List.of("Потенциально опасные HTML-узлы удалены для безопасного просмотра.")
 			: List.<String>of();
 
 		return new HtmlPreview(
@@ -1228,6 +1553,251 @@ public class DocumentPreviewService {
 		return "\"" + identifier.replace("\"", "\"\"") + "\"";
 	}
 
+	private DocumentPreviewPayload.DocumentEditableDraft buildEditableDraft(
+		StoredUpload upload,
+		String text,
+		String editorFormatId,
+		String fileNameOverride
+	) {
+		if (text == null || text.isBlank()) {
+			return null;
+		}
+
+		return new DocumentPreviewPayload.DocumentEditableDraft(
+			normalizeExtractedText(text),
+			fileNameOverride != null ? fileNameOverride : upload.originalFileName(),
+			editorFormatId
+		);
+	}
+
+	private String resolveTextKindLabel(String extension) {
+		return switch (normalizeExtension(extension)) {
+			case "log" -> "LOG";
+			case "sql" -> "SQL";
+			default -> "TXT";
+		};
+	}
+
+	private String trimEnvValue(String value) {
+		var trimmed = Optional.ofNullable(value).orElse("").trim();
+		if (
+			(trimmed.startsWith("\"") && trimmed.endsWith("\"")) ||
+			(trimmed.startsWith("'") && trimmed.endsWith("'"))
+		) {
+			return trimmed.substring(1, trimmed.length() - 1);
+		}
+		return trimmed;
+	}
+
+	private List<DocumentPreviewPayload.DocumentOutlineItem> extractMarkdownOutline(String markdown) {
+		var outline = new ArrayList<DocumentPreviewPayload.DocumentOutlineItem>();
+		var matcher = MARKDOWN_HEADING_PATTERN.matcher(markdown);
+		int index = 0;
+
+		while (matcher.find()) {
+			index += 1;
+			outline.add(
+				new DocumentPreviewPayload.DocumentOutlineItem(
+					"md-heading-" + index,
+					normalizeText(matcher.group(2)),
+					clampHeadingLevel(matcher.group(1).length())
+				)
+			);
+		}
+
+		return List.copyOf(outline);
+	}
+
+	private String renderMarkdownBody(String markdown) {
+		var lines = markdown.split("\\R");
+		var html = new StringBuilder();
+		boolean insideList = false;
+
+		for (String rawLine : lines) {
+			var line = rawLine.trim();
+			if (line.isBlank()) {
+				if (insideList) {
+					html.append("</ul>");
+					insideList = false;
+				}
+				continue;
+			}
+
+			var headingMatcher = MARKDOWN_HEADING_PATTERN.matcher(line);
+			if (headingMatcher.matches()) {
+				if (insideList) {
+					html.append("</ul>");
+					insideList = false;
+				}
+				int level = clampHeadingLevel(headingMatcher.group(1).length());
+				html.append("<h").append(level).append(">")
+					.append(applyInlineMarkdown(headingMatcher.group(2)))
+					.append("</h").append(level).append(">");
+				continue;
+			}
+
+			if (line.startsWith("- ") || line.startsWith("* ")) {
+				if (!insideList) {
+					html.append("<ul>");
+					insideList = true;
+				}
+				html.append("<li>").append(applyInlineMarkdown(line.substring(2).trim())).append("</li>");
+				continue;
+			}
+
+			if (insideList) {
+				html.append("</ul>");
+				insideList = false;
+			}
+
+			if (line.startsWith(">")) {
+				html.append("<blockquote>").append(applyInlineMarkdown(line.replaceFirst("^>\\s*", ""))).append("</blockquote>");
+				continue;
+			}
+
+			html.append("<p>").append(applyInlineMarkdown(line)).append("</p>");
+		}
+
+		if (insideList) {
+			html.append("</ul>");
+		}
+
+		if (html.isEmpty()) {
+			html.append("<p>Пустой Markdown файл.</p>");
+		}
+
+		return html.toString();
+	}
+
+	private String applyInlineMarkdown(String text) {
+		var html = escapeHtml(text);
+		html = html.replaceAll("\\*\\*(.+?)\\*\\*", "<strong>$1</strong>");
+		html = html.replaceAll("__(.+?)__", "<strong>$1</strong>");
+		html = html.replaceAll("`([^`]+)`", "<code>$1</code>");
+		html = html.replaceAll("\\[(.+?)]\\((https?://[^)]+)\\)", "<a href=\"$2\" target=\"_blank\" rel=\"noreferrer noopener\">$1</a>");
+		html = html.replaceAll("(?<!\\*)\\*(?!\\s)(.+?)(?<!\\s)\\*", "<em>$1</em>");
+		return html;
+	}
+
+	private List<DocumentPreviewPayload.DocumentOutlineItem> extractJsonOutline(JsonNode node) {
+		if (node == null || !node.isObject()) {
+			return List.of();
+		}
+
+		var outline = new ArrayList<DocumentPreviewPayload.DocumentOutlineItem>();
+		var iterator = node.fieldNames();
+		int index = 0;
+		while (iterator.hasNext() && outline.size() < 18) {
+			index += 1;
+			outline.add(new DocumentPreviewPayload.DocumentOutlineItem("json-key-" + index, iterator.next(), 1));
+		}
+		return List.copyOf(outline);
+	}
+
+	private int countJsonTopLevelEntries(JsonNode node) {
+		if (node == null) {
+			return 0;
+		}
+		if (node.isObject()) {
+			return node.size();
+		}
+		if (node.isArray()) {
+			return node.size();
+		}
+		return 1;
+	}
+
+	private List<DocumentPreviewPayload.DocumentOutlineItem> extractYamlOutline(String normalizedYaml) {
+		var outline = new ArrayList<DocumentPreviewPayload.DocumentOutlineItem>();
+		int index = 0;
+		for (String line : normalizedYaml.split("\\R")) {
+			if (!line.contains(":")) {
+				continue;
+			}
+			var indent = countLeadingSpaces(line);
+			var key = line.substring(0, line.indexOf(':')).trim();
+			if (key.isBlank() || key.startsWith("-")) {
+				continue;
+			}
+			index += 1;
+			outline.add(
+				new DocumentPreviewPayload.DocumentOutlineItem(
+					"yaml-key-" + index,
+					key,
+					Math.min((indent / 2) + 1, 6)
+				)
+			);
+			if (outline.size() >= 18) {
+				break;
+			}
+		}
+		return List.copyOf(outline);
+	}
+
+	private List<DocumentPreviewPayload.DocumentOutlineItem> extractXmlOutline(org.w3c.dom.Document document) {
+		var outline = new ArrayList<DocumentPreviewPayload.DocumentOutlineItem>();
+		collectXmlOutline(document.getDocumentElement(), outline, 1, new int[] { 0 });
+		return List.copyOf(outline);
+	}
+
+	private void collectXmlOutline(
+		org.w3c.dom.Element element,
+		List<DocumentPreviewPayload.DocumentOutlineItem> outline,
+		int level,
+		int[] counter
+	) {
+		if (element == null || outline.size() >= 18) {
+			return;
+		}
+
+		counter[0] += 1;
+		outline.add(
+			new DocumentPreviewPayload.DocumentOutlineItem(
+				"xml-node-" + counter[0],
+				element.getTagName(),
+				Math.min(level, 6)
+			)
+		);
+
+		var children = element.getChildNodes();
+		for (int index = 0; index < children.getLength() && outline.size() < 18; index += 1) {
+			var child = children.item(index);
+			if (child instanceof org.w3c.dom.Element childElement) {
+				collectXmlOutline(childElement, outline, level + 1, counter);
+			}
+		}
+	}
+
+	private int countLeadingSpaces(String value) {
+		int count = 0;
+		while (count < value.length() && value.charAt(count) == ' ') {
+			count += 1;
+		}
+		return count;
+	}
+
+	private String wrapStructuredConfigHtml(String body) {
+		var safeBody = Optional.ofNullable(body).orElse("");
+		return """
+			<!doctype html>
+			<html lang="ru">
+			  <head>
+			    <meta charset="utf-8" />
+			    <meta name="viewport" content="width=device-width, initial-scale=1" />
+			    <style>
+			      :root{color-scheme:light;font-family:"Manrope","Segoe UI",sans-serif;background:#f7f1e6;color:#173436;}
+			      body{margin:0;padding:28px;background:linear-gradient(180deg,#fffaf2 0%%,#f1e7d8 100%%);}
+			      .config-sheet{border-radius:24px;padding:22px;background:rgba(255,253,249,0.92);box-shadow:-12px -12px 24px rgba(255,255,255,0.86),16px 18px 32px rgba(96,79,57,0.16);}
+			      .config-sheet__meta{display:flex;gap:10px;align-items:center;margin-bottom:14px;font-size:0.9rem;color:#4f6963;}
+			      strong{color:#173436;}
+			      pre{margin:0;white-space:pre-wrap;word-break:break-word;font:500 0.95rem/1.6 "IBM Plex Mono","SFMono-Regular",monospace;color:#1f3834;}
+			    </style>
+			  </head>
+			  <body>%s</body>
+			</html>
+			""".formatted(safeBody);
+	}
+
 	private List<DocumentPreviewPayload.DocumentFact> buildTextSummary(String kind, String text) {
 		return List.of(
 			new DocumentPreviewPayload.DocumentFact("Тип документа", kind),
@@ -1298,7 +1868,7 @@ public class DocumentPreviewService {
 		return normalized.split("\\s+").length;
 	}
 
-	private char detectDelimiter(String text) {
+	private char detectDelimiter(String text, char preferredDelimiter) {
 		var candidates = List.of(',', ';', '\t', '|');
 		var sampleLines = java.util.Arrays.stream(text.split("\\R"))
 			.map(String::trim)
@@ -1306,12 +1876,19 @@ public class DocumentPreviewService {
 			.limit(12)
 			.toList();
 		if (sampleLines.isEmpty()) {
-			return ',';
+			return preferredDelimiter;
+		}
+
+		if (preferredDelimiter == '\t' || preferredDelimiter == ',' || preferredDelimiter == ';' || preferredDelimiter == '|') {
+			var preferredScore = delimiterScore(sampleLines, preferredDelimiter);
+			if (preferredScore > 0) {
+				return preferredDelimiter;
+			}
 		}
 
 		return candidates.stream()
 			.max(Comparator.comparingInt(candidate -> delimiterScore(sampleLines, candidate)))
-			.orElse(',');
+			.orElse(preferredDelimiter);
 	}
 
 	private int delimiterScore(List<String> sampleLines, char delimiter) {
@@ -1507,6 +2084,13 @@ public class DocumentPreviewService {
 		try {
 			var factory = DocumentBuilderFactory.newInstance();
 			factory.setNamespaceAware(true);
+			factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
+			factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+			factory.setFeature("http://xml.org/sax/features/external-general-entities", false);
+			factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
+			factory.setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false);
+			factory.setXIncludeAware(false);
+			factory.setExpandEntityReferences(false);
 			var builder = factory.newDocumentBuilder();
 			return builder.parse(new InputSource(new StringReader(content)));
 		}
