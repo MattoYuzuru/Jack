@@ -4,6 +4,7 @@ import com.keykomi.jack.processing.domain.ProcessingJobStatus;
 import com.keykomi.jack.processing.domain.ProcessingJobType;
 import com.keykomi.jack.processing.domain.StoredArtifact;
 import com.keykomi.jack.processing.domain.ImageProcessingRequest;
+import com.keykomi.jack.processing.domain.MediaConversionRequest;
 import com.keykomi.jack.processing.domain.OfficeConversionRequest;
 import com.keykomi.jack.processing.domain.MetadataPayloads;
 import com.keykomi.jack.processing.domain.MetadataProcessingRequest;
@@ -30,6 +31,7 @@ public class ProcessingJobService {
 	private final UploadStorageService uploadStorageService;
 	private final ArtifactStorageService artifactStorageService;
 	private final MediaPreviewService mediaPreviewService;
+	private final MediaConversionService mediaConversionService;
 	private final ImageProcessingService imageProcessingService;
 	private final OfficeConversionService officeConversionService;
 	private final DocumentPreviewService documentPreviewService;
@@ -43,6 +45,7 @@ public class ProcessingJobService {
 		UploadStorageService uploadStorageService,
 		ArtifactStorageService artifactStorageService,
 		MediaPreviewService mediaPreviewService,
+		MediaConversionService mediaConversionService,
 		ImageProcessingService imageProcessingService,
 		OfficeConversionService officeConversionService,
 		DocumentPreviewService documentPreviewService,
@@ -53,6 +56,7 @@ public class ProcessingJobService {
 		this.uploadStorageService = uploadStorageService;
 		this.artifactStorageService = artifactStorageService;
 		this.mediaPreviewService = mediaPreviewService;
+		this.mediaConversionService = mediaConversionService;
 		this.imageProcessingService = imageProcessingService;
 		this.officeConversionService = officeConversionService;
 		this.documentPreviewService = documentPreviewService;
@@ -119,6 +123,7 @@ public class ProcessingJobService {
 			var result = switch (job.type()) {
 				case UPLOAD_INTAKE_ANALYSIS -> processUploadIntakeAnalysis(job.id(), upload);
 				case MEDIA_PREVIEW -> processMediaPreview(job.id(), upload);
+				case MEDIA_CONVERT -> processMediaConvert(job.id(), upload, parseMediaJobRequest(job.parameters()));
 				case IMAGE_CONVERT -> processImageConvert(job.id(), upload, parseImageJobRequest(job.parameters()));
 				case OFFICE_CONVERT -> processOfficeConvert(job.id(), upload, parseOfficeJobRequest(job.parameters()));
 				case DOCUMENT_PREVIEW -> processDocumentPreview(job.id(), upload);
@@ -165,6 +170,23 @@ public class ProcessingJobService {
 		);
 		return new JobProcessingResult(
 			"Media preview готов через backend %s path.".formatted(result.runtimeLabel()),
+			result.artifacts()
+		);
+	}
+
+	private JobProcessingResult processMediaConvert(
+		UUID jobId,
+		StoredUpload upload,
+		MediaConversionRequest request
+	) {
+		updateJob(jobId, currentJob -> currentJob.updateProgress(24, "Подготавливаю backend media conversion pipeline."));
+		var result = this.mediaConversionService.process(jobId, upload, request);
+		updateJob(
+			jobId,
+			currentJob -> currentJob.updateProgress(86, "Media conversion artifacts собраны, сохраняю manifest и output blobs.")
+		);
+		return new JobProcessingResult(
+			"Media conversion готов через backend %s.".formatted(result.runtimeLabel()),
 			result.artifacts()
 		);
 	}
@@ -272,6 +294,7 @@ public class ProcessingJobService {
 		if (
 			jobType != ProcessingJobType.UPLOAD_INTAKE_ANALYSIS &&
 			jobType != ProcessingJobType.MEDIA_PREVIEW &&
+			jobType != ProcessingJobType.MEDIA_CONVERT &&
 			jobType != ProcessingJobType.IMAGE_CONVERT &&
 			jobType != ProcessingJobType.OFFICE_CONVERT &&
 			jobType != ProcessingJobType.DOCUMENT_PREVIEW &&
@@ -289,6 +312,16 @@ public class ProcessingJobService {
 				HttpStatus.SERVICE_UNAVAILABLE,
 				"MEDIA_PREVIEW job требует доступных ffmpeg/ffprobe binaries в backend окружении."
 			);
+		}
+
+		if (jobType == ProcessingJobType.MEDIA_CONVERT) {
+			parseMediaJobRequest(parameters);
+			if (!this.mediaConversionService.isAvailable()) {
+				throw new ResponseStatusException(
+					HttpStatus.SERVICE_UNAVAILABLE,
+					"MEDIA_CONVERT job требует доступных ffmpeg/ffprobe binaries в backend окружении."
+				);
+			}
 		}
 
 		if (jobType == ProcessingJobType.IMAGE_CONVERT) {
@@ -388,6 +421,7 @@ public class ProcessingJobService {
 		return switch (jobType) {
 			case UPLOAD_INTAKE_ANALYSIS -> "Начинаю intake-analysis для backend processing foundation.";
 			case MEDIA_PREVIEW -> "Запускаю backend media preview pipeline через ffprobe/ffmpeg.";
+			case MEDIA_CONVERT -> "Запускаю backend media conversion pipeline через ffprobe/ffmpeg.";
 			case IMAGE_CONVERT -> "Запускаю backend imaging pipeline через convert/ffmpeg/potrace.";
 			case OFFICE_CONVERT -> "Запускаю backend office/pdf conversion pipeline.";
 			case DOCUMENT_PREVIEW -> "Запускаю backend document intelligence pipeline.";
@@ -415,6 +449,22 @@ public class ProcessingJobService {
 			readOptionalInteger(parameters, "maxHeight"),
 			readOptionalDouble(parameters, "quality"),
 			readOptionalString(parameters, "backgroundColor"),
+			readOptionalString(parameters, "presetLabel")
+		);
+	}
+
+	private MediaConversionRequest parseMediaJobRequest(Map<String, Object> parameters) {
+		var targetExtension = readRequiredString(parameters, "targetExtension");
+
+		return new MediaConversionRequest(
+			targetExtension.toLowerCase(),
+			readOptionalString(parameters, "videoCodec"),
+			readOptionalString(parameters, "audioCodec"),
+			readOptionalInteger(parameters, "maxWidth"),
+			readOptionalInteger(parameters, "maxHeight"),
+			readOptionalInteger(parameters, "targetFps"),
+			readOptionalInteger(parameters, "videoBitrateKbps"),
+			readOptionalInteger(parameters, "audioBitrateKbps"),
 			readOptionalString(parameters, "presetLabel")
 		);
 	}

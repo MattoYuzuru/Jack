@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 
@@ -75,7 +76,16 @@ public class CapabilityMatrixService {
 		sourceFormat("csv", List.of(), "CSV", "document", List.of("text/csv", "application/csv"), "spreadsheet-document", "Office route", "CSV source теперь идёт в OFFICE_CONVERT для workbook export.", List.of(ProcessingJobType.OFFICE_CONVERT), "CSV source требует доступного backend OFFICE_CONVERT capability."),
 		sourceFormat("xlsx", List.of(), "XLSX", "document", List.of("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"), "spreadsheet-document", "Office route", "XLSX source идёт в OFFICE_CONVERT для CSV/PDF/ODS export.", List.of(ProcessingJobType.OFFICE_CONVERT), "XLSX source требует доступного backend OFFICE_CONVERT capability."),
 		sourceFormat("ods", List.of(), "ODS", "document", List.of("application/vnd.oasis.opendocument.spreadsheet"), "spreadsheet-document", "Office route", "ODS source идёт в OFFICE_CONVERT для XLSX roundtrip.", List.of(ProcessingJobType.OFFICE_CONVERT), "ODS source требует доступного backend OFFICE_CONVERT capability."),
-		sourceFormat("pptx", List.of(), "PPTX", "document", List.of("application/vnd.openxmlformats-officedocument.presentationml.presentation"), "presentation-document", "Office route", "PPTX source идёт в OFFICE_CONVERT для PDF/image/video export.", List.of(ProcessingJobType.OFFICE_CONVERT), "PPTX source требует доступного backend OFFICE_CONVERT capability.")
+		sourceFormat("pptx", List.of(), "PPTX", "document", List.of("application/vnd.openxmlformats-officedocument.presentationml.presentation"), "presentation-document", "Office route", "PPTX source идёт в OFFICE_CONVERT для PDF/image/video export.", List.of(ProcessingJobType.OFFICE_CONVERT), "PPTX source требует доступного backend OFFICE_CONVERT capability."),
+		sourceFormat("mp4", List.of(), "MP4", "media", List.of("video/mp4"), "video-media", "Media route", "MP4 source идёт в MEDIA_CONVERT для container/codec/fps/resolution transcode и audio extract export.", List.of(ProcessingJobType.MEDIA_CONVERT), "MP4 source требует доступного backend MEDIA_CONVERT capability."),
+		sourceFormat("mov", List.of(), "MOV", "media", List.of("video/quicktime"), "video-media", "Media route", "MOV source идёт в MEDIA_CONVERT для MP4 normalize, GIF export и audio extraction.", List.of(ProcessingJobType.MEDIA_CONVERT), "MOV source требует доступного backend MEDIA_CONVERT capability."),
+		sourceFormat("mkv", List.of(), "MKV", "media", List.of("video/x-matroska"), "video-media", "Media route", "MKV source идёт в MEDIA_CONVERT для MP4 normalize и delivery-friendly transcode.", List.of(ProcessingJobType.MEDIA_CONVERT), "MKV source требует доступного backend MEDIA_CONVERT capability."),
+		sourceFormat("avi", List.of(), "AVI", "media", List.of("video/x-msvideo"), "video-media", "Media route", "AVI source идёт в MEDIA_CONVERT для MP4 normalize и audio export.", List.of(ProcessingJobType.MEDIA_CONVERT), "AVI source требует доступного backend MEDIA_CONVERT capability."),
+		sourceFormat("webm", List.of(), "WebM", "media", List.of("video/webm"), "video-media", "Media route", "WebM source идёт в MEDIA_CONVERT для MP4 transcode, GIF export и audio extraction.", List.of(ProcessingJobType.MEDIA_CONVERT), "WebM source требует доступного backend MEDIA_CONVERT capability."),
+		sourceFormat("wav", List.of(), "WAV", "media", List.of("audio/wav", "audio/x-wav"), "audio-media", "Media route", "WAV source идёт в MEDIA_CONVERT для MP3/FLAC/AAC delivery export.", List.of(ProcessingJobType.MEDIA_CONVERT), "WAV source требует доступного backend MEDIA_CONVERT capability."),
+		sourceFormat("flac", List.of(), "FLAC", "media", List.of("audio/flac"), "audio-media", "Media route", "FLAC source идёт в MEDIA_CONVERT для MP3/WAV delivery export.", List.of(ProcessingJobType.MEDIA_CONVERT), "FLAC source требует доступного backend MEDIA_CONVERT capability."),
+		sourceFormat("mp3", List.of(), "MP3", "media", List.of("audio/mpeg"), "audio-media", "Media route", "MP3 source идёт в MEDIA_CONVERT для M4A/AAC compatibility export.", List.of(ProcessingJobType.MEDIA_CONVERT), "MP3 source требует доступного backend MEDIA_CONVERT capability."),
+		sourceFormat("m4a", List.of(), "M4A", "media", List.of("audio/mp4", "audio/x-m4a"), "audio-media", "Media route", "M4A source идёт в MEDIA_CONVERT для MP3 roundtrip и bitrate normalization.", List.of(ProcessingJobType.MEDIA_CONVERT), "M4A source требует доступного backend MEDIA_CONVERT capability.")
 	);
 
 	private static final List<ConverterTargetSpec> CONVERTER_TARGET_SPECS = List.of(
@@ -93,10 +103,17 @@ public class CapabilityMatrixService {
 		targetFormat("rtf", "RTF", "document", "application/rtf", "rtf-document", false, true, null, "Office export", "RTF target собирается через OFFICE_CONVERT как compatibility export.", List.of()),
 		targetFormat("odt", "ODT", "document", "application/vnd.oasis.opendocument.text", "odt-document", false, true, null, "Office export", "ODT target собирается через OFFICE_CONVERT как OpenDocument text export.", List.of()),
 		targetFormat("xlsx", "XLSX", "document", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "xlsx-document", false, true, null, "Office export", "XLSX target собирается через OFFICE_CONVERT как workbook export.", List.of()),
-		targetFormat("csv", "CSV", "document", "text/csv", "csv-document", false, true, null, "Office export", "CSV target собирается через OFFICE_CONVERT как flattened table export.", List.of()),
+		targetFormat("csv", "CSV", "document", "text/csv", "csv-document", false, true, null, "Office export", "CSV target собирается через OFFICE_CONVERT как flattened table export без formulas/styles и с single-sheet ограничением.", List.of()),
 		targetFormat("ods", "ODS", "document", "application/vnd.oasis.opendocument.spreadsheet", "ods-document", false, true, null, "Office export", "ODS target собирается через OFFICE_CONVERT как OpenDocument spreadsheet export.", List.of()),
 		targetFormat("pptx", "PPTX", "document", "application/vnd.openxmlformats-officedocument.presentationml.presentation", "pptx-document", false, true, null, "Office export", "PPTX target собирается через OFFICE_CONVERT как image-slide deck export.", List.of()),
-		targetFormat("mp4", "MP4", "media", "video/mp4", "mp4-video", false, true, null, "Office export", "MP4 target собирается через OFFICE_CONVERT как slide-reel video export.", List.of())
+		targetFormat("mp4", "MP4", "media", "video/mp4", "mp4-video", false, true, null, "Media export", "MP4 target теперь используется и для OFFICE_CONVERT slide-reel video export, и для MEDIA_CONVERT container/codec transcode.", List.of()),
+		targetFormat("webm", "WebM", "media", "video/webm", "webm-video", false, true, null, "Media export", "WebM target собирается через MEDIA_CONVERT с раздельным container/codec/fps/bitrate control.", List.of()),
+		targetFormat("gif", "GIF", "image", "image/gif", "gif-image", false, true, null, "Media export", "GIF target собирается через MEDIA_CONVERT как reduced-fps animated export без audio track.", List.of()),
+		targetFormat("mp3", "MP3", "media", "audio/mpeg", "mp3-audio", false, true, null, "Media export", "MP3 target собирается через MEDIA_CONVERT как lossy delivery audio export.", List.of()),
+		targetFormat("wav", "WAV", "media", "audio/wav", "wav-audio", false, true, null, "Media export", "WAV target собирается через MEDIA_CONVERT как PCM audio export.", List.of()),
+		targetFormat("aac", "AAC", "media", "audio/aac", "aac-audio", false, true, null, "Media export", "AAC target собирается через MEDIA_CONVERT как compact audio delivery export.", List.of()),
+		targetFormat("m4a", "M4A", "media", "audio/mp4", "m4a-audio", false, true, null, "Media export", "M4A target собирается через MEDIA_CONVERT как AAC-in-M4A compatibility export.", List.of()),
+		targetFormat("flac", "FLAC", "media", "audio/flac", "flac-audio", false, true, null, "Media export", "FLAC target собирается через MEDIA_CONVERT как lossless audio export.", List.of())
 	);
 
 	private static final List<ConverterPresetSpec> CONVERTER_PRESET_SPECS = List.of(
@@ -111,12 +128,12 @@ public class CapabilityMatrixService {
 			"compression",
 			"Compression",
 			"Модуль сжатия может стартовать как thin feature поверх уже существующих image/media jobs, quality presets и artifact lifecycle.",
-			"Первый production-срез не должен заново придумывать browser runtime: image compression и target-size UX уже логично строятся поверх IMAGE_CONVERT, а media compression reuse'ит MEDIA_PREVIEW foundation и те же upload/job/artifact контракты.",
+			"Первый production-срез не должен заново придумывать browser runtime: image compression и target-size UX уже логично строятся поверх IMAGE_CONVERT, а media compression reuse'ит MEDIA_CONVERT/MEDIA_PREVIEW foundation и те же upload/job/artifact контракты.",
 			List.of("Target size", "Quality", "Batch"),
 			List.of("image-processing", "media-processing", "artifact-storage", "capabilities"),
-			List.of(ProcessingJobType.IMAGE_CONVERT, ProcessingJobType.MEDIA_PREVIEW),
+			List.of(ProcessingJobType.IMAGE_CONVERT, ProcessingJobType.MEDIA_CONVERT, ProcessingJobType.MEDIA_PREVIEW),
 			List.of("image quality presets", "video/audio bitrate targeting", "batch compression"),
-			"Compression module требует доступных IMAGE_CONVERT и MEDIA_PREVIEW capabilities."
+			"Compression module требует доступных IMAGE_CONVERT, MEDIA_CONVERT и MEDIA_PREVIEW capabilities."
 		),
 		platformModule(
 			"pdf-toolkit",
@@ -348,9 +365,12 @@ public class CapabilityMatrixService {
 		}
 		var available = allRequiredJobsAvailable(requiredJobTypes, availabilityByJobType);
 		var officeScenario = requiredJobTypes.contains(ProcessingJobType.OFFICE_CONVERT);
+		var mediaScenario = requiredJobTypes.contains(ProcessingJobType.MEDIA_CONVERT);
 		var detail = officeScenario
 			? "Сценарий идёт через backend OFFICE_CONVERT jobs: frontend держит progress/retry/cancel/reuse UX и получает preview/result artifacts."
-			: "Сценарий идёт через backend IMAGE_CONVERT jobs: frontend держит progress/retry/cancel/reuse UX и получает preview/result artifacts.";
+			: mediaScenario
+				? "Сценарий идёт через backend MEDIA_CONVERT jobs: контейнер, codec, bitrate, resolution и FPS собираются server-side в одном artifact contract."
+				: "Сценарий идёт через backend IMAGE_CONVERT jobs: frontend держит progress/retry/cancel/reuse UX и получает preview/result artifacts.";
 
 		return new CapabilityMatrixPayloads.ConverterScenarioCapability(
 			buildScenarioKey(spec.sourceExtension(), spec.targetExtension()),
@@ -360,7 +380,7 @@ public class CapabilityMatrixService {
 			spec.targetExtension(),
 			available ? ("server-assisted".equals(spec.executionMode()) ? "Server-assisted" : "Browser-native") : "Capability unavailable",
 			"server-assisted".equals(spec.executionMode())
-				? detail
+				? resolveScenarioNotes(spec, requiredJobTypes, detail)
 				: "Сценарий закрывается локально через browser-native raster pipeline без backend round-trip.",
 			List.of(spec.sourceExtension().toUpperCase(), spec.targetExtension().toUpperCase()),
 			spec.executionMode(),
@@ -477,7 +497,39 @@ public class CapabilityMatrixService {
 			scenario("pptx", "pdf", "PPTX -> PDF", "document", List.of(ProcessingJobType.OFFICE_CONVERT)),
 			scenario("pptx", "jpg", "PPTX -> JPG", "image", List.of(ProcessingJobType.OFFICE_CONVERT)),
 			scenario("pptx", "png", "PPTX -> PNG", "image", List.of(ProcessingJobType.OFFICE_CONVERT)),
-			scenario("pptx", "mp4", "PPTX -> MP4 video", "media", List.of(ProcessingJobType.OFFICE_CONVERT, ProcessingJobType.MEDIA_PREVIEW))
+			scenario("pptx", "mp4", "PPTX -> MP4 video", "media", List.of(ProcessingJobType.OFFICE_CONVERT, ProcessingJobType.MEDIA_PREVIEW)),
+			scenario("mov", "mp4", "MOV -> MP4", "media", List.of(ProcessingJobType.MEDIA_CONVERT)),
+			scenario("mkv", "mp4", "MKV -> MP4", "media", List.of(ProcessingJobType.MEDIA_CONVERT)),
+			scenario("avi", "mp4", "AVI -> MP4", "media", List.of(ProcessingJobType.MEDIA_CONVERT)),
+			scenario("webm", "mp4", "WebM -> MP4", "media", List.of(ProcessingJobType.MEDIA_CONVERT)),
+			scenario("mp4", "mp4", "MP4 -> MP4 transcode", "media", List.of(ProcessingJobType.MEDIA_CONVERT)),
+			scenario("mp4", "webm", "MP4 -> WebM", "media", List.of(ProcessingJobType.MEDIA_CONVERT)),
+			scenario("mov", "gif", "MOV -> GIF", "media", List.of(ProcessingJobType.MEDIA_CONVERT)),
+			scenario("mkv", "gif", "MKV -> GIF", "media", List.of(ProcessingJobType.MEDIA_CONVERT)),
+			scenario("avi", "gif", "AVI -> GIF", "media", List.of(ProcessingJobType.MEDIA_CONVERT)),
+			scenario("webm", "gif", "WebM -> GIF", "media", List.of(ProcessingJobType.MEDIA_CONVERT)),
+			scenario("mp4", "gif", "MP4 -> GIF", "media", List.of(ProcessingJobType.MEDIA_CONVERT)),
+			scenario("mov", "mp3", "MOV -> MP3", "media", List.of(ProcessingJobType.MEDIA_CONVERT)),
+			scenario("mov", "wav", "MOV -> WAV", "media", List.of(ProcessingJobType.MEDIA_CONVERT)),
+			scenario("mov", "aac", "MOV -> AAC", "media", List.of(ProcessingJobType.MEDIA_CONVERT)),
+			scenario("mkv", "mp3", "MKV -> MP3", "media", List.of(ProcessingJobType.MEDIA_CONVERT)),
+			scenario("mkv", "wav", "MKV -> WAV", "media", List.of(ProcessingJobType.MEDIA_CONVERT)),
+			scenario("mkv", "aac", "MKV -> AAC", "media", List.of(ProcessingJobType.MEDIA_CONVERT)),
+			scenario("avi", "mp3", "AVI -> MP3", "media", List.of(ProcessingJobType.MEDIA_CONVERT)),
+			scenario("avi", "wav", "AVI -> WAV", "media", List.of(ProcessingJobType.MEDIA_CONVERT)),
+			scenario("avi", "aac", "AVI -> AAC", "media", List.of(ProcessingJobType.MEDIA_CONVERT)),
+			scenario("webm", "mp3", "WebM -> MP3", "media", List.of(ProcessingJobType.MEDIA_CONVERT)),
+			scenario("webm", "wav", "WebM -> WAV", "media", List.of(ProcessingJobType.MEDIA_CONVERT)),
+			scenario("webm", "aac", "WebM -> AAC", "media", List.of(ProcessingJobType.MEDIA_CONVERT)),
+			scenario("mp4", "mp3", "MP4 -> MP3", "media", List.of(ProcessingJobType.MEDIA_CONVERT)),
+			scenario("mp4", "wav", "MP4 -> WAV", "media", List.of(ProcessingJobType.MEDIA_CONVERT)),
+			scenario("mp4", "aac", "MP4 -> AAC", "media", List.of(ProcessingJobType.MEDIA_CONVERT)),
+			scenario("wav", "mp3", "WAV -> MP3", "media", List.of(ProcessingJobType.MEDIA_CONVERT)),
+			scenario("wav", "flac", "WAV -> FLAC", "media", List.of(ProcessingJobType.MEDIA_CONVERT)),
+			scenario("flac", "mp3", "FLAC -> MP3", "media", List.of(ProcessingJobType.MEDIA_CONVERT)),
+			scenario("flac", "wav", "FLAC -> WAV", "media", List.of(ProcessingJobType.MEDIA_CONVERT)),
+			scenario("m4a", "mp3", "M4A -> MP3", "media", List.of(ProcessingJobType.MEDIA_CONVERT)),
+			scenario("mp3", "m4a", "MP3 -> M4A", "media", List.of(ProcessingJobType.MEDIA_CONVERT))
 		);
 	}
 
@@ -518,6 +570,10 @@ public class CapabilityMatrixService {
 		String targetExtension,
 		List<ProcessingJobType> requiredJobTypes
 	) {
+		if (requiredJobTypes.contains(ProcessingJobType.MEDIA_CONVERT)) {
+			return "%s -> %s требует доступного backend MEDIA_CONVERT capability."
+				.formatted(sourceExtension.toUpperCase(), targetExtension.toUpperCase());
+		}
 		if (requiredJobTypes.contains(ProcessingJobType.OFFICE_CONVERT)) {
 			return "%s -> %s требует доступного backend OFFICE_CONVERT capability."
 				.formatted(sourceExtension.toUpperCase(), targetExtension.toUpperCase());
@@ -530,6 +586,32 @@ public class CapabilityMatrixService {
 		// После converter route flip браузер больше не выбирает отдельные encode/decode ветки
 		// для "простых" форматов: любой supported сценарий идёт через единый job/artifact contract.
 		return true;
+	}
+
+	private static String resolveScenarioNotes(
+		ConverterScenarioSpec spec,
+		List<ProcessingJobType> requiredJobTypes,
+		String defaultDetail
+	) {
+		if (requiredJobTypes.contains(ProcessingJobType.MEDIA_CONVERT)) {
+			if ("gif".equals(spec.targetExtension())) {
+				return defaultDetail + " GIF target отдельно от контейнера фиксирует palette/fps constraints и всегда отбрасывает audio track.";
+			}
+			if (Set.of("mp3", "wav", "aac", "m4a", "flac").contains(spec.targetExtension())) {
+				return defaultDetail + " Audio export отделяет container от bitrate rules: video stream отбрасывается, а browser получает preview уже готового audio artifact.";
+			}
+			return defaultDetail + " Target format выбирает контейнер, а codec/bitrate/resolution/FPS настраиваются отдельно в media controls этого же workspace.";
+		}
+		if ("pdf".equals(spec.sourceExtension()) && "docx".equals(spec.targetExtension())) {
+			return defaultDetail + " PDF -> DOCX reconstructs text flow из доступного text layer, поэтому сложная верстка, колонки и positioned blocks могут поехать.";
+		}
+		if ("pdf".equals(spec.sourceExtension()) && Set.of("docx", "txt", "xlsx", "csv", "pptx").contains(spec.targetExtension())) {
+			return defaultDetail + " Если source PDF scanned и без text layer, сначала потребуется OCR: текущий export честно предупредит об этом и не притворяется точным reconstruction.";
+		}
+		if ("csv".equals(spec.targetExtension())) {
+			return defaultDetail + " CSV target остаётся flattened table export: formulas, styling, comments и multi-sheet structure не переносятся полностью.";
+		}
+		return defaultDetail;
 	}
 
 	private String buildAcceptAttribute(List<ExtensionAliases> definitions) {

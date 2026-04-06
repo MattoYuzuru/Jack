@@ -16,6 +16,12 @@ public final class ProcessingFileFamilyResolver {
 		"pdf", "txt", "text", "csv", "html", "htm", "rtf", "doc", "docx",
 		"odt", "xls", "xlsx", "ods", "pptx", "epub", "sqlite", "db"
 	);
+	private static final Set<String> VIDEO_EXTENSIONS = Set.of(
+		"mp4", "mov", "webm", "avi", "mkv", "wmv", "flv"
+	);
+	private static final Set<String> AUDIO_EXTENSIONS = Set.of(
+		"mp3", "wav", "aac", "m4a", "flac", "ogg", "opus", "aiff", "aif"
+	);
 
 	private ProcessingFileFamilyResolver() {
 	}
@@ -32,7 +38,13 @@ public final class ProcessingFileFamilyResolver {
 		if (mediaType.startsWith("video/")) {
 			return "media";
 		}
+		if (VIDEO_EXTENSIONS.contains(extension)) {
+			return "media";
+		}
 		if (mediaType.startsWith("audio/")) {
+			return "audio";
+		}
+		if (AUDIO_EXTENSIONS.contains(extension)) {
 			return "audio";
 		}
 		if (mediaType.startsWith("text/") || DOCUMENT_EXTENSIONS.contains(extension)) {
