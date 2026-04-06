@@ -18,6 +18,10 @@ public class ProcessingProperties {
 	private String tesseractExecutable = "tesseract";
 	private long pdfToolkitTimeoutSeconds = 300L;
 	private String pdfToolkitDefaultOcrLanguage = "eng";
+	private long cleanupIntervalMillis = 1_800_000L;
+	private long uploadRetentionHours = 24L;
+	private long artifactRetentionHours = 24L;
+	private long jobRetentionHours = 24L;
 
 	public Path getStorageRoot() {
 		return this.storageRoot;
@@ -121,6 +125,38 @@ public class ProcessingProperties {
 
 	public void setPdfToolkitDefaultOcrLanguage(String pdfToolkitDefaultOcrLanguage) {
 		this.pdfToolkitDefaultOcrLanguage = pdfToolkitDefaultOcrLanguage;
+	}
+
+	public long getCleanupIntervalMillis() {
+		return this.cleanupIntervalMillis;
+	}
+
+	public void setCleanupIntervalMillis(long cleanupIntervalMillis) {
+		this.cleanupIntervalMillis = cleanupIntervalMillis;
+	}
+
+	public long getUploadRetentionHours() {
+		return this.uploadRetentionHours;
+	}
+
+	public void setUploadRetentionHours(long uploadRetentionHours) {
+		this.uploadRetentionHours = uploadRetentionHours;
+	}
+
+	public long getArtifactRetentionHours() {
+		return this.artifactRetentionHours;
+	}
+
+	public void setArtifactRetentionHours(long artifactRetentionHours) {
+		this.artifactRetentionHours = artifactRetentionHours;
+	}
+
+	public long getJobRetentionHours() {
+		return this.jobRetentionHours;
+	}
+
+	public void setJobRetentionHours(long jobRetentionHours) {
+		this.jobRetentionHours = jobRetentionHours;
 	}
 
 }
