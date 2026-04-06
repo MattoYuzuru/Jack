@@ -32,6 +32,7 @@ public class ProcessingJobService {
 	private final ImageProcessingService imageProcessingService;
 	private final DocumentPreviewService documentPreviewService;
 	private final MetadataProcessingService metadataProcessingService;
+	private final ViewerResolveService viewerResolveService;
 	private final ExecutorService processingExecutor;
 	private final Map<UUID, StoredProcessingJob> jobs = new ConcurrentHashMap<>();
 	private final Map<UUID, Future<?>> submittedJobs = new ConcurrentHashMap<>();
@@ -43,6 +44,7 @@ public class ProcessingJobService {
 		ImageProcessingService imageProcessingService,
 		DocumentPreviewService documentPreviewService,
 		MetadataProcessingService metadataProcessingService,
+		ViewerResolveService viewerResolveService,
 		ExecutorService processingExecutor
 	) {
 		this.uploadStorageService = uploadStorageService;
@@ -51,13 +53,14 @@ public class ProcessingJobService {
 		this.imageProcessingService = imageProcessingService;
 		this.documentPreviewService = documentPreviewService;
 		this.metadataProcessingService = metadataProcessingService;
+		this.viewerResolveService = viewerResolveService;
 		this.processingExecutor = processingExecutor;
 	}
 
 	public StoredProcessingJob enqueue(UUID uploadId, ProcessingJobType jobType, Map<String, Object> parameters) {
 		var upload = this.uploadStorageService.getRequiredUpload(uploadId);
 		var normalizedParameters = parameters == null ? Map.<String, Object>of() : Map.copyOf(parameters);
-		ensureJobTypeSupported(jobType, normalizedParameters);
+		ensureJobTypeSupported(upload, jobType, normalizedParameters);
 
 		var job = StoredProcessingJob.queued(UUID.randomUUID(), upload.id(), jobType, normalizedParameters, Instant.now());
 		this.jobs.put(job.id(), job);
@@ -115,6 +118,7 @@ public class ProcessingJobService {
 				case IMAGE_CONVERT -> processImageConvert(job.id(), upload, parseImageJobRequest(job.parameters()));
 				case DOCUMENT_PREVIEW -> processDocumentPreview(job.id(), upload);
 				case METADATA_EXPORT -> processMetadataExport(job.id(), upload, parseMetadataJobRequest(job.parameters()));
+				case VIEWER_RESOLVE -> processViewerResolve(job.id(), upload);
 				default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Для этого job type backend processor ещё не реализован.");
 			};
 			throwIfCancellationRequested(jobId);
@@ -203,6 +207,19 @@ public class ProcessingJobService {
 		);
 	}
 
+	private JobProcessingResult processViewerResolve(UUID jobId, StoredUpload upload) {
+		updateJob(jobId, currentJob -> currentJob.updateProgress(20, "Собираю unified viewer payload поверх backend processing services."));
+		var result = this.viewerResolveService.process(jobId, upload);
+		updateJob(
+			jobId,
+			currentJob -> currentJob.updateProgress(88, "Viewer payload собран, сохраняю unified manifest и связанные artifacts.")
+		);
+		return new JobProcessingResult(
+			"Viewer resolve готов через backend %s.".formatted(result.runtimeLabel()),
+			result.artifacts()
+		);
+	}
+
 	private StoredArtifact buildUploadIntakeArtifact(UUID jobId, StoredUpload upload) {
 		try {
 			// Первый artifact здесь намеренно простой: он доказывает, что upload уже
@@ -229,13 +246,14 @@ public class ProcessingJobService {
 		}
 	}
 
-	private void ensureJobTypeSupported(ProcessingJobType jobType, Map<String, Object> parameters) {
+	private void ensureJobTypeSupported(StoredUpload upload, ProcessingJobType jobType, Map<String, Object> parameters) {
 		if (
 			jobType != ProcessingJobType.UPLOAD_INTAKE_ANALYSIS &&
 			jobType != ProcessingJobType.MEDIA_PREVIEW &&
 			jobType != ProcessingJobType.IMAGE_CONVERT &&
 			jobType != ProcessingJobType.DOCUMENT_PREVIEW &&
-			jobType != ProcessingJobType.METADATA_EXPORT
+			jobType != ProcessingJobType.METADATA_EXPORT &&
+			jobType != ProcessingJobType.VIEWER_RESOLVE
 		) {
 			throw new ResponseStatusException(
 				HttpStatus.BAD_REQUEST,
@@ -275,6 +293,13 @@ public class ProcessingJobService {
 					"METADATA_EXPORT job требует доступного backend metadata service."
 				);
 			}
+		}
+
+		if (jobType == ProcessingJobType.VIEWER_RESOLVE && !this.viewerResolveService.isAvailableFor(upload)) {
+			throw new ResponseStatusException(
+				HttpStatus.SERVICE_UNAVAILABLE,
+				"VIEWER_RESOLVE job недоступен для этого upload в текущем backend окружении."
+			);
 		}
 	}
 
@@ -333,6 +358,7 @@ public class ProcessingJobService {
 			case IMAGE_CONVERT -> "Запускаю backend imaging pipeline через convert/ffmpeg/potrace.";
 			case DOCUMENT_PREVIEW -> "Запускаю backend document intelligence pipeline.";
 			case METADATA_EXPORT -> "Запускаю backend metadata inspect/export pipeline.";
+			case VIEWER_RESOLVE -> "Запускаю backend viewer resolve pipeline поверх processing services.";
 			default -> "Запускаю backend processing job.";
 		};
 	}
