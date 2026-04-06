@@ -87,6 +87,75 @@ public class CapabilityMatrixService {
 		new ConverterPresetSpec("thumbnail", "Thumbnail", "Миниатюрный профиль для карточек и лёгких превью.", "512 px cap", List.of("Preview", "Small"), 512, 512, 0.72, "#f3ede3")
 	);
 
+	private static final List<PlatformModuleSpec> PLATFORM_MODULE_SPECS = List.of(
+		platformModule(
+			"compression",
+			"Compression",
+			"Модуль сжатия может стартовать как thin feature поверх уже существующих image/media jobs, quality presets и artifact lifecycle.",
+			"Первый production-срез не должен заново придумывать browser runtime: image compression и target-size UX уже логично строятся поверх IMAGE_CONVERT, а media compression reuse'ит MEDIA_PREVIEW foundation и те же upload/job/artifact контракты.",
+			List.of("Target size", "Quality", "Batch"),
+			List.of("image-processing", "media-processing", "artifact-storage", "capabilities"),
+			List.of(ProcessingJobType.IMAGE_CONVERT, ProcessingJobType.MEDIA_PREVIEW),
+			List.of("image quality presets", "video/audio bitrate targeting", "batch compression"),
+			"Compression module требует доступных IMAGE_CONVERT и MEDIA_PREVIEW capabilities."
+		),
+		platformModule(
+			"pdf-toolkit",
+			"PDF Toolkit",
+			"PDF toolkit может расти поверх document intelligence, viewer artifacts и image/document processing без нового browser-first runtime.",
+			"Preview, page-aware payload, extraction и server raster artifacts уже существуют. Merge/split/rotate/e-sign/redaction должны использовать тот же job/artifact lifecycle, а не разрозненные клиентские пайплайны.",
+			List.of("Merge", "Rotate", "Protect"),
+			List.of("document-processing", "image-processing", "viewer-resolve", "artifact-storage"),
+			List.of(ProcessingJobType.DOCUMENT_PREVIEW, ProcessingJobType.IMAGE_CONVERT, ProcessingJobType.VIEWER_RESOLVE),
+			List.of("merge/split/rotate", "page reorder", "protected PDF flows"),
+			"PDF toolkit требует доступных DOCUMENT_PREVIEW, IMAGE_CONVERT и VIEWER_RESOLVE capabilities."
+		),
+		platformModule(
+			"multi-format-editor",
+			"Multi-Format Editor",
+			"Editor может использовать backend document contracts как safe inspect/validate/export base, а frontend оставить за interaction и live preview.",
+			"Structured document payload, HTML sanitization и file artifact lifecycle уже готовы. Новый editor должен держать editing UX на фронте, а validation, conversion и risky file mutation выносить в processing platform.",
+			List.of("Preview", "Validate", "Export"),
+			List.of("document-processing", "metadata-processing", "artifact-storage"),
+			List.of(ProcessingJobType.DOCUMENT_PREVIEW, ProcessingJobType.METADATA_EXPORT),
+			List.of("markdown/html preview", "safe export", "format-specific validation"),
+			"Editor module требует доступных DOCUMENT_PREVIEW и METADATA_EXPORT capabilities."
+		),
+		platformModule(
+			"batch-conversion",
+			"Batch Conversion",
+			"Batch conversion теперь не нужно строить с нуля: upload/job/artifact foundation уже умеет orchestrate несколько backend-first scenarios.",
+			"Ключевой следующий шаг для batch-модуля не новый runtime, а поверх existing IMAGE_CONVERT и capability matrix добавить пакетный UX, queue visibility и reuse уже собранных artifacts.",
+			List.of("Queue", "Reuse", "Artifacts"),
+			List.of("job-orchestration", "image-processing", "artifact-storage", "capabilities"),
+			List.of(ProcessingJobType.IMAGE_CONVERT),
+			List.of("multi-file submit", "queue progress", "bulk download"),
+			"Batch conversion требует доступного IMAGE_CONVERT capability."
+		),
+		platformModule(
+			"ocr",
+			"OCR",
+			"OCR-слой может стартовать поверх существующих document/image intake contracts: ingest, preview, warnings и artifacts уже готовы.",
+			"Нового OCR runtime пока нет, но это уже не причина строить отдельный модуль browser-first. OCR должен reuse'ить DOCUMENT_PREVIEW для document context, IMAGE_CONVERT для page/image preprocessing и общий job/artifact lifecycle.",
+			List.of("Extract", "Search", "Scan"),
+			List.of("document-processing", "image-processing", "artifact-storage"),
+			List.of(ProcessingJobType.DOCUMENT_PREVIEW, ProcessingJobType.IMAGE_CONVERT),
+			List.of("scan preprocessing", "searchable PDF", "OCR text layer"),
+			"OCR module требует доступных DOCUMENT_PREVIEW и IMAGE_CONVERT capabilities."
+		),
+		platformModule(
+			"office-pdf-conversion",
+			"Office/PDF Conversion",
+			"Будущие DOCX/PDF/XLSX/PPTX conversion flows уже имеют backend foundation: document contracts, artifacts и capability-driven routing.",
+			"Следующие office/pdf routes должны садиться поверх processing platform как отдельные job types и reuse'ить существующие contracts для upload, status, artifacts и source-of-truth capability matrix.",
+			List.of("DOCX", "PDF", "Office"),
+			List.of("document-processing", "job-orchestration", "artifact-storage", "capabilities"),
+			List.of(ProcessingJobType.DOCUMENT_PREVIEW, ProcessingJobType.VIEWER_RESOLVE),
+			List.of("docx/pdf roundtrip", "xlsx/csv flows", "presentation export"),
+			"Office/PDF conversion foundation требует доступных DOCUMENT_PREVIEW и VIEWER_RESOLVE capabilities."
+		)
+	);
+
 	public CapabilityMatrixPayloads.ViewerCapabilityMatrix viewerMatrix(
 		Map<ProcessingJobType, Boolean> availabilityByJobType
 	) {
@@ -159,6 +228,16 @@ public class CapabilityMatrixService {
 			scenarios,
 			presets
 		);
+	}
+
+	public CapabilityMatrixPayloads.PlatformCapabilityMatrix platformMatrix(
+		Map<ProcessingJobType, Boolean> availabilityByJobType
+	) {
+		var modules = PLATFORM_MODULE_SPECS.stream()
+			.map(spec -> toPlatformModule(spec, availabilityByJobType))
+			.toList();
+
+		return new CapabilityMatrixPayloads.PlatformCapabilityMatrix(modules);
 	}
 
 	private CapabilityMatrixPayloads.ViewerFormatCapability toViewerFormat(
@@ -263,6 +342,26 @@ public class CapabilityMatrixService {
 			available,
 			available ? null : spec.unavailableDetail(),
 			requiredJobTypes
+		);
+	}
+
+	private CapabilityMatrixPayloads.PlatformModuleCapability toPlatformModule(
+		PlatformModuleSpec spec,
+		Map<ProcessingJobType, Boolean> availabilityByJobType
+	) {
+		var foundationReady = allRequiredJobsAvailable(spec.reusedJobTypes(), availabilityByJobType);
+		return new CapabilityMatrixPayloads.PlatformModuleCapability(
+			spec.id(),
+			spec.label(),
+			spec.summary(),
+			spec.detail(),
+			foundationReady ? "Foundation ready" : "Needs extra runtime",
+			spec.accents(),
+			spec.reusedDomains(),
+			spec.reusedJobTypes(),
+			spec.nextSlices(),
+			foundationReady,
+			foundationReady ? null : spec.unavailableDetail()
 		);
 	}
 
@@ -611,6 +710,19 @@ public class CapabilityMatrixService {
 	) {
 	}
 
+	private record PlatformModuleSpec(
+		String id,
+		String label,
+		String summary,
+		String detail,
+		List<String> accents,
+		List<String> reusedDomains,
+		List<ProcessingJobType> reusedJobTypes,
+		List<String> nextSlices,
+		String unavailableDetail
+	) {
+	}
+
 	private record ExtensionAliases(String extension, List<String> aliases) {
 
 		private List<String> allExtensions() {
@@ -619,6 +731,30 @@ public class CapabilityMatrixService {
 			values.addAll(this.aliases);
 			return values;
 		}
+	}
+
+	private static PlatformModuleSpec platformModule(
+		String id,
+		String label,
+		String summary,
+		String detail,
+		List<String> accents,
+		List<String> reusedDomains,
+		List<ProcessingJobType> reusedJobTypes,
+		List<String> nextSlices,
+		String unavailableDetail
+	) {
+		return new PlatformModuleSpec(
+			id,
+			label,
+			summary,
+			detail,
+			accents,
+			reusedDomains,
+			reusedJobTypes,
+			nextSlices,
+			unavailableDetail
+		);
 	}
 
 }

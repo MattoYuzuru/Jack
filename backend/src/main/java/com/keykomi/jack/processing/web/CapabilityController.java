@@ -25,4 +25,9 @@ public class CapabilityController {
 		return this.capabilityCatalogService.converterCapabilities();
 	}
 
+	@GetMapping("/platform")
+	public CapabilityCatalogService.CapabilityScope platformCapabilities() {
+		return this.capabilityCatalogService.platformCapabilities();
+	}
+
 }

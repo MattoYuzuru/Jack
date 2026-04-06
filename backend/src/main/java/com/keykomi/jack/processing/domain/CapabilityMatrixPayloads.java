@@ -104,4 +104,24 @@ public final class CapabilityMatrixPayloads {
 	) {
 	}
 
+	public record PlatformCapabilityMatrix(
+		List<PlatformModuleCapability> modules
+	) {
+	}
+
+	public record PlatformModuleCapability(
+		String id,
+		String label,
+		String summary,
+		String detail,
+		String statusLabel,
+		List<String> accents,
+		List<String> reusedDomains,
+		List<ProcessingJobType> reusedJobTypes,
+		List<String> nextSlices,
+		boolean foundationReady,
+		String availabilityDetail
+	) {
+	}
+
 }

@@ -28,9 +28,10 @@ Jack задуман как практичный рабочий набор инс
 - есть новый UI foundation с neumorphic home-dashboard и крупной навигационной сеткой модулей
 - home уже ведёт в два живых маршрута: `viewer` и первый `converter`
 - есть server-assisted processing layer: backend уже закрывает legacy media preview, heavy image-processing jobs, document intelligence preview и metadata operations
+- есть reusable processing-platform: backend отдаёт не только viewer/converter capability matrix, но и `platform`-matrix для следующих queued-модулей
 - подготовлены логотип и favicon для дальнейшего использования
 - есть `docker compose`-окружение для локального старта
-- задокументированы workflow-правила и roadmap для будущих итераций
+- задокументированы workflow-правила, финальная platform-архитектура и roadmap для будущих итераций
 
 ## Быстрый Старт Через Docker Compose
 
@@ -83,9 +84,9 @@ docker compose down -v
 - `JACK_PROCESSING_RAW_PREVIEW_EXECUTABLE`
 - `JACK_PROCESSING_IMAGE_PROCESSING_TIMEOUT_SECONDS`
 
-## Backend Processing Foundation
+## Backend Processing Platform
 
-Первый backend-срез теперь уже поднимает базовый processing workflow:
+Текущий backend-слой теперь уже поднимает общий processing workflow:
 
 - `POST /api/uploads` — сохраняет файл во временное backend storage
 - `GET /api/uploads/{id}` — возвращает metadata по upload
@@ -94,6 +95,7 @@ docker compose down -v
 - `GET /api/jobs/{id}/artifacts/{artifactId}` — скачивает artifact
 - `GET /api/capabilities/viewer`
 - `GET /api/capabilities/converter`
+- `GET /api/capabilities/platform`
 
 В текущем срезе реально реализованы шесть job type:
 
@@ -106,6 +108,7 @@ docker compose down -v
 
 Контейнерный backend теперь сам ставит `ffmpeg`, `ffprobe`, `ImageMagick`, `Ghostscript`, `potrace` и `libraw`, поэтому `MEDIA_PREVIEW` и `IMAGE_CONVERT` работают внутри `docker compose` без внешней подготовки образа.
 Frontend viewer уже использует unified backend route для `avi`, `mkv`, `wmv`, `flv`, `aac`, `flac`, `aiff`, `heic`, `tiff`, `raw` family и всего document stack (`pdf`, `txt`, `csv`, `html`, `rtf`, `doc`, `docx`, `odt`, `xls`, `xlsx`, `pptx`, `epub`, `db`, `sqlite`), metadata read/export остаётся за `METADATA_EXPORT`, а converter гонит через backend heavy image scenarios, поэтому для локальной разработки backend также должен разрешать origin из `JACK_WEB_ALLOWED_ORIGINS`.
+Отдельный `platform` capability scope теперь показывает, как следующие модули (`Compression`, `PDF Toolkit`, `Multi-Format Editor`, `Batch Conversion`, `OCR`, `Office/PDF Conversion`) должны reuse'ить уже существующий processing stack, а не заводить новый browser-heavy runtime.
 
 ## Локальный Запуск Без Docker
 
@@ -129,6 +132,7 @@ npm run dev
 - `compose.yaml` — единый контейнерный запуск
 - `backend/Dockerfile` — контейнер backend-сервиса
 - `frontend/Dockerfile` — контейнер frontend-сервиса
+- `docs/processing-platform.md` — актуальное описание processing-platform и границы backend/frontend логики
 - `AGENTS.md` — правила работы для будущих агентных итераций
 - `assets/brand/` — логотип, favicon и сопутствующие ассеты
 

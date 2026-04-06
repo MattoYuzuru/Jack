@@ -28,6 +28,32 @@
 2. Комментарии должны объяснять, зачем существует логика или какое неочевидное ограничение она учитывает.
 3. Не добавляй шумные комментарии к тривиальному коду.
 
+## Разделение Логики Между Backend И Frontend
+
+1. Новую бизнес-логику по умолчанию сначала оценивай как backend-кандидата, а не как frontend-реализацию.
+2. Логику нужно уносить в backend, если она:
+   - обрабатывает или мутирует файлы
+   - конвертирует, санитизирует, валидирует или извлекает структурированные данные
+   - выигрывает от очередей, retry, лимитов, artifact reuse, audit, rate limit или единых capability-правил
+   - потенциально тяжёлая по CPU/RAM или даёт нестабильный результат в браузерах и на слабых устройствах
+   - влияет на безопасность, форматные ограничения или product-wide source of truth
+3. Перед новой реализацией проверяй, можно ли переиспользовать уже существующую processing-platform:
+   - `upload/job/artifact/capability` API
+   - `MEDIA_PREVIEW`
+   - `IMAGE_CONVERT`
+   - `DOCUMENT_PREVIEW`
+   - `METADATA_EXPORT`
+   - `VIEWER_RESOLVE`
+   - `GET /api/capabilities/platform`
+4. На frontend должна оставаться логика presentation и interaction:
+   - состояние экрана
+   - формы и локальная валидация UI-уровня
+   - native browser rendering
+   - playback/viewport controls
+   - optimistic UX, local filtering, download/share UX
+5. Не дублируй одну и ту же business logic одновременно на backend и frontend без явной причины.
+6. Если фича действительно browser-native, мгновенная по отклику и не выигрывает от серверного orchestration, тогда держи её на frontend.
+
 ## Визуальный Стиль И UI Foundation
 
 Текущий визуальный стиль проекта уже задан в `frontend/src/App.vue` и `frontend/src/styles.css`. Будущие агенты должны развивать его последовательно, а не заменять на новый по своему вкусу.
