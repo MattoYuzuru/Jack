@@ -25,9 +25,10 @@ interface ToolCard {
 }
 
 const signalPills = [
-  'Iteration 03',
+  'Iteration 04',
   'Viewer workspace',
   'Converter route',
+  'Compression route',
   'Processing API client',
   'Platform reuse matrix',
   'Backend document intelligence',
@@ -55,7 +56,7 @@ const foundationPillars: FoundationPillar[] = [
   {
     name: 'Архитектура',
     detail:
-      'Home, viewer и converter разведены по маршрутам, а viewer/converter уже сидят на processing API, server-owned capability matrix, backend artifact jobs и platform matrix для следующих queued-модулей вместо browser-heavy runtime orchestration.',
+      'Home, viewer, converter и compression разведены по маршрутам, а продуктовые file-flows уже сидят на processing API, server-owned capability matrix и backend artifact jobs вместо browser-heavy runtime orchestration.',
   },
 ]
 
@@ -92,8 +93,10 @@ const toolCardBlueprints: ToolCard[] = [
     title: 'Compressor',
     description:
       'Сжатие до практического минимума или под целевой размер с понятной визуализацией давления на файл.',
-    detail: 'Логика подготовлена под quality presets и size targeting.',
-    status: 'Queued',
+    detail:
+      'Compression route уже работает как отдельный backend-first модуль: size goal, maximum reduction и custom limits собираются в единый manifest/result contract.',
+    status: 'Active route',
+    route: '/compression',
     accents: ['Target size', 'Quality', 'Batch'],
     span: 'tool-card--standard',
   },
@@ -179,27 +182,25 @@ void hydrateQueuedModuleCards().catch(() => undefined)
       </div>
 
       <div class="app-topbar__status">
-        <span class="chip-pill">Iteration 03</span>
-        <span class="chip-pill chip-pill--accent">Viewer + Converter</span>
+        <span class="chip-pill">Iteration 04</span>
+        <span class="chip-pill chip-pill--accent">Viewer + Converter + Compression</span>
       </div>
     </header>
 
     <section class="hero-grid">
       <article class="panel-surface hero-copy">
-        <p class="eyebrow">Iteration 03 · Viewer + Converter</p>
+        <p class="eyebrow">Iteration 04 · Compression Live</p>
         <h1>
-          Главный экран Jack теперь ведёт сразу в viewer и converter с image-, document- и
-          processing-oriented runtime.
+          Главный экран Jack теперь ведёт уже в три живых file-маршрута: viewer, converter и
+          compression.
         </h1>
         <p class="lead">
-          Home сохраняет soft industrial foundation, но теперь работает как switchboard для двух
-          живых маршрутов: viewer отвечает за preview, analysis, backend-powered document
-          intelligence, backend-powered metadata service, video tooling, audio workbench и image
-          tooling через unified `VIEWER_RESOLVE` route, а converter теперь закрывает и image-блок,
-          и офисные сценарии с `DOC/DOCX/RTF/ODT`, `CSV/XLSX/ODS`, `PDF`, `PPTX`, и media delivery
-          с `MOV/MKV/AVI/WebM/MP4`, `WAV/FLAC/MP3/M4A`, vector/icon targets и slideshow-export
-          через backend-first job contract, где browser больше не вычисляет conversion result
-          самостоятельно.
+          Home сохраняет soft industrial foundation, но теперь работает как switchboard уже для
+          трёх backend-first продуктов: viewer отвечает за preview и analysis через unified
+          `VIEWER_RESOLVE`, converter закрывает format-to-format сценарии через `IMAGE_CONVERT`,
+          `OFFICE_CONVERT` и `MEDIA_CONVERT`, а compression решает size-first задачу через новый
+          `FILE_COMPRESS`, где backend сам подбирает candidate ladder и возвращает единый
+          compression manifest/result contract.
         </p>
 
         <div class="signal-row">
@@ -208,7 +209,7 @@ void hydrateQueuedModuleCards().catch(() => undefined)
 
         <div class="stats-grid" aria-label="Ключевые показатели foundation">
           <article class="stats-card">
-            <strong>3</strong>
+            <strong>4</strong>
             <span>экрана уже разведены через router</span>
           </article>
           <article class="stats-card">
@@ -219,10 +220,10 @@ void hydrateQueuedModuleCards().catch(() => undefined)
             >
           </article>
           <article class="stats-card">
-            <strong>7</strong>
+            <strong>8</strong>
             <span
-              >слоёв foundation: processing client, registry, adapters, metadata, workspace
-              state, color lab и media/document UX</span
+              >слоёв foundation: processing client, registry, adapters, compression orchestration,
+              metadata, workspace state, color lab и media/document UX</span
             >
           </article>
         </div>

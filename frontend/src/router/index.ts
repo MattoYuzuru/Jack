@@ -18,6 +18,11 @@ const router = createRouter({
       name: 'converter',
       component: () => import('../views/ConverterWorkspaceView.vue'),
     },
+    {
+      path: '/compression',
+      name: 'compression',
+      component: () => import('../views/CompressionWorkspaceView.vue'),
+    },
   ],
 })
 
