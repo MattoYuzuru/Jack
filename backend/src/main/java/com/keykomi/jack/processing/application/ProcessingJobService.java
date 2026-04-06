@@ -6,9 +6,10 @@ import com.keykomi.jack.processing.domain.StoredArtifact;
 import com.keykomi.jack.processing.domain.CompressionRequest;
 import com.keykomi.jack.processing.domain.ImageProcessingRequest;
 import com.keykomi.jack.processing.domain.MediaConversionRequest;
-import com.keykomi.jack.processing.domain.OfficeConversionRequest;
 import com.keykomi.jack.processing.domain.MetadataPayloads;
 import com.keykomi.jack.processing.domain.MetadataProcessingRequest;
+import com.keykomi.jack.processing.domain.OfficeConversionRequest;
+import com.keykomi.jack.processing.domain.PdfToolkitRequest;
 import com.keykomi.jack.processing.domain.StoredProcessingJob;
 import com.keykomi.jack.processing.domain.StoredUpload;
 import java.io.IOException;
@@ -35,6 +36,7 @@ public class ProcessingJobService {
 	private final MediaConversionService mediaConversionService;
 	private final ImageProcessingService imageProcessingService;
 	private final CompressionService compressionService;
+	private final PdfToolkitService pdfToolkitService;
 	private final OfficeConversionService officeConversionService;
 	private final DocumentPreviewService documentPreviewService;
 	private final MetadataProcessingService metadataProcessingService;
@@ -50,6 +52,7 @@ public class ProcessingJobService {
 		MediaConversionService mediaConversionService,
 		ImageProcessingService imageProcessingService,
 		CompressionService compressionService,
+		PdfToolkitService pdfToolkitService,
 		OfficeConversionService officeConversionService,
 		DocumentPreviewService documentPreviewService,
 		MetadataProcessingService metadataProcessingService,
@@ -62,6 +65,7 @@ public class ProcessingJobService {
 		this.mediaConversionService = mediaConversionService;
 		this.imageProcessingService = imageProcessingService;
 		this.compressionService = compressionService;
+		this.pdfToolkitService = pdfToolkitService;
 		this.officeConversionService = officeConversionService;
 		this.documentPreviewService = documentPreviewService;
 		this.metadataProcessingService = metadataProcessingService;
@@ -130,6 +134,7 @@ public class ProcessingJobService {
 				case MEDIA_CONVERT -> processMediaConvert(job.id(), upload, parseMediaJobRequest(job.parameters()));
 				case IMAGE_CONVERT -> processImageConvert(job.id(), upload, parseImageJobRequest(job.parameters()));
 				case FILE_COMPRESS -> processFileCompress(job.id(), upload, parseCompressionJobRequest(job.parameters()));
+				case PDF_TOOLKIT -> processPdfToolkit(job.id(), upload, parsePdfToolkitJobRequest(job.parameters()));
 				case OFFICE_CONVERT -> processOfficeConvert(job.id(), upload, parseOfficeJobRequest(job.parameters()));
 				case DOCUMENT_PREVIEW -> processDocumentPreview(job.id(), upload);
 				case METADATA_EXPORT -> processMetadataExport(job.id(), upload, parseMetadataJobRequest(job.parameters()));
@@ -231,6 +236,28 @@ public class ProcessingJobService {
 		);
 	}
 
+	private JobProcessingResult processPdfToolkit(
+		UUID jobId,
+		StoredUpload upload,
+		PdfToolkitRequest request
+	) {
+		updateJob(jobId, currentJob -> currentJob.updateProgress(18, "Подготавливаю page-aware PDF toolkit orchestration."));
+		var result = this.pdfToolkitService.process(
+			jobId,
+			upload,
+			request,
+			(progressPercent, message) -> updateJob(jobId, currentJob -> currentJob.updateProgress(progressPercent, message))
+		);
+		updateJob(
+			jobId,
+			currentJob -> currentJob.updateProgress(88, "PDF toolkit artifacts собраны, сохраняю manifest, preview и итоговый result.")
+		);
+		return new JobProcessingResult(
+			"PDF toolkit job готов через backend %s.".formatted(result.runtimeLabel()),
+			result.artifacts()
+		);
+	}
+
 	private JobProcessingResult processOfficeConvert(
 		UUID jobId,
 		StoredUpload upload,
@@ -324,6 +351,7 @@ public class ProcessingJobService {
 			jobType != ProcessingJobType.MEDIA_CONVERT &&
 			jobType != ProcessingJobType.IMAGE_CONVERT &&
 			jobType != ProcessingJobType.FILE_COMPRESS &&
+			jobType != ProcessingJobType.PDF_TOOLKIT &&
 			jobType != ProcessingJobType.OFFICE_CONVERT &&
 			jobType != ProcessingJobType.DOCUMENT_PREVIEW &&
 			jobType != ProcessingJobType.METADATA_EXPORT &&
@@ -368,6 +396,16 @@ public class ProcessingJobService {
 				throw new ResponseStatusException(
 					HttpStatus.SERVICE_UNAVAILABLE,
 					"FILE_COMPRESS job недоступен для этого upload в текущем backend окружении."
+				);
+			}
+		}
+
+		if (jobType == ProcessingJobType.PDF_TOOLKIT) {
+			parsePdfToolkitJobRequest(parameters);
+			if (!this.pdfToolkitService.isAvailableFor(upload)) {
+				throw new ResponseStatusException(
+					HttpStatus.SERVICE_UNAVAILABLE,
+					"PDF_TOOLKIT job недоступен для этого upload в текущем backend окружении."
 				);
 			}
 		}
@@ -462,6 +500,7 @@ public class ProcessingJobService {
 			case MEDIA_CONVERT -> "Запускаю backend media conversion pipeline через ffprobe/ffmpeg.";
 			case IMAGE_CONVERT -> "Запускаю backend imaging pipeline через convert/ffmpeg/potrace.";
 			case FILE_COMPRESS -> "Запускаю backend compression orchestration поверх image/media processing services.";
+			case PDF_TOOLKIT -> "Запускаю backend PDF toolkit orchestration для page-aware document flows.";
 			case OFFICE_CONVERT -> "Запускаю backend office/pdf conversion pipeline.";
 			case DOCUMENT_PREVIEW -> "Запускаю backend document intelligence pipeline.";
 			case METADATA_EXPORT -> "Запускаю backend metadata inspect/export pipeline.";
@@ -554,6 +593,71 @@ public class ProcessingJobService {
 			readOptionalString(parameters, "backgroundColor"),
 			readOptionalString(parameters, "presetLabel")
 		);
+	}
+
+	private PdfToolkitRequest parsePdfToolkitJobRequest(Map<String, Object> parameters) {
+		var rawOperation = readRequiredString(parameters, "operation").trim().toLowerCase();
+		var operation = switch (rawOperation) {
+			case "merge" -> PdfToolkitRequest.Operation.MERGE;
+			case "split" -> PdfToolkitRequest.Operation.SPLIT;
+			case "rotate" -> PdfToolkitRequest.Operation.ROTATE;
+			case "reorder", "extract-reorder", "extract_reorder", "page-reorder", "page_reorder" -> PdfToolkitRequest.Operation.REORDER;
+			case "ocr" -> PdfToolkitRequest.Operation.OCR;
+			case "sign", "esign", "e-sign", "stamp" -> PdfToolkitRequest.Operation.SIGN;
+			case "redact", "redaction" -> PdfToolkitRequest.Operation.REDACT;
+			case "protect", "password-protect", "password_protect" -> PdfToolkitRequest.Operation.PROTECT;
+			case "unlock" -> PdfToolkitRequest.Operation.UNLOCK;
+			default -> throw new ResponseStatusException(
+				HttpStatus.BAD_REQUEST,
+				"PDF_TOOLKIT operation должна быть merge, split, rotate, reorder, ocr, sign, redact, protect или unlock."
+			);
+		};
+
+		var request = new PdfToolkitRequest(
+			operation,
+			readOptionalUuidList(parameters, "additionalUploadIds"),
+			readOptionalStringList(parameters, "splitRanges"),
+			readOptionalString(parameters, "pageSelection"),
+			readOptionalInteger(parameters, "rotationDegrees"),
+			readOptionalIntegerList(parameters, "pageOrder"),
+			readOptionalString(parameters, "currentPassword"),
+			readOptionalString(parameters, "userPassword"),
+			readOptionalString(parameters, "ownerPassword"),
+			readOptionalBoolean(parameters, "allowPrinting"),
+			readOptionalBoolean(parameters, "allowCopying"),
+			readOptionalBoolean(parameters, "allowModifying"),
+			readOptionalString(parameters, "signatureText"),
+			readOptionalUuid(parameters, "signatureImageUploadId"),
+			readOptionalString(parameters, "signaturePlacement"),
+			readOptionalBoolean(parameters, "includeSignatureDate"),
+			readOptionalStringList(parameters, "redactTerms"),
+			readOptionalString(parameters, "ocrLanguage")
+		);
+
+		if (operation == PdfToolkitRequest.Operation.MERGE && (request.additionalUploadIds() == null || request.additionalUploadIds().isEmpty())) {
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "PDF merge требует additionalUploadIds.");
+		}
+		if (operation == PdfToolkitRequest.Operation.ROTATE && request.rotationDegrees() == null) {
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "PDF rotate требует rotationDegrees.");
+		}
+		if (operation == PdfToolkitRequest.Operation.REORDER && (request.pageOrder() == null || request.pageOrder().isEmpty())) {
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Page reorder требует pageOrder.");
+		}
+		if (operation == PdfToolkitRequest.Operation.SIGN &&
+			((request.signatureText() == null || request.signatureText().isBlank()) && request.signatureImageUploadId() == null)) {
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "E-sign требует signatureText или signatureImageUploadId.");
+		}
+		if (operation == PdfToolkitRequest.Operation.REDACT && (request.redactTerms() == null || request.redactTerms().isEmpty())) {
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Redaction требует redactTerms.");
+		}
+		if (operation == PdfToolkitRequest.Operation.PROTECT && (request.ownerPassword() == null || request.ownerPassword().isBlank())) {
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Protect operation требует ownerPassword.");
+		}
+		if (operation == PdfToolkitRequest.Operation.UNLOCK && (request.currentPassword() == null || request.currentPassword().isBlank())) {
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unlock operation требует currentPassword.");
+		}
+
+		return request;
 	}
 
 	private MetadataProcessingRequest parseMetadataJobRequest(Map<String, Object> parameters) {
@@ -662,6 +766,94 @@ public class ProcessingJobService {
 		catch (NumberFormatException exception) {
 			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Параметр %s должен быть long.".formatted(key), exception);
 		}
+	}
+
+	private Boolean readOptionalBoolean(Map<String, Object> parameters, String key) {
+		var value = parameters.get(key);
+		if (value == null) {
+			return null;
+		}
+		if (value instanceof Boolean booleanValue) {
+			return booleanValue;
+		}
+		return switch (String.valueOf(value).trim().toLowerCase()) {
+			case "true", "1", "yes" -> true;
+			case "false", "0", "no" -> false;
+			default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Параметр %s должен быть boolean.".formatted(key));
+		};
+	}
+
+	private UUID readOptionalUuid(Map<String, Object> parameters, String key) {
+		var value = parameters.get(key);
+		if (value == null) {
+			return null;
+		}
+		try {
+			return UUID.fromString(String.valueOf(value));
+		}
+		catch (IllegalArgumentException exception) {
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Параметр %s должен быть UUID.".formatted(key), exception);
+		}
+	}
+
+	private List<UUID> readOptionalUuidList(Map<String, Object> parameters, String key) {
+		var value = parameters.get(key);
+		if (value == null) {
+			return null;
+		}
+		if (!(value instanceof List<?> values)) {
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Параметр %s должен быть массивом UUID.".formatted(key));
+		}
+
+		var result = new java.util.ArrayList<UUID>(values.size());
+		for (Object entry : values) {
+			try {
+				result.add(UUID.fromString(String.valueOf(entry)));
+			}
+			catch (IllegalArgumentException exception) {
+				throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Параметр %s содержит невалидный UUID.".formatted(key), exception);
+			}
+		}
+		return List.copyOf(result);
+	}
+
+	private List<String> readOptionalStringList(Map<String, Object> parameters, String key) {
+		var value = parameters.get(key);
+		if (value == null) {
+			return null;
+		}
+		if (!(value instanceof List<?> values)) {
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Параметр %s должен быть массивом строк.".formatted(key));
+		}
+		var result = new java.util.ArrayList<String>(values.size());
+		for (Object entry : values) {
+			result.add(String.valueOf(entry));
+		}
+		return List.copyOf(result);
+	}
+
+	private List<Integer> readOptionalIntegerList(Map<String, Object> parameters, String key) {
+		var value = parameters.get(key);
+		if (value == null) {
+			return null;
+		}
+		if (!(value instanceof List<?> values)) {
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Параметр %s должен быть массивом integer.".formatted(key));
+		}
+		var result = new java.util.ArrayList<Integer>(values.size());
+		for (Object entry : values) {
+			if (entry instanceof Number number) {
+				result.add(number.intValue());
+				continue;
+			}
+			try {
+				result.add(Integer.valueOf(String.valueOf(entry)));
+			}
+			catch (NumberFormatException exception) {
+				throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Параметр %s содержит невалидный integer.".formatted(key), exception);
+			}
+		}
+		return List.copyOf(result);
 	}
 
 	public record UploadIntakeManifest(

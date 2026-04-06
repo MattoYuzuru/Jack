@@ -15,7 +15,9 @@ RUN set -eux; \
       imagemagick \
       libraw-bin \
       potrace \
+      qpdf \
       librsvg2-bin \
+      tesseract-ocr \
       tar; \
     mkdir -p /opt/java; \
     curl -fsSL https://corretto.aws/downloads/latest/amazon-corretto-26-x64-linux-jdk.tar.gz -o /tmp/amazon-corretto.tar.gz; \

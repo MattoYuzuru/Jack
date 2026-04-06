@@ -14,35 +14,41 @@ public class CapabilityCatalogService {
 	private final MediaConversionService mediaConversionService;
 	private final ImageProcessingService imageProcessingService;
 	private final CompressionService compressionService;
+	private final PdfToolkitService pdfToolkitService;
 	private final OfficeConversionService officeConversionService;
 	private final DocumentPreviewService documentPreviewService;
 	private final MetadataProcessingService metadataProcessingService;
 	private final ViewerResolveService viewerResolveService;
 	private final CapabilityMatrixService capabilityMatrixService;
 	private final CompressionCapabilityMatrixService compressionCapabilityMatrixService;
+	private final PdfToolkitCapabilityMatrixService pdfToolkitCapabilityMatrixService;
 
 	public CapabilityCatalogService(
 		MediaPreviewService mediaPreviewService,
 		MediaConversionService mediaConversionService,
 		ImageProcessingService imageProcessingService,
 		CompressionService compressionService,
+		PdfToolkitService pdfToolkitService,
 		OfficeConversionService officeConversionService,
 		DocumentPreviewService documentPreviewService,
 		MetadataProcessingService metadataProcessingService,
 		ViewerResolveService viewerResolveService,
 		CapabilityMatrixService capabilityMatrixService,
-		CompressionCapabilityMatrixService compressionCapabilityMatrixService
+		CompressionCapabilityMatrixService compressionCapabilityMatrixService,
+		PdfToolkitCapabilityMatrixService pdfToolkitCapabilityMatrixService
 	) {
 		this.mediaPreviewService = mediaPreviewService;
 		this.mediaConversionService = mediaConversionService;
 		this.imageProcessingService = imageProcessingService;
 		this.compressionService = compressionService;
+		this.pdfToolkitService = pdfToolkitService;
 		this.officeConversionService = officeConversionService;
 		this.documentPreviewService = documentPreviewService;
 		this.metadataProcessingService = metadataProcessingService;
 		this.viewerResolveService = viewerResolveService;
 		this.capabilityMatrixService = capabilityMatrixService;
 		this.compressionCapabilityMatrixService = compressionCapabilityMatrixService;
+		this.pdfToolkitCapabilityMatrixService = pdfToolkitCapabilityMatrixService;
 	}
 
 	public CapabilityScope viewerCapabilities() {
@@ -107,6 +113,7 @@ public class CapabilityCatalogService {
 				"Backend отдаёт format matrix как источник правды, а browser оставляет у себя только native rendering, state и interaction tooling."
 			),
 			this.capabilityMatrixService.viewerMatrix(availabilityByJobType),
+			null,
 			null,
 			null,
 			null
@@ -177,6 +184,7 @@ public class CapabilityCatalogService {
 			null,
 			null,
 			this.capabilityMatrixService.converterMatrix(availabilityByJobType),
+			null,
 			null
 		);
 	}
@@ -229,6 +237,68 @@ public class CapabilityCatalogService {
 			null,
 			this.compressionCapabilityMatrixService.compressionMatrix(availabilityByJobType),
 			null,
+			null,
+			null
+		);
+	}
+
+	public CapabilityScope pdfToolkitCapabilities() {
+		var availabilityByJobType = availabilityByJobType();
+		var pdfToolkitAvailable = availabilityByJobType.getOrDefault(ProcessingJobType.PDF_TOOLKIT, false);
+		var viewerResolveAvailable = availabilityByJobType.getOrDefault(ProcessingJobType.VIEWER_RESOLVE, false);
+		var documentPreviewAvailable = availabilityByJobType.getOrDefault(ProcessingJobType.DOCUMENT_PREVIEW, false);
+		var imageProcessingAvailable = availabilityByJobType.getOrDefault(ProcessingJobType.IMAGE_CONVERT, false);
+		var officeConversionAvailable = availabilityByJobType.getOrDefault(ProcessingJobType.OFFICE_CONVERT, false);
+
+		return new CapabilityScope(
+			"pdf-toolkit",
+			"pdf-toolkit-backend-first",
+			List.of(
+				new JobTypeCapability(ProcessingJobType.UPLOAD_INTAKE_ANALYSIS, true, "Upload intake остаётся общим foundation для PDF import, merge stack и follow-up reuse."),
+				new JobTypeCapability(
+					ProcessingJobType.PDF_TOOLKIT,
+					pdfToolkitAvailable,
+					pdfToolkitAvailable
+						? "Backend уже умеет merge/split/rotate/reorder/OCR/sign/redact/protect/unlock операции как отдельный PDF_TOOLKIT route."
+						: "PDF toolkit route сейчас недоступен в текущем backend окружении."
+				),
+				new JobTypeCapability(
+					ProcessingJobType.VIEWER_RESOLVE,
+					viewerResolveAvailable,
+					viewerResolveAvailable
+						? "PDF toolkit reuse'ит VIEWER_RESOLVE для preview и page-aware viewing flow."
+						: "VIEWER_RESOLVE сейчас недоступен и PDF viewer stage не сможет загрузить unified preview contract."
+				),
+				new JobTypeCapability(
+					ProcessingJobType.DOCUMENT_PREVIEW,
+					documentPreviewAvailable,
+					documentPreviewAvailable
+						? "Document preview foundation уже даёт page count, search layer и warnings для PDF workspace."
+						: "DOCUMENT_PREVIEW сейчас недоступен и PDF summary/search stage будет ограничен."
+				),
+				new JobTypeCapability(
+					ProcessingJobType.IMAGE_CONVERT,
+					imageProcessingAvailable,
+					imageProcessingAvailable
+						? "Image convert foundation уже может заводить image-family sources в import-to-PDF flow перед pdf-toolkit."
+						: "IMAGE_CONVERT сейчас недоступен и image -> PDF intake будет выключен."
+				),
+				new JobTypeCapability(
+					ProcessingJobType.OFFICE_CONVERT,
+					officeConversionAvailable,
+					officeConversionAvailable
+						? "Office convert foundation уже может заводить office/PDF-compatible document flows в pdf-toolkit workspace."
+						: "OFFICE_CONVERT сейчас недоступен и office -> PDF intake будет выключен."
+				)
+			),
+			List.of(
+				"PDF toolkit теперь отдельный backend-first route: page-aware операции, OCR, redaction и protection живут в PDF_TOOLKIT job вместо browser-side mutation.",
+				"Workspace reuse'ит converter routes для import-to-PDF, VIEWER_RESOLVE для preview и upload/job/artifact foundation для follow-up editing flows."
+			),
+			null,
+			null,
+			null,
+			this.pdfToolkitCapabilityMatrixService.pdfToolkitMatrix(availabilityByJobType, this.pdfToolkitService.isOcrAvailable()),
 			null
 		);
 	}
@@ -246,6 +316,13 @@ public class CapabilityCatalogService {
 					availabilityByJobType.getOrDefault(ProcessingJobType.FILE_COMPRESS, false)
 						? "Dedicated compression orchestration уже поднята и закрывает size-first product route поверх image/media services."
 						: "Compression orchestration ещё не поднята как отдельный product route поверх existing processing foundation."
+				),
+				new JobTypeCapability(
+					ProcessingJobType.PDF_TOOLKIT,
+					availabilityByJobType.getOrDefault(ProcessingJobType.PDF_TOOLKIT, false),
+					availabilityByJobType.getOrDefault(ProcessingJobType.PDF_TOOLKIT, false)
+						? "Dedicated PDF toolkit route уже поднят и закрывает page editing, OCR, redact и protection flows поверх processing platform."
+						: "PDF toolkit route ещё не поднят как отдельный product route поверх document/viewer foundation."
 				),
 				new JobTypeCapability(
 					ProcessingJobType.MEDIA_PREVIEW,
@@ -304,6 +381,7 @@ public class CapabilityCatalogService {
 			null,
 			null,
 			null,
+			null,
 			this.capabilityMatrixService.platformMatrix(availabilityByJobType)
 		);
 	}
@@ -314,6 +392,7 @@ public class CapabilityCatalogService {
 		var availabilityByJobType = new LinkedHashMap<ProcessingJobType, Boolean>();
 		availabilityByJobType.put(ProcessingJobType.UPLOAD_INTAKE_ANALYSIS, true);
 		availabilityByJobType.put(ProcessingJobType.FILE_COMPRESS, this.compressionService.isAvailable());
+		availabilityByJobType.put(ProcessingJobType.PDF_TOOLKIT, this.pdfToolkitService.isAvailable());
 		availabilityByJobType.put(ProcessingJobType.MEDIA_PREVIEW, this.mediaPreviewService.isAvailable());
 		availabilityByJobType.put(ProcessingJobType.MEDIA_CONVERT, this.mediaConversionService.isAvailable());
 		availabilityByJobType.put(ProcessingJobType.IMAGE_CONVERT, this.imageProcessingService.isAvailable());
@@ -332,6 +411,7 @@ public class CapabilityCatalogService {
 		CapabilityMatrixPayloads.ViewerCapabilityMatrix viewerMatrix,
 		CapabilityMatrixPayloads.CompressionCapabilityMatrix compressionMatrix,
 		CapabilityMatrixPayloads.ConverterCapabilityMatrix converterMatrix,
+		CapabilityMatrixPayloads.PdfToolkitCapabilityMatrix pdfToolkitMatrix,
 		CapabilityMatrixPayloads.PlatformCapabilityMatrix platformMatrix
 	) {
 	}

@@ -159,6 +159,46 @@ public final class CapabilityMatrixPayloads {
 	) {
 	}
 
+	public record PdfToolkitCapabilityMatrix(
+		String acceptAttribute,
+		String importAcceptAttribute,
+		List<PdfToolkitSourceCapability> directSourceFormats,
+		List<PdfToolkitSourceCapability> importSourceFormats,
+		List<PdfToolkitOperationCapability> operations
+	) {
+	}
+
+	public record PdfToolkitSourceCapability(
+		String extension,
+		List<String> aliases,
+		String label,
+		String family,
+		String routeKind,
+		String routeLabel,
+		String notes,
+		List<String> accents,
+		boolean available,
+		String availabilityDetail,
+		List<ProcessingJobType> requiredJobTypes
+	) {
+	}
+
+	public record PdfToolkitOperationCapability(
+		String id,
+		String label,
+		String detail,
+		String statusLabel,
+		List<String> accents,
+		boolean available,
+		String availabilityDetail,
+		boolean supportsMultiSource,
+		boolean requiresPageSelection,
+		boolean producesArchive,
+		boolean producesPreviewPdf,
+		List<ProcessingJobType> requiredJobTypes
+	) {
+	}
+
 	public record PlatformCapabilityMatrix(
 		List<PlatformModuleCapability> modules
 	) {

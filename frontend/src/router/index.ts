@@ -23,6 +23,11 @@ const router = createRouter({
       name: 'compression',
       component: () => import('../views/CompressionWorkspaceView.vue'),
     },
+    {
+      path: '/pdf-toolkit',
+      name: 'pdf-toolkit',
+      component: () => import('../views/PdfToolkitWorkspaceView.vue'),
+    },
   ],
 })
 

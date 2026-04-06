@@ -25,10 +25,11 @@ interface ToolCard {
 }
 
 const signalPills = [
-  'Iteration 04',
+  'Iteration 05',
   'Viewer workspace',
   'Converter route',
   'Compression route',
+  'PDF toolkit route',
   'Processing API client',
   'Platform reuse matrix',
   'Backend document intelligence',
@@ -106,8 +107,10 @@ const toolCardBlueprints: ToolCard[] = [
     title: 'PDF Toolkit',
     description:
       'Merge, split, rotate, OCR и сценарии защиты собираются в отдельный модуль с собственной рабочей зоной.',
-    detail: 'Будущий центр для операций над страницами и безопасной правки PDF.',
-    status: 'Queued',
+    detail:
+      'PDF toolkit уже работает как отдельный backend-first модуль: import-to-PDF, page operations, OCR, term redaction и password flows идут через dedicated PDF_TOOLKIT route.',
+    status: 'Active route',
+    route: '/pdf-toolkit',
     accents: ['Merge', 'OCR', 'Protect'],
     span: 'tool-card--standard',
   },
@@ -138,7 +141,6 @@ const toolCardBlueprints: ToolCard[] = [
 const toolCards = ref<ToolCard[]>(toolCardBlueprints)
 const platformModuleIdByToolId: Partial<Record<ToolId, string>> = {
   compressor: 'compression',
-  pdf: 'pdf-toolkit',
   editor: 'multi-format-editor',
 }
 
@@ -182,25 +184,29 @@ void hydrateQueuedModuleCards().catch(() => undefined)
       </div>
 
       <div class="app-topbar__status">
-        <span class="chip-pill">Iteration 04</span>
-        <span class="chip-pill chip-pill--accent">Viewer + Converter + Compression</span>
+        <span class="chip-pill">Iteration 05</span>
+        <span class="chip-pill chip-pill--accent"
+          >Viewer + Converter + Compression + PDF Toolkit</span
+        >
       </div>
     </header>
 
     <section class="hero-grid">
       <article class="panel-surface hero-copy">
-        <p class="eyebrow">Iteration 04 · Compression Live</p>
+        <p class="eyebrow">Iteration 05 · PDF Toolkit Live</p>
         <h1>
-          Главный экран Jack теперь ведёт уже в три живых file-маршрута: viewer, converter и
-          compression.
+          Главный экран Jack теперь ведёт уже в четыре живых file-маршрута: viewer, converter,
+          compression и PDF toolkit.
         </h1>
         <p class="lead">
           Home сохраняет soft industrial foundation, но теперь работает как switchboard уже для
-          трёх backend-first продуктов: viewer отвечает за preview и analysis через unified
+          четырёх backend-first продуктов: viewer отвечает за preview и analysis через unified
           `VIEWER_RESOLVE`, converter закрывает format-to-format сценарии через `IMAGE_CONVERT`,
           `OFFICE_CONVERT` и `MEDIA_CONVERT`, а compression решает size-first задачу через новый
           `FILE_COMPRESS`, где backend сам подбирает candidate ladder и возвращает единый
-          compression manifest/result contract.
+          compression manifest/result contract. Поверх этого PDF toolkit заводит import-to-PDF,
+          merge/split/rotate, OCR, visible signature stamps, term redaction и password flows в
+          dedicated `PDF_TOOLKIT` route без browser-side PDF mutation.
         </p>
 
         <div class="signal-row">
@@ -209,7 +215,7 @@ void hydrateQueuedModuleCards().catch(() => undefined)
 
         <div class="stats-grid" aria-label="Ключевые показатели foundation">
           <article class="stats-card">
-            <strong>4</strong>
+            <strong>5</strong>
             <span>экрана уже разведены через router</span>
           </article>
           <article class="stats-card">

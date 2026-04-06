@@ -15,6 +15,9 @@ public class ProcessingProperties {
 	private String potraceExecutable = "potrace";
 	private String rawPreviewExecutable = "dcraw_emu";
 	private long imageProcessingTimeoutSeconds = 240L;
+	private String tesseractExecutable = "tesseract";
+	private long pdfToolkitTimeoutSeconds = 300L;
+	private String pdfToolkitDefaultOcrLanguage = "eng";
 
 	public Path getStorageRoot() {
 		return this.storageRoot;
@@ -94,6 +97,30 @@ public class ProcessingProperties {
 
 	public void setImageProcessingTimeoutSeconds(long imageProcessingTimeoutSeconds) {
 		this.imageProcessingTimeoutSeconds = imageProcessingTimeoutSeconds;
+	}
+
+	public String getTesseractExecutable() {
+		return this.tesseractExecutable;
+	}
+
+	public void setTesseractExecutable(String tesseractExecutable) {
+		this.tesseractExecutable = tesseractExecutable;
+	}
+
+	public long getPdfToolkitTimeoutSeconds() {
+		return this.pdfToolkitTimeoutSeconds;
+	}
+
+	public void setPdfToolkitTimeoutSeconds(long pdfToolkitTimeoutSeconds) {
+		this.pdfToolkitTimeoutSeconds = pdfToolkitTimeoutSeconds;
+	}
+
+	public String getPdfToolkitDefaultOcrLanguage() {
+		return this.pdfToolkitDefaultOcrLanguage;
+	}
+
+	public void setPdfToolkitDefaultOcrLanguage(String pdfToolkitDefaultOcrLanguage) {
+		this.pdfToolkitDefaultOcrLanguage = pdfToolkitDefaultOcrLanguage;
 	}
 
 }
