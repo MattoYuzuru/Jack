@@ -10,26 +10,9 @@ export type ViewerPreviewPipeline =
 
 export type PreviewStrategyId =
   | 'native-image'
-  | 'heic-image'
-  | 'tiff-image'
-  | 'raw-image'
   | 'native-video'
-  | 'legacy-video'
   | 'native-audio'
-  | 'legacy-audio'
-  | 'pdf-document'
-  | 'text-document'
-  | 'csv-document'
-  | 'html-document'
-  | 'rtf-document'
-  | 'doc-document'
-  | 'docx-document'
-  | 'odt-document'
-  | 'xls-document'
-  | 'xlsx-document'
-  | 'pptx-document'
-  | 'epub-document'
-  | 'sqlite-document'
+  | 'server-viewer'
   | 'planned-media'
 
 export interface ViewerFormatDefinition {

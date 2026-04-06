@@ -4,41 +4,21 @@ import {
   type PreviewStrategyId,
   type ViewerFormatDefinition,
 } from '../domain/viewer-registry'
+import type { ViewerAudioFact, ViewerAudioLayout, ViewerAudioPreviewPayload } from './viewer-audio'
+import { buildNativeAudioPreview } from './viewer-audio-preview'
 import type {
   ViewerDocumentFact,
   ViewerDocumentLayout,
   ViewerDocumentPreviewPayload,
 } from './viewer-document'
-import {
-  buildCsvDocumentPreview,
-  buildDocDocumentPreview,
-  buildEpubDocumentPreview,
-  buildDocxDocumentPreview,
-  buildHtmlDocumentPreview,
-  buildOdtDocumentPreview,
-  buildPdfDocumentPreview,
-  buildPptxDocumentPreview,
-  buildRtfDocumentPreview,
-  buildSqliteDocumentPreview,
-  buildTextDocumentPreview,
-  buildXlsDocumentPreview,
-  buildXlsxDocumentPreview,
-} from './viewer-document-preview'
 import type { ViewerMetadataPayload } from './viewer-metadata'
+import { loadStructuredMetadata } from './viewer-preview'
 import {
-  loadStructuredMetadata,
-  type ViewerBinaryPreview,
-} from './viewer-preview'
-import {
-  decodeHeicPreview,
-  decodeRawPreview,
-  decodeTiffPreview,
-} from './viewer-image-preview'
-import type { ViewerAudioFact, ViewerAudioLayout, ViewerAudioPreviewPayload } from './viewer-audio'
-import { buildNativeAudioPreview } from './viewer-audio-preview'
+  resolveServerViewerPreview,
+  type ViewerServerResolvedPayload,
+} from './viewer-server-preview'
 import type { ViewerVideoFact, ViewerVideoLayout, ViewerVideoPreviewPayload } from './viewer-video'
 import { buildNativeVideoPreview } from './viewer-video-preview'
-import { buildLegacyAudioPreview, buildLegacyVideoPreview } from './viewer-media-preview'
 
 export interface ViewerResolvedImage {
   kind: 'image'
@@ -132,35 +112,9 @@ export interface ViewerRuntimeDependencies {
     buffer: ArrayBuffer,
     context: PreviewStrategyContext,
   ) => Promise<ViewerMetadataPayload>
-  decodeHeicImage?: (
-    buffer: ArrayBuffer,
-    context: PreviewStrategyContext,
-  ) => Promise<ViewerBinaryPreview>
-  decodeTiffImage?: (
-    buffer: ArrayBuffer,
-    context: PreviewStrategyContext,
-  ) => Promise<ViewerBinaryPreview>
-  decodeRawImage?: (
-    buffer: ArrayBuffer,
-    context: PreviewStrategyContext,
-  ) => Promise<ViewerBinaryPreview>
   buildNativeVideo?: (context: PreviewStrategyContext) => Promise<ViewerVideoPreviewPayload>
-  buildLegacyVideo?: (context: PreviewStrategyContext) => Promise<ViewerVideoPreviewPayload>
   buildNativeAudio?: (context: PreviewStrategyContext) => Promise<ViewerAudioPreviewPayload>
-  buildLegacyAudio?: (context: PreviewStrategyContext) => Promise<ViewerAudioPreviewPayload>
-  buildPdfDocument?: (context: PreviewStrategyContext) => Promise<ViewerDocumentPreviewPayload>
-  buildTextDocument?: (context: PreviewStrategyContext) => Promise<ViewerDocumentPreviewPayload>
-  buildCsvDocument?: (context: PreviewStrategyContext) => Promise<ViewerDocumentPreviewPayload>
-  buildHtmlDocument?: (context: PreviewStrategyContext) => Promise<ViewerDocumentPreviewPayload>
-  buildRtfDocument?: (context: PreviewStrategyContext) => Promise<ViewerDocumentPreviewPayload>
-  buildDocDocument?: (context: PreviewStrategyContext) => Promise<ViewerDocumentPreviewPayload>
-  buildDocxDocument?: (context: PreviewStrategyContext) => Promise<ViewerDocumentPreviewPayload>
-  buildOdtDocument?: (context: PreviewStrategyContext) => Promise<ViewerDocumentPreviewPayload>
-  buildXlsDocument?: (context: PreviewStrategyContext) => Promise<ViewerDocumentPreviewPayload>
-  buildXlsxDocument?: (context: PreviewStrategyContext) => Promise<ViewerDocumentPreviewPayload>
-  buildPptxDocument?: (context: PreviewStrategyContext) => Promise<ViewerDocumentPreviewPayload>
-  buildEpubDocument?: (context: PreviewStrategyContext) => Promise<ViewerDocumentPreviewPayload>
-  buildSqliteDocument?: (context: PreviewStrategyContext) => Promise<ViewerDocumentPreviewPayload>
+  buildServerViewer?: (context: PreviewStrategyContext) => Promise<ViewerServerResolvedPayload>
 }
 
 const previewStrategies = (
@@ -169,35 +123,9 @@ const previewStrategies = (
     buffer: ArrayBuffer,
     context: PreviewStrategyContext,
   ) => Promise<ViewerMetadataPayload>,
-  decodeHeicImage: (
-    buffer: ArrayBuffer,
-    context: PreviewStrategyContext,
-  ) => Promise<ViewerBinaryPreview>,
-  decodeTiffImage: (
-    buffer: ArrayBuffer,
-    context: PreviewStrategyContext,
-  ) => Promise<ViewerBinaryPreview>,
-  decodeRawImage: (
-    buffer: ArrayBuffer,
-    context: PreviewStrategyContext,
-  ) => Promise<ViewerBinaryPreview>,
   buildNativeVideo: (context: PreviewStrategyContext) => Promise<ViewerVideoPreviewPayload>,
-  buildLegacyVideo: (context: PreviewStrategyContext) => Promise<ViewerVideoPreviewPayload>,
   buildNativeAudio: (context: PreviewStrategyContext) => Promise<ViewerAudioPreviewPayload>,
-  buildLegacyAudio: (context: PreviewStrategyContext) => Promise<ViewerAudioPreviewPayload>,
-  buildPdfDocument: (context: PreviewStrategyContext) => Promise<ViewerDocumentPreviewPayload>,
-  buildTextDocument: (context: PreviewStrategyContext) => Promise<ViewerDocumentPreviewPayload>,
-  buildCsvDocument: (context: PreviewStrategyContext) => Promise<ViewerDocumentPreviewPayload>,
-  buildHtmlDocument: (context: PreviewStrategyContext) => Promise<ViewerDocumentPreviewPayload>,
-  buildRtfDocument: (context: PreviewStrategyContext) => Promise<ViewerDocumentPreviewPayload>,
-  buildDocDocument: (context: PreviewStrategyContext) => Promise<ViewerDocumentPreviewPayload>,
-  buildDocxDocument: (context: PreviewStrategyContext) => Promise<ViewerDocumentPreviewPayload>,
-  buildOdtDocument: (context: PreviewStrategyContext) => Promise<ViewerDocumentPreviewPayload>,
-  buildXlsDocument: (context: PreviewStrategyContext) => Promise<ViewerDocumentPreviewPayload>,
-  buildXlsxDocument: (context: PreviewStrategyContext) => Promise<ViewerDocumentPreviewPayload>,
-  buildPptxDocument: (context: PreviewStrategyContext) => Promise<ViewerDocumentPreviewPayload>,
-  buildEpubDocument: (context: PreviewStrategyContext) => Promise<ViewerDocumentPreviewPayload>,
-  buildSqliteDocument: (context: PreviewStrategyContext) => Promise<ViewerDocumentPreviewPayload>,
+  buildServerViewer: (context: PreviewStrategyContext) => Promise<ViewerServerResolvedPayload>,
 ): Record<PreviewStrategyId, PreviewStrategy<ViewerResolvedEntry>> => ({
   'native-image': {
     async resolve(context) {
@@ -224,35 +152,9 @@ const previewStrategies = (
       }
     },
   },
-  'heic-image': {
-    async resolve(context) {
-      const buffer = await context.file.arrayBuffer()
-      const preview = await decodeHeicImage(buffer, context)
-      return buildDecodedImageSelection(preview, context, inspectNativeImage)
-    },
-  },
-  'tiff-image': {
-    async resolve(context) {
-      const buffer = await context.file.arrayBuffer()
-      const preview = await decodeTiffImage(buffer, context)
-      return buildDecodedImageSelection(preview, context, inspectNativeImage)
-    },
-  },
-  'raw-image': {
-    async resolve(context) {
-      const buffer = await context.file.arrayBuffer()
-      const preview = await decodeRawImage(buffer, context)
-      return buildDecodedImageSelection(preview, context, inspectNativeImage)
-    },
-  },
   'native-video': {
     async resolve(context) {
       return buildVideoSelection(await buildNativeVideo(context), context)
-    },
-  },
-  'legacy-video': {
-    async resolve(context) {
-      return buildVideoSelection(await buildLegacyVideo(context), context)
     },
   },
   'native-audio': {
@@ -260,74 +162,9 @@ const previewStrategies = (
       return buildAudioSelection(await buildNativeAudio(context), context)
     },
   },
-  'legacy-audio': {
+  'server-viewer': {
     async resolve(context) {
-      return buildAudioSelection(await buildLegacyAudio(context), context)
-    },
-  },
-  'pdf-document': {
-    async resolve(context) {
-      return buildDocumentSelection(await buildPdfDocument(context), context)
-    },
-  },
-  'text-document': {
-    async resolve(context) {
-      return buildDocumentSelection(await buildTextDocument(context), context)
-    },
-  },
-  'csv-document': {
-    async resolve(context) {
-      return buildDocumentSelection(await buildCsvDocument(context), context)
-    },
-  },
-  'html-document': {
-    async resolve(context) {
-      return buildDocumentSelection(await buildHtmlDocument(context), context)
-    },
-  },
-  'rtf-document': {
-    async resolve(context) {
-      return buildDocumentSelection(await buildRtfDocument(context), context)
-    },
-  },
-  'doc-document': {
-    async resolve(context) {
-      return buildDocumentSelection(await buildDocDocument(context), context)
-    },
-  },
-  'docx-document': {
-    async resolve(context) {
-      return buildDocumentSelection(await buildDocxDocument(context), context)
-    },
-  },
-  'odt-document': {
-    async resolve(context) {
-      return buildDocumentSelection(await buildOdtDocument(context), context)
-    },
-  },
-  'xls-document': {
-    async resolve(context) {
-      return buildDocumentSelection(await buildXlsDocument(context), context)
-    },
-  },
-  'xlsx-document': {
-    async resolve(context) {
-      return buildDocumentSelection(await buildXlsxDocument(context), context)
-    },
-  },
-  'pptx-document': {
-    async resolve(context) {
-      return buildDocumentSelection(await buildPptxDocument(context), context)
-    },
-  },
-  'epub-document': {
-    async resolve(context) {
-      return buildDocumentSelection(await buildEpubDocument(context), context)
-    },
-  },
-  'sqlite-document': {
-    async resolve(context) {
-      return buildDocumentSelection(await buildSqliteDocument(context), context)
+      return buildServerSelection(await buildServerViewer(context), context)
     },
   },
   'planned-media': {
@@ -343,26 +180,9 @@ export function createViewerRuntime(dependencies: ViewerRuntimeDependencies = {}
   const strategies = previewStrategies(
     inspectNativeImage,
     loadNativeMetadata,
-    dependencies.decodeHeicImage ?? defaultDecodeHeicImage,
-    dependencies.decodeTiffImage ?? defaultDecodeTiffImage,
-    dependencies.decodeRawImage ?? defaultDecodeRawImage,
     dependencies.buildNativeVideo ?? defaultBuildNativeVideo,
-    dependencies.buildLegacyVideo ?? defaultBuildLegacyVideo,
     dependencies.buildNativeAudio ?? defaultBuildNativeAudio,
-    dependencies.buildLegacyAudio ?? defaultBuildLegacyAudio,
-    dependencies.buildPdfDocument ?? defaultBuildPdfDocument,
-    dependencies.buildTextDocument ?? defaultBuildTextDocument,
-    dependencies.buildCsvDocument ?? defaultBuildCsvDocument,
-    dependencies.buildHtmlDocument ?? defaultBuildHtmlDocument,
-    dependencies.buildRtfDocument ?? defaultBuildRtfDocument,
-    dependencies.buildDocDocument ?? defaultBuildDocDocument,
-    dependencies.buildDocxDocument ?? defaultBuildDocxDocument,
-    dependencies.buildOdtDocument ?? defaultBuildOdtDocument,
-    dependencies.buildXlsDocument ?? defaultBuildXlsDocument,
-    dependencies.buildXlsxDocument ?? defaultBuildXlsxDocument,
-    dependencies.buildPptxDocument ?? defaultBuildPptxDocument,
-    dependencies.buildEpubDocument ?? defaultBuildEpubDocument,
-    dependencies.buildSqliteDocument ?? defaultBuildSqliteDocument,
+    dependencies.buildServerViewer ?? defaultBuildServerViewer,
   )
 
   return {
@@ -432,32 +252,56 @@ export function releaseViewerEntry(entry: ViewerResolvedEntry | null) {
   }
 }
 
-async function buildDecodedImageSelection(
-  preview: ViewerBinaryPreview,
+function buildServerSelection(
+  payload: ViewerServerResolvedPayload,
   context: PreviewStrategyContext,
-  inspectNativeImage: (objectUrl: string) => Promise<{ width: number; height: number }>,
-): Promise<ViewerResolvedImage> {
-  // UI работает только с единым object URL контрактом, поэтому даже декодированные
-  // форматы приводим к тому же виду, что и browser-native изображения.
-  const previewBuffer = preview.bytes.slice().buffer
-  const objectUrl = URL.createObjectURL(new Blob([previewBuffer], { type: preview.mimeType }))
-
-  try {
-    const dimensions = await inspectNativeImage(objectUrl)
-
-    return {
-      kind: 'image',
-      file: context.file,
-      extension: context.extension,
-      format: context.format,
-      objectUrl,
-      dimensions,
-      metadata: preview.metadata,
-      previewLabel: preview.previewLabel,
-    }
-  } catch (error) {
-    URL.revokeObjectURL(objectUrl)
-    throw error
+): ViewerResolvedEntry {
+  switch (payload.kind) {
+    case 'image':
+      return {
+        kind: 'image',
+        file: context.file,
+        extension: context.extension,
+        format: context.format,
+        objectUrl: payload.objectUrl,
+        dimensions: payload.dimensions,
+        metadata: payload.metadata,
+        previewLabel: payload.previewLabel,
+      }
+    case 'document':
+      return buildDocumentSelection(
+        {
+          summary: payload.summary,
+          searchableText: payload.searchableText,
+          warnings: payload.warnings,
+          layout: payload.layout,
+          previewLabel: payload.previewLabel,
+        },
+        context,
+      )
+    case 'video':
+      return buildVideoSelection(
+        {
+          summary: payload.summary,
+          warnings: payload.warnings,
+          layout: payload.layout,
+          previewLabel: payload.previewLabel,
+        },
+        context,
+      )
+    case 'audio':
+      return buildAudioSelection(
+        {
+          summary: payload.summary,
+          warnings: payload.warnings,
+          searchableText: payload.searchableText,
+          artworkDataUrl: payload.artworkDataUrl,
+          metadataGroups: payload.metadataGroups,
+          layout: payload.layout,
+          previewLabel: payload.previewLabel,
+        },
+        context,
+      )
   }
 }
 
@@ -533,37 +377,10 @@ async function defaultLoadNativeMetadata(
   return loadStructuredMetadata(context.file, context.reportProgress)
 }
 
-async function defaultDecodeHeicImage(
-  buffer: ArrayBuffer,
-  context: PreviewStrategyContext,
-): Promise<ViewerBinaryPreview> {
-  return decodeHeicPreview(buffer, context)
-}
-
-async function defaultDecodeTiffImage(
-  buffer: ArrayBuffer,
-  context: PreviewStrategyContext,
-): Promise<ViewerBinaryPreview> {
-  return decodeTiffPreview(buffer, context)
-}
-
-async function defaultDecodeRawImage(
-  buffer: ArrayBuffer,
-  context: PreviewStrategyContext,
-): Promise<ViewerBinaryPreview> {
-  return decodeRawPreview(buffer, context)
-}
-
 async function defaultBuildNativeVideo(
   context: PreviewStrategyContext,
 ): Promise<ViewerVideoPreviewPayload> {
   return buildNativeVideoPreview(context.file, context.format)
-}
-
-async function defaultBuildLegacyVideo(
-  context: PreviewStrategyContext,
-): Promise<ViewerVideoPreviewPayload> {
-  return buildLegacyVideoPreview(context.file, context.format, context.reportProgress)
 }
 
 async function defaultBuildNativeAudio(
@@ -572,88 +389,10 @@ async function defaultBuildNativeAudio(
   return buildNativeAudioPreview(context.file, context.format)
 }
 
-async function defaultBuildLegacyAudio(
+async function defaultBuildServerViewer(
   context: PreviewStrategyContext,
-): Promise<ViewerAudioPreviewPayload> {
-  return buildLegacyAudioPreview(context.file, context.format, context.reportProgress)
-}
-
-async function defaultBuildPdfDocument(
-  context: PreviewStrategyContext,
-): Promise<ViewerDocumentPreviewPayload> {
-  return buildPdfDocumentPreview(context.file, context.reportProgress)
-}
-
-async function defaultBuildTextDocument(
-  context: PreviewStrategyContext,
-): Promise<ViewerDocumentPreviewPayload> {
-  return buildTextDocumentPreview(context.file, context.reportProgress)
-}
-
-async function defaultBuildCsvDocument(
-  context: PreviewStrategyContext,
-): Promise<ViewerDocumentPreviewPayload> {
-  return buildCsvDocumentPreview(context.file, context.reportProgress)
-}
-
-async function defaultBuildHtmlDocument(
-  context: PreviewStrategyContext,
-): Promise<ViewerDocumentPreviewPayload> {
-  return buildHtmlDocumentPreview(context.file, context.reportProgress)
-}
-
-async function defaultBuildRtfDocument(
-  context: PreviewStrategyContext,
-): Promise<ViewerDocumentPreviewPayload> {
-  return buildRtfDocumentPreview(context.file, context.reportProgress)
-}
-
-async function defaultBuildDocDocument(
-  context: PreviewStrategyContext,
-): Promise<ViewerDocumentPreviewPayload> {
-  return buildDocDocumentPreview(context.file, context.reportProgress)
-}
-
-async function defaultBuildDocxDocument(
-  context: PreviewStrategyContext,
-): Promise<ViewerDocumentPreviewPayload> {
-  return buildDocxDocumentPreview(context.file, context.reportProgress)
-}
-
-async function defaultBuildOdtDocument(
-  context: PreviewStrategyContext,
-): Promise<ViewerDocumentPreviewPayload> {
-  return buildOdtDocumentPreview(context.file, context.reportProgress)
-}
-
-async function defaultBuildXlsDocument(
-  context: PreviewStrategyContext,
-): Promise<ViewerDocumentPreviewPayload> {
-  return buildXlsDocumentPreview(context.file, context.reportProgress)
-}
-
-async function defaultBuildXlsxDocument(
-  context: PreviewStrategyContext,
-): Promise<ViewerDocumentPreviewPayload> {
-  return buildXlsxDocumentPreview(context.file, context.reportProgress)
-}
-
-async function defaultBuildPptxDocument(
-  context: PreviewStrategyContext,
-): Promise<ViewerDocumentPreviewPayload> {
-  return buildPptxDocumentPreview(context.file, context.reportProgress)
-}
-
-async function defaultBuildEpubDocument(
-  context: PreviewStrategyContext,
-): Promise<ViewerDocumentPreviewPayload> {
-  return buildEpubDocumentPreview(context.file, context.reportProgress)
-}
-
-async function defaultBuildSqliteDocument(
-  context: PreviewStrategyContext,
-): Promise<ViewerDocumentPreviewPayload> {
-  return buildSqliteDocumentPreview(context.file, context.reportProgress)
+): Promise<ViewerServerResolvedPayload> {
+  return resolveServerViewerPreview(context.file, context.reportProgress)
 }
 
 function defaultInspectNativeImage(objectUrl: string): Promise<{ width: number; height: number }> {

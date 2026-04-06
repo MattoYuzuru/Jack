@@ -830,9 +830,10 @@ onBeforeUnmount(() => {
         </h1>
         <p class="lead">
           Архитектура остаётся registry-driven: image, document, video и audio семьи живут в одном
-          маршруте, но каждая получает свой tooling-layer поверх общего stage/runtime. Для audio это
-          означает waveform, artwork, tag inspector и compatibility bridge для legacy контейнеров
-          без разрастания workspace в набор format-specific веток.
+          маршруте, но backend теперь собирает для всех non-native форматов единый
+          `VIEWER_RESOLVE` payload/artifact contract. На клиенте остаются stage, interaction
+          tooling и native rendering, а heavy image/document/media/audio orchestration больше не
+          размазана по format-specific веткам.
         </p>
 
         <div
@@ -863,7 +864,7 @@ onBeforeUnmount(() => {
             <span>
               Viewer уже держит image и document roadmap, video workbench и теперь закрывает весь
               audio slice: `mp3`, `wav`, `aac`, `flac`, `ogg`, `opus`, `aiff` сходятся в один
-              workspace через native path или server-assisted audio preview, а поверх этого работают
+              workspace через native path или unified backend viewer route, а поверх этого работают
               waveform, artwork, keyboard flow и richer tag metadata inspector.
             </span>
           </div>
@@ -1203,8 +1204,8 @@ onBeforeUnmount(() => {
                   <h3>{{ selection.file.name }}</h3>
                   <p>
                     Browser-native player, waveform rail и metadata inspector живут в одном
-                    workspace, а legacy containers нормализуются в тот же контракт через backend
-                    MEDIA_PREVIEW.
+                    workspace, а non-native containers нормализуются в тот же контракт через
+                    backend VIEWER_RESOLVE.
                   </p>
                 </div>
               </div>
@@ -1802,7 +1803,7 @@ onBeforeUnmount(() => {
         </div>
         <p v-if="!plannedMediaFormats.length" class="viewer-panel__empty">
           Для video roadmap в текущем срезе больше нет planned-only слотов: все заявленные форматы
-          уже сводятся к native path или server-assisted media preview внутри одного workspace.
+          уже сводятся к native path или unified backend viewer route внутри одного workspace.
         </p>
       </article>
     </section>

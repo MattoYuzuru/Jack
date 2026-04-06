@@ -170,24 +170,20 @@ export function useViewerWorkspace() {
 async function resolveLoadingMessage(file: File): Promise<string> {
   const format = await resolveViewerFormat(file.name, file.type)
 
-  if (
-    format?.previewStrategyId === 'heic-image' ||
-    format?.previewStrategyId === 'tiff-image' ||
-    format?.previewStrategyId === 'raw-image'
-  ) {
-    return 'Подготавливаю image preview через backend IMAGE_CONVERT job. Для больших HEIC/TIFF/RAW файлов upload и server rasterization могут занять заметное время.'
+  if (format?.previewStrategyId === 'server-viewer' && format.family === 'image') {
+    return 'Подготавливаю image preview через backend VIEWER_RESOLVE job. Backend соберёт raster preview и metadata payload, поэтому для больших HEIC/TIFF/RAW upload и server processing могут занять заметное время.'
   }
 
-  if (format?.previewStrategyId === 'legacy-video') {
-    return 'Подготавливаю video preview через backend MEDIA_PREVIEW job. Для больших контейнеров upload и server transcode могут занять заметное время.'
+  if (format?.previewStrategyId === 'server-viewer' && format.family === 'document') {
+    return 'Подготавливаю document preview через backend VIEWER_RESOLVE job. Для больших PDF, офисных документов, EPUB и SQLite upload и server parsing могут занять заметное время.'
   }
 
-  if (format?.previewStrategyId === 'legacy-audio') {
-    return 'Подготавливаю audio preview через backend MEDIA_PREVIEW job. Для длинных lossless-треков upload и server transcode могут занять заметное время.'
+  if (format?.previewStrategyId === 'server-viewer' && format.family === 'media') {
+    return 'Подготавливаю video preview через backend VIEWER_RESOLVE job. Backend соберёт unified payload и playback artifact, поэтому для больших контейнеров upload и server transcode могут занять заметное время.'
   }
 
-  if (format?.family === 'document') {
-    return 'Подготавливаю document preview через backend DOCUMENT_PREVIEW job. Для больших PDF, офисных документов, EPUB и SQLite upload и server parsing могут занять заметное время.'
+  if (format?.previewStrategyId === 'server-viewer' && format.family === 'audio') {
+    return 'Подготавливаю audio preview через backend VIEWER_RESOLVE job. Backend соберёт playback artifact, waveform и tag payload, поэтому для длинных lossless-треков upload и server processing могут занять заметное время.'
   }
 
   if (format?.family === 'image') {

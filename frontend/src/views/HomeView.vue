@@ -49,7 +49,7 @@ const foundationPillars: FoundationPillar[] = [
   {
     name: 'Архитектура',
     detail:
-      'Home, viewer и converter разведены по маршрутам, а legacy media, heavy imaging, document intelligence и metadata operations уже идут через processing API, registry/strategy-слой и backend artifact jobs.',
+      'Home, viewer и converter разведены по маршрутам, а viewer/converter уже сидят на processing API, server-owned capability matrix и backend artifact jobs вместо browser-heavy runtime orchestration.',
   },
 ]
 
@@ -61,7 +61,7 @@ const toolCards: ToolCard[] = [
     description:
       'Рабочий маршрут для preview и анализа: image tooling, backend document intelligence, backend metadata service, video workbench и audio viewer внутри одного workspace.',
     detail:
-      'Viewer уже закрывает весь стартовый image-format set, document layer, video slice и audio slice целиком: MP4/MOV/WebM через native path, AVI/MKV/WMV/FLV через backend MEDIA_PREVIEW, PDF/TXT/CSV/HTML/RTF/DOC/DOCX/ODT/XLS/XLSX/PPTX/EPUB/SQLite через backend DOCUMENT_PREVIEW, image/audio metadata через backend METADATA_EXPORT, MP3/WAV/OGG/OPUS через native audio path, AAC/FLAC/AIFF через server-assisted audio preview, плюс waveform, tag inspector, frame stepping, subtitle sidecars и poster tooling.',
+      'Viewer уже закрывает весь стартовый image-format set, document layer, video slice и audio slice целиком: MP4/MOV/WebM и MP3/WAV/OGG/OPUS остаются native, а HEIC/TIFF/RAW, legacy media, весь document stack и non-native audio идут через backend VIEWER_RESOLVE; metadata export остаётся за METADATA_EXPORT, плюс доступны waveform, tag inspector, frame stepping, subtitle sidecars и poster tooling.',
     status: 'Active route',
     route: '/viewer',
     accents: ['Images', 'Docs', 'Media', 'Search'],
@@ -154,7 +154,8 @@ const toolCards: ToolCard[] = [
         <p class="lead">
           Home сохраняет soft industrial foundation, но теперь работает как switchboard для двух
           живых маршрутов: viewer отвечает за preview, analysis, backend-powered document
-          intelligence, backend-powered metadata service, video tooling, audio workbench и image tooling, а converter закрывает первую волну
+          intelligence, backend-powered metadata service, video tooling, audio workbench и image
+          tooling через unified `VIEWER_RESOLVE` route, а converter закрывает первую волну
           image-конвертаций, vector/icon targets, archive-friendly TIFF target и document-target
           через scenario registry, processing API и backend-first job contract, где browser больше
           не вычисляет conversion result самостоятельно.

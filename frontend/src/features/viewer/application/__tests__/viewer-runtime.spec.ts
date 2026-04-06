@@ -25,7 +25,6 @@ afterEach(() => {
     configurable: true,
     value: originalCreateObjectUrl,
   })
-
   Object.defineProperty(URL, 'revokeObjectURL', {
     configurable: true,
     value: originalRevokeObjectUrl,
@@ -37,11 +36,6 @@ describe('viewer runtime', () => {
     Object.defineProperty(URL, 'createObjectURL', {
       configurable: true,
       value: vi.fn(() => 'blob:preview'),
-    })
-
-    Object.defineProperty(URL, 'revokeObjectURL', {
-      configurable: true,
-      value: vi.fn(),
     })
 
     const runtime = createViewerRuntime({
@@ -64,22 +58,17 @@ describe('viewer runtime', () => {
     expect(result.metadata.summary).toEqual([{ label: 'Камера', value: 'JackCam' }])
   })
 
-  it('builds a decoded preview for heic files', async () => {
-    Object.defineProperty(URL, 'createObjectURL', {
-      configurable: true,
-      value: vi.fn(() => 'blob:heic-preview'),
-    })
-
+  it('routes server-assisted image formats through the unified server viewer adapter', async () => {
     const runtime = createViewerRuntime({
-      inspectNativeImage: async () => ({ width: 3024, height: 4032 }),
-      decodeHeicImage: async () => ({
-        bytes: new Uint8Array([1, 2, 3]),
-        mimeType: 'image/jpeg',
+      buildServerViewer: async () => ({
+        kind: 'image',
+        objectUrl: 'blob:server-image-preview',
+        dimensions: { width: 3024, height: 4032 },
         metadata: {
           ...createEmptyMetadataPayload(),
           summary: [{ label: 'Тип файла', value: 'HEIC' }],
         },
-        previewLabel: 'HEIC decode adapter',
+        previewLabel: 'Server image preview',
       }),
     })
 
@@ -88,45 +77,15 @@ describe('viewer runtime', () => {
     )
 
     if (result.kind !== 'image') {
-      throw new Error('Expected a decoded HEIC preview result.')
+      throw new Error('Expected a server image preview result.')
     }
 
     expect(result.format.extension).toBe('heic')
-    expect(result.previewLabel).toBe('HEIC decode adapter')
+    expect(result.previewLabel).toBe('Server image preview')
     expect(result.metadata.summary).toEqual([{ label: 'Тип файла', value: 'HEIC' }])
   })
 
-  it('routes raw aliases through the raw preview adapter', async () => {
-    Object.defineProperty(URL, 'createObjectURL', {
-      configurable: true,
-      value: vi.fn(() => 'blob:raw-preview'),
-    })
-
-    const runtime = createViewerRuntime({
-      inspectNativeImage: async () => ({ width: 1600, height: 1067 }),
-      decodeRawImage: async () => ({
-        bytes: new Uint8Array([4, 5, 6]),
-        mimeType: 'image/png',
-        metadata: {
-          ...createEmptyMetadataPayload(),
-          summary: [{ label: 'Камера', value: 'RAW Body' }],
-        },
-        previewLabel: 'RAW preview extraction',
-      }),
-    })
-
-    const result = await runtime.resolve(new File(['raw'], 'session.nef'))
-
-    if (result.kind !== 'image') {
-      throw new Error('Expected a RAW preview result.')
-    }
-
-    expect(result.format.extension).toBe('raw')
-    expect(result.previewLabel).toBe('RAW preview extraction')
-    expect(result.metadata.summary).toEqual([{ label: 'Камера', value: 'RAW Body' }])
-  })
-
-  it('builds a document preview for pdf files', async () => {
+  it('routes document formats through the unified server viewer adapter', async () => {
     const revokeObjectUrl = vi.fn()
 
     Object.defineProperty(URL, 'revokeObjectURL', {
@@ -135,7 +94,8 @@ describe('viewer runtime', () => {
     })
 
     const runtime = createViewerRuntime({
-      buildPdfDocument: async () => ({
+      buildServerViewer: async () => ({
+        kind: 'document',
         summary: [{ label: 'Страниц', value: '3' }],
         searchableText: 'Alpha beta gamma',
         warnings: ['Search layer ограничен первыми страницами.'],
@@ -144,7 +104,7 @@ describe('viewer runtime', () => {
           objectUrl: 'blob:pdf-preview',
           pageCount: 3,
         },
-        previewLabel: 'PDF browser preview',
+        previewLabel: 'Server document preview',
       }),
     })
 
@@ -155,7 +115,7 @@ describe('viewer runtime', () => {
     }
 
     expect(result.layout.mode).toBe('pdf')
-    expect(result.previewLabel).toBe('PDF browser preview')
+    expect(result.previewLabel).toBe('Server document preview')
     expect(result.summary).toEqual([{ label: 'Страниц', value: '3' }])
     expect(result.searchableText).toContain('beta')
 
@@ -198,10 +158,11 @@ describe('viewer runtime', () => {
     expect(result.layout.width).toBe(1920)
   })
 
-  it('routes legacy video containers through the server media preview path', async () => {
+  it('routes legacy video containers through the unified server viewer adapter', async () => {
     const runtime = createViewerRuntime({
-      buildLegacyVideo: async () => ({
-        summary: [{ label: 'Runtime Container', value: 'MP4 transcode' }],
+      buildServerViewer: async () => ({
+        kind: 'video',
+        summary: [{ label: 'Playback path', value: 'Backend VIEWER_RESOLVE' }],
         warnings: ['Server preview used.'],
         layout: {
           mode: 'native',
@@ -210,14 +171,14 @@ describe('viewer runtime', () => {
           width: 1280,
           height: 720,
           metadata: {
-            mimeType: 'video/x-matroska',
+            mimeType: 'video/mp4',
             aspectRatio: '16:9',
             orientation: 'Landscape',
             estimatedBitrateBitsPerSecond: 3_600_000,
             sizeBytes: 8_100_000,
           },
         },
-        previewLabel: 'Server media preview',
+        previewLabel: 'Server video preview',
       }),
     })
 
@@ -228,12 +189,12 @@ describe('viewer runtime', () => {
     )
 
     if (result.kind !== 'video') {
-      throw new Error('Expected a legacy video preview result.')
+      throw new Error('Expected a server video preview result.')
     }
 
-    expect(result.previewLabel).toBe('Server media preview')
+    expect(result.previewLabel).toBe('Server video preview')
     expect(result.format.extension).toBe('mkv')
-    expect(result.summary).toEqual([{ label: 'Runtime Container', value: 'MP4 transcode' }])
+    expect(result.summary).toEqual([{ label: 'Playback path', value: 'Backend VIEWER_RESOLVE' }])
   })
 
   it('builds an audio preview for browser-native formats', async () => {
@@ -285,10 +246,11 @@ describe('viewer runtime', () => {
     expect(revokeObjectUrl).toHaveBeenCalledWith('blob:audio-preview')
   })
 
-  it('routes legacy audio containers through the server media preview path', async () => {
+  it('routes legacy audio containers through the unified server viewer adapter', async () => {
     const runtime = createViewerRuntime({
-      buildLegacyAudio: async () => ({
-        summary: [{ label: 'Runtime Container', value: 'MP3 transcode' }],
+      buildServerViewer: async () => ({
+        kind: 'audio',
+        summary: [{ label: 'Playback path', value: 'Backend VIEWER_RESOLVE' }],
         warnings: ['Server preview used.'],
         searchableText: 'Lossless archive',
         artworkDataUrl: null,
@@ -299,7 +261,7 @@ describe('viewer runtime', () => {
           durationSeconds: 242,
           waveform: [0.3, 0.9],
           metadata: {
-            mimeType: 'audio/flac',
+            mimeType: 'audio/mpeg',
             estimatedBitrateBitsPerSecond: 768_000,
             sampleRate: 48_000,
             channelCount: 2,
@@ -317,122 +279,48 @@ describe('viewer runtime', () => {
     )
 
     if (result.kind !== 'audio') {
-      throw new Error('Expected a legacy audio preview result.')
+      throw new Error('Expected a server audio preview result.')
     }
 
     expect(result.previewLabel).toBe('Server audio preview')
     expect(result.format.extension).toBe('flac')
-    expect(result.summary).toEqual([{ label: 'Runtime Container', value: 'MP3 transcode' }])
+    expect(result.summary).toEqual([{ label: 'Playback path', value: 'Backend VIEWER_RESOLVE' }])
   })
 
-  it('routes xlsx files through the workbook document adapter', async () => {
-    const runtime = createViewerRuntime({
-      buildXlsxDocument: async () => ({
-        summary: [{ label: 'Sheets', value: '2' }],
-        searchableText: 'Summary Viewer',
-        warnings: [],
-        layout: {
-          mode: 'workbook',
-          text: 'Summary Viewer',
-          activeSheetIndex: 0,
-          sheets: [
-            {
-              id: 'sheet-1',
-              name: 'Summary',
-              table: {
-                columns: ['Name'],
-                rows: [['Viewer']],
-                totalRows: 1,
-                totalColumns: 1,
-                delimiter: '',
-              },
-            },
-          ],
-        },
-        previewLabel: 'XLSX workbook adapter',
-      }),
-    })
-
-    const result = await runtime.resolve(
-      new File(['xlsx'], 'report.xlsx', {
-        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      }),
+  it('returns an unknown result when backend marks the format unavailable', async () => {
+    const fetchMock = vi.mocked(globalThis.fetch)
+    const capabilityFixture = createViewerCapabilityScopeFixture()
+    const viewerFormats = (capabilityFixture.viewerMatrix?.formats ?? []) as Array<{
+      extension: string
+      available: boolean
+      availabilityDetail: string | null
+    }>
+    const wmvFormat = viewerFormats.find(
+      (definition) => definition.extension === 'wmv',
     )
 
-    if (result.kind !== 'document') {
-      throw new Error('Expected an XLSX document preview result.')
+    if (!wmvFormat) {
+      throw new Error('WMV capability fixture is required for this test.')
     }
 
-    expect(result.previewLabel).toBe('XLSX workbook adapter')
-    expect(result.layout.mode).toBe('workbook')
-  })
+    wmvFormat.available = false
+    wmvFormat.availabilityDetail = 'MEDIA_PREVIEW временно выключен на backend.'
 
-  it('routes doc files through the legacy document adapter', async () => {
-    const runtime = createViewerRuntime({
-      buildDocDocument: async () => ({
-        summary: [{ label: 'Тип документа', value: 'DOC' }],
-        searchableText: 'Legacy viewer text',
-        warnings: [],
-        layout: {
-          mode: 'text',
-          text: 'Legacy viewer text',
-          paragraphs: ['Legacy viewer text'],
-        },
-        previewLabel: 'DOC legacy text adapter',
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify(capabilityFixture), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
       }),
-    })
-
-    const result = await runtime.resolve(
-      new File(['doc'], 'legacy.doc', { type: 'application/msword' }),
     )
 
-    if (result.kind !== 'document') {
-      throw new Error('Expected a DOC document preview result.')
+    const runtime = createViewerRuntime()
+    const result = await runtime.resolve(new File(['video'], 'clip.wmv', { type: 'video/x-ms-wmv' }))
+
+    expect(result.kind).toBe('unknown')
+    if (result.kind !== 'unknown') {
+      return
     }
 
-    expect(result.previewLabel).toBe('DOC legacy text adapter')
-    expect(result.layout.mode).toBe('text')
-  })
-
-  it('routes epub files through the reflow document adapter', async () => {
-    const runtime = createViewerRuntime({
-      buildEpubDocument: async () => ({
-        summary: [{ label: 'Тип документа', value: 'EPUB' }],
-        searchableText: 'Viewer chapter text',
-        warnings: [],
-        layout: {
-          mode: 'html',
-          text: 'Viewer chapter text',
-          srcDoc: '<html><body><h1>Viewer</h1></body></html>',
-          outline: [{ id: 'epub-1', label: 'Viewer', level: 1 }],
-        },
-        previewLabel: 'EPUB reading adapter',
-      }),
-    })
-
-    const result = await runtime.resolve(
-      new File(['epub'], 'book.epub', {
-        type: 'application/epub+zip',
-      }),
-    )
-
-    if (result.kind !== 'document') {
-      throw new Error('Expected an EPUB document preview result.')
-    }
-
-    expect(result.previewLabel).toBe('EPUB reading adapter')
-    expect(result.layout.mode).toBe('html')
-  })
-
-  it('surfaces backend document preview errors for sqlite routes', async () => {
-    const runtime = createViewerRuntime({
-      buildSqliteDocument: async () => {
-        throw new Error('DB file is not SQLite')
-      },
-    })
-
-    await expect(runtime.resolve(new File(['db'], 'storage.db'))).rejects.toThrow(
-      'DB file is not SQLite',
-    )
+    expect(result.detail).toContain('MEDIA_PREVIEW временно выключен')
   })
 })
