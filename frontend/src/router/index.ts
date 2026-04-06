@@ -33,6 +33,11 @@ const router = createRouter({
       name: 'editor',
       component: () => import('../views/EditorWorkspaceView.vue'),
     },
+    {
+      path: '/dev-tools',
+      name: 'dev-tools',
+      component: () => import('../views/DevToolsWorkspaceView.vue'),
+    },
   ],
 })
 
