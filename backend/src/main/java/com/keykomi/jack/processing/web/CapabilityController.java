@@ -30,6 +30,11 @@ public class CapabilityController {
 		return this.capabilityCatalogService.compressionCapabilities();
 	}
 
+	@GetMapping("/pdf-toolkit")
+	public CapabilityCatalogService.CapabilityScope pdfToolkitCapabilities() {
+		return this.capabilityCatalogService.pdfToolkitCapabilities();
+	}
+
 	@GetMapping("/platform")
 	public CapabilityCatalogService.CapabilityScope platformCapabilities() {
 		return this.capabilityCatalogService.platformCapabilities();

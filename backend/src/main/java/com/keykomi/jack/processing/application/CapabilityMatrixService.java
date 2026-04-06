@@ -138,13 +138,13 @@ public class CapabilityMatrixService {
 		platformModule(
 			"pdf-toolkit",
 			"PDF Toolkit",
-			"PDF toolkit может расти поверх document intelligence, viewer artifacts и image/document processing без нового browser-first runtime.",
-			"Preview, page-aware payload, extraction и server raster artifacts уже существуют. Merge/split/rotate/e-sign/redaction должны использовать тот же job/artifact lifecycle, а не разрозненные клиентские пайплайны.",
-			List.of("Merge", "Rotate", "Protect"),
-			List.of("document-processing", "image-processing", "viewer-resolve", "artifact-storage"),
-			List.of(ProcessingJobType.DOCUMENT_PREVIEW, ProcessingJobType.IMAGE_CONVERT, ProcessingJobType.VIEWER_RESOLVE),
-			List.of("merge/split/rotate", "page reorder", "protected PDF flows"),
-			"PDF toolkit требует доступных DOCUMENT_PREVIEW, IMAGE_CONVERT и VIEWER_RESOLVE capabilities."
+			"PDF toolkit уже поднят как отдельный backend-first route для page operations, OCR, redaction и password flows поверх processing platform.",
+			"Workspace reuse'ит VIEWER_RESOLVE для preview, IMAGE_CONVERT и OFFICE_CONVERT для import-to-PDF entry flows, а все page mutations живут в dedicated PDF_TOOLKIT job без browser-side PDF rewriting.",
+			List.of("Merge", "OCR", "Protect"),
+			List.of("document-processing", "image-processing", "office-conversion", "viewer-resolve", "artifact-storage"),
+			List.of(ProcessingJobType.PDF_TOOLKIT, ProcessingJobType.DOCUMENT_PREVIEW, ProcessingJobType.IMAGE_CONVERT, ProcessingJobType.OFFICE_CONVERT, ProcessingJobType.VIEWER_RESOLVE),
+			List.of("term-based redaction", "visible signature stamps", "searchable PDF OCR"),
+			"PDF toolkit требует доступных PDF_TOOLKIT, DOCUMENT_PREVIEW, IMAGE_CONVERT, OFFICE_CONVERT и VIEWER_RESOLVE capabilities."
 		),
 		platformModule(
 			"multi-format-editor",

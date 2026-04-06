@@ -46,6 +46,7 @@ class ProcessingFoundationApiTests {
 		registry.add("jack.processing.image-convert-executable", () -> STORAGE_ROOT.resolve("missing-convert").toString());
 		registry.add("jack.processing.potrace-executable", () -> STORAGE_ROOT.resolve("missing-potrace").toString());
 		registry.add("jack.processing.raw-preview-executable", () -> STORAGE_ROOT.resolve("missing-dcraw").toString());
+		registry.add("jack.processing.tesseract-executable", () -> STORAGE_ROOT.resolve("missing-tesseract").toString());
 	}
 
 	@AfterAll
@@ -148,19 +149,37 @@ class ProcessingFoundationApiTests {
 			.andExpect(jsonPath("$.compressionMatrix.modes[0].id").value("maximum"))
 			.andExpect(jsonPath("$.compressionMatrix.sourceFormats[0].available").value(false));
 
+		this.mockMvc.perform(get("/api/capabilities/pdf-toolkit"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.scope").value("pdf-toolkit"))
+			.andExpect(jsonPath("$.phase").value("pdf-toolkit-backend-first"))
+			.andExpect(jsonPath("$.jobTypes[0].implemented").value(true))
+			.andExpect(jsonPath("$.jobTypes[1].implemented").value(true))
+			.andExpect(jsonPath("$.jobTypes[2].implemented").value(true))
+			.andExpect(jsonPath("$.jobTypes[3].implemented").value(true))
+			.andExpect(jsonPath("$.jobTypes[4].implemented").value(false))
+			.andExpect(jsonPath("$.jobTypes[5].implemented").value(true))
+			.andExpect(jsonPath("$.pdfToolkitMatrix.directSourceFormats[0].extension").value("pdf"))
+			.andExpect(jsonPath("$.pdfToolkitMatrix.importSourceFormats[0].routeKind").value("convert-to-pdf"))
+			.andExpect(jsonPath("$.pdfToolkitMatrix.operations[0].id").value("merge"))
+			.andExpect(jsonPath("$.pdfToolkitMatrix.operations[4].available").value(false));
+
 		this.mockMvc.perform(get("/api/capabilities/platform"))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.scope").value("platform"))
 			.andExpect(jsonPath("$.phase").value("processing-platform"))
 			.andExpect(jsonPath("$.jobTypes[0].implemented").value(true))
 			.andExpect(jsonPath("$.jobTypes[1].implemented").value(false))
-			.andExpect(jsonPath("$.jobTypes[2].implemented").value(false))
+			.andExpect(jsonPath("$.jobTypes[2].implemented").value(true))
 			.andExpect(jsonPath("$.jobTypes[3].implemented").value(false))
 			.andExpect(jsonPath("$.jobTypes[4].implemented").value(false))
-			.andExpect(jsonPath("$.jobTypes[5].implemented").value(true))
+			.andExpect(jsonPath("$.jobTypes[5].implemented").value(false))
 			.andExpect(jsonPath("$.jobTypes[6].implemented").value(true))
+			.andExpect(jsonPath("$.jobTypes[7].implemented").value(true))
 			.andExpect(jsonPath("$.platformMatrix.modules[0].id").value("compression"))
 			.andExpect(jsonPath("$.platformMatrix.modules[0].foundationReady").value(false))
+			.andExpect(jsonPath("$.platformMatrix.modules[1].id").value("pdf-toolkit"))
+			.andExpect(jsonPath("$.platformMatrix.modules[1].foundationReady").value(false))
 			.andExpect(jsonPath("$.platformMatrix.modules[2].id").value("multi-format-editor"))
 			.andExpect(jsonPath("$.platformMatrix.modules[2].foundationReady").value(true))
 			.andExpect(jsonPath("$.platformMatrix.modules[5].id").value("office-pdf-conversion"));
