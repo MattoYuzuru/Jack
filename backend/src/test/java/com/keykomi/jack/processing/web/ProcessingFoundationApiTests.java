@@ -164,6 +164,17 @@ class ProcessingFoundationApiTests {
 			.andExpect(jsonPath("$.pdfToolkitMatrix.operations[0].id").value("merge"))
 			.andExpect(jsonPath("$.pdfToolkitMatrix.operations[4].available").value(false));
 
+		this.mockMvc.perform(get("/api/capabilities/editor"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.scope").value("editor"))
+			.andExpect(jsonPath("$.phase").value("editor-backend-first"))
+			.andExpect(jsonPath("$.jobTypes[0].implemented").value(true))
+			.andExpect(jsonPath("$.jobTypes[1].implemented").value(true))
+			.andExpect(jsonPath("$.jobTypes[2].implemented").value(true))
+			.andExpect(jsonPath("$.editorMatrix.acceptAttribute").value(org.hamcrest.Matchers.containsString(".md")))
+			.andExpect(jsonPath("$.editorMatrix.formats[0].id").value("markdown"))
+			.andExpect(jsonPath("$.editorMatrix.formats[1].previewMode").value("sandbox"));
+
 		this.mockMvc.perform(get("/api/capabilities/platform"))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.scope").value("platform"))
@@ -176,6 +187,9 @@ class ProcessingFoundationApiTests {
 			.andExpect(jsonPath("$.jobTypes[5].implemented").value(false))
 			.andExpect(jsonPath("$.jobTypes[6].implemented").value(true))
 			.andExpect(jsonPath("$.jobTypes[7].implemented").value(true))
+			.andExpect(jsonPath("$.jobTypes[8].implemented").value(true))
+			.andExpect(jsonPath("$.jobTypes[9].implemented").value(true))
+			.andExpect(jsonPath("$.jobTypes[10].implemented").value(true))
 			.andExpect(jsonPath("$.platformMatrix.modules[0].id").value("compression"))
 			.andExpect(jsonPath("$.platformMatrix.modules[0].foundationReady").value(false))
 			.andExpect(jsonPath("$.platformMatrix.modules[1].id").value("pdf-toolkit"))
