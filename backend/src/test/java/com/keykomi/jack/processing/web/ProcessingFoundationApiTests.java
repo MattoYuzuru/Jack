@@ -132,6 +132,20 @@ class ProcessingFoundationApiTests {
 			.andExpect(jsonPath("$.converterMatrix.acceptAttribute").value(""))
 			.andExpect(jsonPath("$.converterMatrix.sourceFormats[0].available").value(false))
 			.andExpect(jsonPath("$.converterMatrix.presets[0].id").value("original"));
+
+		this.mockMvc.perform(get("/api/capabilities/platform"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.scope").value("platform"))
+			.andExpect(jsonPath("$.phase").value("processing-platform"))
+			.andExpect(jsonPath("$.jobTypes[0].implemented").value(true))
+			.andExpect(jsonPath("$.jobTypes[1].implemented").value(false))
+			.andExpect(jsonPath("$.jobTypes[2].implemented").value(false))
+			.andExpect(jsonPath("$.jobTypes[3].implemented").value(true))
+			.andExpect(jsonPath("$.platformMatrix.modules[0].id").value("compression"))
+			.andExpect(jsonPath("$.platformMatrix.modules[0].foundationReady").value(false))
+			.andExpect(jsonPath("$.platformMatrix.modules[2].id").value("multi-format-editor"))
+			.andExpect(jsonPath("$.platformMatrix.modules[2].foundationReady").value(true))
+			.andExpect(jsonPath("$.platformMatrix.modules[5].id").value("office-pdf-conversion"));
 	}
 
 	private JsonNode awaitJobCompletion(String jobId) throws Exception {

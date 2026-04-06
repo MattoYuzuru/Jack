@@ -155,6 +155,34 @@ export function createConverterCapabilityScopeFixture(): ProcessingCapabilitySco
   }
 }
 
+export function createPlatformCapabilityScopeFixture(): ProcessingCapabilityScope {
+  return {
+    scope: 'platform',
+    phase: 'processing-platform',
+    jobTypes: [
+      { jobType: 'UPLOAD_INTAKE_ANALYSIS', implemented: true },
+      { jobType: 'MEDIA_PREVIEW', implemented: true },
+      { jobType: 'IMAGE_CONVERT', implemented: true },
+      { jobType: 'DOCUMENT_PREVIEW', implemented: true },
+      { jobType: 'METADATA_EXPORT', implemented: true },
+      { jobType: 'VIEWER_RESOLVE', implemented: true },
+    ],
+    notes: [],
+    viewerMatrix: null,
+    converterMatrix: null,
+    platformMatrix: {
+      modules: [
+        platformModule('compression', 'Compression', ['Target size', 'Quality', 'Batch'], ['IMAGE_CONVERT', 'MEDIA_PREVIEW']),
+        platformModule('pdf-toolkit', 'PDF Toolkit', ['Merge', 'Rotate', 'Protect'], ['DOCUMENT_PREVIEW', 'IMAGE_CONVERT', 'VIEWER_RESOLVE']),
+        platformModule('multi-format-editor', 'Multi-Format Editor', ['Preview', 'Validate', 'Export'], ['DOCUMENT_PREVIEW', 'METADATA_EXPORT']),
+        platformModule('batch-conversion', 'Batch Conversion', ['Queue', 'Reuse', 'Artifacts'], ['IMAGE_CONVERT']),
+        platformModule('ocr', 'OCR', ['Extract', 'Search', 'Scan'], ['DOCUMENT_PREVIEW', 'IMAGE_CONVERT']),
+        platformModule('office-pdf-conversion', 'Office/PDF Conversion', ['DOCX', 'PDF', 'Office'], ['DOCUMENT_PREVIEW', 'VIEWER_RESOLVE']),
+      ],
+    },
+  }
+}
+
 function viewerFormat(
   extension: string,
   aliases: string[],
@@ -276,6 +304,27 @@ function converterPreset(
     preferredQuality,
     defaultBackgroundColor,
     available: true,
+    availabilityDetail: null,
+  }
+}
+
+function platformModule(
+  id: string,
+  label: string,
+  accents: string[],
+  reusedJobTypes: string[],
+) {
+  return {
+    id,
+    label,
+    summary: `${label} platform fixture`,
+    detail: `${label} detail fixture`,
+    statusLabel: 'Foundation ready',
+    accents,
+    reusedDomains: ['artifact-storage', 'job-orchestration'],
+    reusedJobTypes,
+    nextSlices: ['slice-1', 'slice-2'],
+    foundationReady: true,
     availabilityDetail: null,
   }
 }

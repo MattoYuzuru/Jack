@@ -1,5 +1,6 @@
 export type ProcessingJobStatus = 'QUEUED' | 'RUNNING' | 'COMPLETED' | 'FAILED' | 'CANCELLED'
 export type ProcessingProgressReporter = (message: string) => void
+export type ProcessingCapabilityScopeName = 'viewer' | 'converter' | 'platform'
 
 export interface ProcessingCapabilityJobType {
   jobType: string
@@ -9,7 +10,7 @@ export interface ProcessingCapabilityJobType {
 }
 
 export interface ProcessingCapabilityScope {
-  scope: string
+  scope: ProcessingCapabilityScopeName
   phase: string
   jobTypes: ProcessingCapabilityJobType[]
   notes?: string[]
@@ -24,6 +25,25 @@ export interface ProcessingCapabilityScope {
     scenarios: unknown[]
     presets: unknown[]
   } | null
+  platformMatrix?: ProcessingPlatformCapabilityMatrix | null
+}
+
+export interface ProcessingPlatformCapabilityMatrix {
+  modules: ProcessingPlatformModuleCapability[]
+}
+
+export interface ProcessingPlatformModuleCapability {
+  id: string
+  label: string
+  summary: string
+  detail: string
+  statusLabel: string
+  accents: string[]
+  reusedDomains: string[]
+  reusedJobTypes: string[]
+  nextSlices: string[]
+  foundationReady: boolean
+  availabilityDetail?: string | null
 }
 
 export interface ProcessingUploadResponse {
@@ -55,7 +75,7 @@ export interface ProcessingJobResponse {
 }
 
 interface RunProcessingJobOptions {
-  scope: 'viewer' | 'converter'
+  scope: Exclude<ProcessingCapabilityScopeName, 'platform'>
   file: File
   jobType: string
   parameters?: Record<string, unknown>
@@ -80,7 +100,7 @@ interface AwaitProcessingJobOptions {
 const DEFAULT_API_BASE_URL = 'http://localhost:8080'
 const DEFAULT_MAX_ATTEMPTS = 300
 const DEFAULT_POLL_INTERVAL_MS = 1_000
-const capabilityScopeCache = new Map<RunProcessingJobOptions['scope'], Promise<ProcessingCapabilityScope>>()
+const capabilityScopeCache = new Map<ProcessingCapabilityScopeName, Promise<ProcessingCapabilityScope>>()
 
 export class ProcessingJobCancelledError extends Error {
   readonly job: ProcessingJobResponse
@@ -97,7 +117,7 @@ export function resetProcessingCapabilityScopeCache(): void {
 }
 
 export async function getProcessingCapabilityScope(
-  scope: RunProcessingJobOptions['scope'],
+  scope: ProcessingCapabilityScopeName,
 ): Promise<ProcessingCapabilityScope> {
   const cachedScope = capabilityScopeCache.get(scope)
   if (cachedScope) {
@@ -116,7 +136,7 @@ export async function getProcessingCapabilityScope(
 }
 
 export async function ensureProcessingCapability(
-  scope: RunProcessingJobOptions['scope'],
+  scope: Exclude<ProcessingCapabilityScopeName, 'platform'>,
   jobType: string,
 ): Promise<ProcessingCapabilityJobType> {
   const capabilityScope = await getProcessingCapabilityScope(scope)
@@ -141,6 +161,16 @@ export async function uploadProcessingFile(file: File): Promise<ProcessingUpload
     method: 'POST',
     body: formData,
   })
+}
+
+export async function getPlatformCapabilityMatrix(): Promise<ProcessingPlatformCapabilityMatrix> {
+  const scope = await getProcessingCapabilityScope('platform')
+
+  if (!scope.platformMatrix) {
+    throw new Error('Backend не вернул platform capability matrix.')
+  }
+
+  return scope.platformMatrix
 }
 
 export async function createProcessingJob(input: {

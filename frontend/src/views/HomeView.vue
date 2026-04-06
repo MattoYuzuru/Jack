@@ -1,6 +1,9 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import HomeToolIllustration from '../components/HomeToolIllustration.vue'
+import { getProcessingPlatformModules } from '../features/processing/domain/platform-registry'
+import type { ProcessingPlatformModuleCapability } from '../features/processing/application/processing-client'
 
 type ToolId = 'viewer' | 'converter' | 'compressor' | 'pdf' | 'editor' | 'devtools'
 
@@ -26,6 +29,7 @@ const signalPills = [
   'Viewer workspace',
   'Converter route',
   'Processing API client',
+  'Platform reuse matrix',
   'Backend document intelligence',
   'Backend metadata service',
   'Video tooling',
@@ -49,11 +53,11 @@ const foundationPillars: FoundationPillar[] = [
   {
     name: 'Архитектура',
     detail:
-      'Home, viewer и converter разведены по маршрутам, а viewer/converter уже сидят на processing API, server-owned capability matrix и backend artifact jobs вместо browser-heavy runtime orchestration.',
+      'Home, viewer и converter разведены по маршрутам, а viewer/converter уже сидят на processing API, server-owned capability matrix, backend artifact jobs и platform matrix для следующих queued-модулей вместо browser-heavy runtime orchestration.',
   },
 ]
 
-const toolCards: ToolCard[] = [
+const toolCardBlueprints: ToolCard[] = [
   {
     id: 'viewer',
     label: '01 · File Viewer',
@@ -125,6 +129,40 @@ const toolCards: ToolCard[] = [
     span: 'tool-card--standard',
   },
 ]
+
+const toolCards = ref<ToolCard[]>(toolCardBlueprints)
+const platformModuleIdByToolId: Partial<Record<ToolId, string>> = {
+  compressor: 'compression',
+  pdf: 'pdf-toolkit',
+  editor: 'multi-format-editor',
+}
+
+function applyPlatformModule(
+  card: ToolCard,
+  module: ProcessingPlatformModuleCapability | undefined,
+): ToolCard {
+  if (!module || card.route) {
+    return card
+  }
+
+  return {
+    ...card,
+    detail: module.summary,
+    status: module.foundationReady ? 'Queued · Platform ready' : 'Queued · Needs runtime',
+    accents: module.accents.slice(0, 3).length ? module.accents.slice(0, 3) : card.accents,
+  }
+}
+
+async function hydrateQueuedModuleCards(): Promise<void> {
+  const modules = await getProcessingPlatformModules()
+  const moduleById = new Map(modules.map((module) => [module.id, module]))
+
+  toolCards.value = toolCardBlueprints.map((card) =>
+    applyPlatformModule(card, moduleById.get(platformModuleIdByToolId[card.id] ?? '')),
+  )
+}
+
+void hydrateQueuedModuleCards().catch(() => undefined)
 </script>
 
 <template>

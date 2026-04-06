@@ -2,14 +2,18 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   awaitProcessingJob,
   cancelProcessingJob,
+  getPlatformCapabilityMatrix,
   ProcessingJobCancelledError,
+  resetProcessingCapabilityScopeCache,
 } from '../processing-client'
+import { createPlatformCapabilityScopeFixture } from './capability-matrix.fixtures'
 
 const originalFetch = globalThis.fetch
 
 describe('processing client', () => {
   afterEach(() => {
     globalThis.fetch = originalFetch
+    resetProcessingCapabilityScopeCache()
   })
 
   it('throws ProcessingJobCancelledError when polling sees a cancelled job', async () => {
@@ -70,5 +74,19 @@ describe('processing client', () => {
       'http://localhost:8080/api/jobs/job-2',
       expect.objectContaining({ method: 'DELETE' }),
     )
+  })
+
+  it('loads platform matrix from backend capability scope', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(createPlatformCapabilityScopeFixture()), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    ) as typeof fetch
+
+    const matrix = await getPlatformCapabilityMatrix()
+
+    expect(matrix.modules).toHaveLength(6)
+    expect(matrix.modules[0]?.id).toBe('compression')
   })
 })

@@ -87,6 +87,7 @@ public class CapabilityCatalogService {
 				"Backend отдаёт format matrix как источник правды, а browser оставляет у себя только native rendering, state и interaction tooling."
 			),
 			this.capabilityMatrixService.viewerMatrix(availabilityByJobType),
+			null,
 			null
 		);
 	}
@@ -137,7 +138,61 @@ public class CapabilityCatalogService {
 				"Workspace может строить progress, retry, cancel и artifact reuse поверх единых job status и capability rules от backend."
 			),
 			null,
-			this.capabilityMatrixService.converterMatrix(availabilityByJobType)
+			this.capabilityMatrixService.converterMatrix(availabilityByJobType),
+			null
+		);
+	}
+
+	public CapabilityScope platformCapabilities() {
+		var availabilityByJobType = availabilityByJobType();
+		return new CapabilityScope(
+			"platform",
+			"processing-platform",
+			List.of(
+				new JobTypeCapability(ProcessingJobType.UPLOAD_INTAKE_ANALYSIS, true, "Upload intake уже даёт общий foundation для новых thin features поверх processing platform."),
+				new JobTypeCapability(
+					ProcessingJobType.MEDIA_PREVIEW,
+					availabilityByJobType.getOrDefault(ProcessingJobType.MEDIA_PREVIEW, false),
+					availabilityByJobType.getOrDefault(ProcessingJobType.MEDIA_PREVIEW, false)
+						? "Media preview foundation уже готова к reuse в compression, batch и future delivery flows."
+						: "Для reuse media foundation нужны доступные ffmpeg/ffprobe binaries."
+				),
+				new JobTypeCapability(
+					ProcessingJobType.IMAGE_CONVERT,
+					availabilityByJobType.getOrDefault(ProcessingJobType.IMAGE_CONVERT, false),
+					availabilityByJobType.getOrDefault(ProcessingJobType.IMAGE_CONVERT, false)
+						? "Image processing foundation уже готова к reuse в compression, OCR, PDF toolkit и batch conversion."
+						: "Для reuse imaging foundation нужны доступные convert/ffmpeg/potrace/raw-preview binaries."
+				),
+				new JobTypeCapability(
+					ProcessingJobType.DOCUMENT_PREVIEW,
+					availabilityByJobType.getOrDefault(ProcessingJobType.DOCUMENT_PREVIEW, false),
+					availabilityByJobType.getOrDefault(ProcessingJobType.DOCUMENT_PREVIEW, false)
+						? "Document intelligence foundation уже готова к reuse в PDF toolkit, editor, OCR и office conversion."
+						: "Document intelligence foundation сейчас недоступна и блокирует document-centric reuse."
+				),
+				new JobTypeCapability(
+					ProcessingJobType.METADATA_EXPORT,
+					availabilityByJobType.getOrDefault(ProcessingJobType.METADATA_EXPORT, false),
+					availabilityByJobType.getOrDefault(ProcessingJobType.METADATA_EXPORT, false)
+						? "Metadata foundation уже готова к reuse в editor/export и quality-aware processing flows."
+						: "Metadata foundation сейчас недоступна и ограничивает export/validation reuse."
+				),
+				new JobTypeCapability(
+					ProcessingJobType.VIEWER_RESOLVE,
+					availabilityByJobType.getOrDefault(ProcessingJobType.VIEWER_RESOLVE, false),
+					availabilityByJobType.getOrDefault(ProcessingJobType.VIEWER_RESOLVE, false)
+						? "Unified viewer route уже даёт reusable file-resolve contract для новых product modules."
+						: "VIEWER_RESOLVE сейчас недоступен и часть future module entry points останется fragmented."
+				)
+			),
+			List.of(
+				"Финальный platform-срез закрывается не новым browser runtime, а reusable processing platform contract для следующих roadmap-модулей.",
+				"Новые модули должны стартовать как thin features поверх upload/job/artifact/capability foundation и добавлять только свою product-specific orchestration."
+			),
+			null,
+			null,
+			this.capabilityMatrixService.platformMatrix(availabilityByJobType)
 		);
 	}
 
@@ -160,7 +215,8 @@ public class CapabilityCatalogService {
 		List<JobTypeCapability> jobTypes,
 		List<String> notes,
 		CapabilityMatrixPayloads.ViewerCapabilityMatrix viewerMatrix,
-		CapabilityMatrixPayloads.ConverterCapabilityMatrix converterMatrix
+		CapabilityMatrixPayloads.ConverterCapabilityMatrix converterMatrix,
+		CapabilityMatrixPayloads.PlatformCapabilityMatrix platformMatrix
 	) {
 	}
 
