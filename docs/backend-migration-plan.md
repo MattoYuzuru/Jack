@@ -397,6 +397,14 @@ Frontend отвечает за:
 
 Приоритет: `P1`
 
+Статус:
+
+- выполнено: backend поднял `VIEWER_RESOLVE` job, который сводит server-assisted image/document/video/audio preview к единому viewer manifest поверх `IMAGE_CONVERT`, `DOCUMENT_PREVIEW`, `MEDIA_PREVIEW` и `METADATA_EXPORT`
+- выполнено: viewer capability matrix теперь помечает все heavy/non-native viewer formats единым `server-viewer` strategy и server-owned required job types
+- выполнено: frontend viewer runtime схлопнут до native strategies и одного `server-viewer` adapter, а family-specific server orchestration убрана из active route
+- выполнено: backend для server-assisted audio теперь сам собирает waveform payload, поэтому browser больше не декодирует legacy/lossless audio ради waveform preview
+- фазу считаем закрытой: viewer route теперь backend-first для всех non-native тяжёлых форматов, а frontend оставляет у себя только rendering, state и interaction tooling
+
 ### Phase 8. Reuse For New Modules
 
 Цель:

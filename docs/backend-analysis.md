@@ -26,7 +26,7 @@
 - backend уже умеет сохранять source upload, считать `sha256`, отдавать artifacts и репортить capability state
 - из production-grade частей всё ещё отсутствуют постоянное хранилище, cleanup policy, retries, queueing и специализированные processing domains
 
-Вывод: backend уже стал участником продукта и забрал media, heavy imaging, document intelligence, metadata, capability-matrix домены и backend-first converter route; следующая крупная миграция теперь смещается на viewer route flip и reuse platform для новых модулей.
+Вывод: backend уже стал участником продукта и забрал media, heavy imaging, document intelligence, metadata, capability-matrix домены, backend-first converter route и unified viewer route; следующая крупная миграция теперь смещается на reuse platform для новых модулей.
 
 ### Frontend
 
@@ -53,7 +53,7 @@ Frontend уже выполняет роль orchestration/UI слоя, но plat
 
 Файлы:
 
-- `frontend/src/features/viewer/application/viewer-media-preview.ts`
+- `frontend/src/features/viewer/application/viewer-server-preview.ts`
 - `backend/src/main/java/com/keykomi/jack/processing/application/MediaPreviewService.java`
 
 Почему это кандидат на backend:
@@ -103,7 +103,7 @@ Frontend уже выполняет роль orchestration/UI слоя, но plat
 
 - `backend/src/main/java/com/keykomi/jack/processing/application/ImageProcessingService.java`
 - `frontend/src/features/converter/application/converter-server-runtime.ts`
-- `frontend/src/features/viewer/application/viewer-image-preview.ts`
+- `frontend/src/features/viewer/application/viewer-server-preview.ts`
 - `frontend/src/features/processing/application/processing-client.ts`
 
 Почему это кандидат на backend:
@@ -140,7 +140,7 @@ Frontend уже выполняет роль orchestration/UI слоя, но plat
 
 - `backend/src/main/java/com/keykomi/jack/processing/application/DocumentPreviewService.java`
 - `backend/src/main/java/com/keykomi/jack/processing/domain/DocumentPreviewPayload.java`
-- `frontend/src/features/viewer/application/viewer-document-preview.ts`
+- `frontend/src/features/viewer/application/viewer-server-preview.ts`
 - `frontend/src/features/processing/application/processing-client.ts`
 
 Почему это кандидат на backend:
@@ -226,6 +226,23 @@ Frontend уже выполняет роль orchestration/UI слоя, но plat
 - перенесено: backend теперь отдаёт viewer/converter matrix через capability API
 - matrix включает format/scenario/preset definitions, required job types, accept rules и explicit availability details
 - frontend больше не использует локальный registry/preset catalog как единственный источник правды и только резолвит UI поверх server-owned contract
+
+Приоритет: `P1`
+
+### 6. Viewer Route Flip
+
+Статус: закрыто в `Phase 7`.
+
+Последний крупный остаток после media/imaging/document/metadata миграций был уже не в raw decode,
+а в самом viewer route: фронтенд всё ещё дёргал разные backend jobs по семействам и сам
+дособирал итоговый preview contract.
+
+Решение:
+
+- перенесено: backend теперь держит единый `VIEWER_RESOLVE` job поверх `MEDIA_PREVIEW`, `IMAGE_CONVERT`, `DOCUMENT_PREVIEW` и `METADATA_EXPORT`
+- перенесено: frontend viewer схлопнут до native strategies и одного `server-viewer` adapter, который получает unified manifest и связанные artifacts
+- перенесено: waveform для server-assisted audio теперь тоже собирается на backend, так что browser больше не декодирует legacy/lossless preview ради waveform rail
+- итог: viewer route теперь backend-first для всех non-native тяжёлых форматов, а локально остались только rendering, state, interaction tooling и metadata export UX
 
 Приоритет: `P1`
 
