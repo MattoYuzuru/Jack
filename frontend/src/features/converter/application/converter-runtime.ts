@@ -5,10 +5,12 @@ import {
   type RasterImageFrame,
 } from '../../imaging/application/browser-raster'
 import {
+  runServerMediaConvert,
   runServerOfficeConvert,
   type ConverterFact,
   runServerImageConvert,
   type ServerImageConvertResult,
+  type ServerMediaConvertResult,
   type ServerOfficeConvertResult,
 } from './converter-server-runtime'
 import { resolveConverterPreset, type ConverterPresetDefinition } from '../domain/converter-presets'
@@ -68,6 +70,13 @@ export interface ConverterRuntime {
     presetId?: string
     quality?: number
     backgroundColor?: string
+    maxWidth?: number | null
+    maxHeight?: number | null
+    videoCodec?: string
+    audioCodec?: string
+    targetFps?: number | null
+    videoBitrateKbps?: number | null
+    audioBitrateKbps?: number | null
     onProgress?: (message: string) => void
     onJobCreated?: (jobId: string) => void
     onJobUpdate?: (job: {
@@ -105,7 +114,10 @@ interface ConverterEncodedArtifact {
   warnings: string[]
 }
 
-type ServerConverterResult = ServerImageConvertResult | ServerOfficeConvertResult
+type ServerConverterResult =
+  | ServerImageConvertResult
+  | ServerOfficeConvertResult
+  | ServerMediaConvertResult
 
 export interface ConverterRuntimeDependencies {
   decodeNativeRaster?: (prepared: ConverterPreparedSource) => Promise<ConverterDecodedSourceArtifact>
@@ -180,6 +192,13 @@ export interface ConverterRuntimeDependencies {
     scenario: ConverterScenarioDefinition
     quality?: number
     backgroundColor?: string
+    maxWidth?: number | null
+    maxHeight?: number | null
+    videoCodec?: string
+    audioCodec?: string
+    targetFps?: number | null
+    videoBitrateKbps?: number | null
+    audioBitrateKbps?: number | null
     onProgress?: (message: string) => void
     onJobCreated?: (jobId: string) => void
     onJobUpdate?: (job: {
@@ -244,6 +263,13 @@ export function createConverterRuntime(
       presetId,
       quality,
       backgroundColor,
+      maxWidth,
+      maxHeight,
+      videoCodec,
+      audioCodec,
+      targetFps,
+      videoBitrateKbps,
+      audioBitrateKbps,
       onProgress,
       onJobCreated,
       onJobUpdate,
@@ -284,6 +310,13 @@ export function createConverterRuntime(
             ? (quality ?? preset.preferredQuality ?? target.defaultQuality ?? undefined)
             : undefined,
           backgroundColor: backgroundColor ?? preset.defaultBackgroundColor ?? undefined,
+          maxWidth,
+          maxHeight,
+          videoCodec,
+          audioCodec,
+          targetFps,
+          videoBitrateKbps,
+          audioBitrateKbps,
           onProgress,
           onJobCreated,
           onJobUpdate,
@@ -427,6 +460,12 @@ function createSourceStrategies(
     'presentation-document': {
       decode: defaultDecodeOfficeSource,
     },
+    'video-media': {
+      decode: defaultDecodeMediaSource,
+    },
+    'audio-media': {
+      decode: defaultDecodeMediaSource,
+    },
   }
 }
 
@@ -488,6 +527,27 @@ function createTargetStrategies(
     'mp4-video': {
       encode: defaultEncodeOfficeTarget,
     },
+    'webm-video': {
+      encode: defaultEncodeMediaTarget,
+    },
+    'gif-image': {
+      encode: defaultEncodeMediaTarget,
+    },
+    'mp3-audio': {
+      encode: defaultEncodeMediaTarget,
+    },
+    'wav-audio': {
+      encode: defaultEncodeMediaTarget,
+    },
+    'aac-audio': {
+      encode: defaultEncodeMediaTarget,
+    },
+    'm4a-audio': {
+      encode: defaultEncodeMediaTarget,
+    },
+    'flac-audio': {
+      encode: defaultEncodeMediaTarget,
+    },
   }
 }
 
@@ -535,6 +595,14 @@ async function defaultDecodeOfficeSource(
 ): Promise<ConverterDecodedSourceArtifact> {
   throw new Error(
     'Office local fallback отключён: document/spreadsheet/presentation conversion должен идти через backend OFFICE_CONVERT.',
+  )
+}
+
+async function defaultDecodeMediaSource(
+  _prepared: ConverterPreparedSource,
+): Promise<ConverterDecodedSourceArtifact> {
+  throw new Error(
+    'Media local fallback отключён: video/audio conversion должен идти через backend MEDIA_CONVERT.',
   )
 }
 
@@ -643,6 +711,12 @@ async function defaultEncodeOfficeTarget(): Promise<ConverterEncodedArtifact> {
   )
 }
 
+async function defaultEncodeMediaTarget(): Promise<ConverterEncodedArtifact> {
+  throw new Error(
+    'Media local fallback отключён: video/audio conversion должен идти через backend MEDIA_CONVERT.',
+  )
+}
+
 function defaultIsServerScenario(
   _prepared: ConverterPreparedSource,
   _target: ConverterTargetFormatDefinition,
@@ -658,6 +732,13 @@ async function defaultConvertServerScenario(input: {
   scenario: ConverterScenarioDefinition
   quality?: number
   backgroundColor?: string
+  maxWidth?: number | null
+  maxHeight?: number | null
+  videoCodec?: string
+  audioCodec?: string
+  targetFps?: number | null
+  videoBitrateKbps?: number | null
+  audioBitrateKbps?: number | null
   onProgress?: (message: string) => void
   onJobCreated?: (jobId: string) => void
   onJobUpdate?: (job: {
@@ -668,16 +749,39 @@ async function defaultConvertServerScenario(input: {
     errorMessage: string | null
   }) => void
 }): Promise<ServerConverterResult> {
+  const requiresMediaRuntime =
+    input.prepared.source.family === 'media' ||
+    input.scenario.requiredJobTypes.includes('MEDIA_CONVERT')
   const requiresOfficeRuntime =
     input.prepared.source.family === 'document' ||
     input.scenario.requiredJobTypes.includes('OFFICE_CONVERT')
+
+  if (requiresMediaRuntime) {
+    return runServerMediaConvert({
+      file: input.prepared.file,
+      targetExtension: input.target.extension,
+      maxWidth: input.maxWidth ?? input.preset.maxWidth,
+      maxHeight: input.maxHeight ?? input.preset.maxHeight,
+      videoCodec: input.videoCodec,
+      audioCodec: input.audioCodec,
+      targetFps: input.targetFps,
+      videoBitrateKbps: input.videoBitrateKbps,
+      audioBitrateKbps: input.audioBitrateKbps,
+      presetLabel: input.preset.label,
+      reportProgress: input.onProgress,
+      onJobCreated(job) {
+        input.onJobCreated?.(job.id)
+      },
+      onJobUpdate: input.onJobUpdate,
+    })
+  }
 
   if (requiresOfficeRuntime) {
     return runServerOfficeConvert({
       file: input.prepared.file,
       targetExtension: input.target.extension,
-      maxWidth: input.preset.maxWidth,
-      maxHeight: input.preset.maxHeight,
+      maxWidth: input.maxWidth ?? input.preset.maxWidth,
+      maxHeight: input.maxHeight ?? input.preset.maxHeight,
       quality: input.quality,
       backgroundColor: input.backgroundColor,
       presetLabel: input.preset.label,
@@ -692,8 +796,8 @@ async function defaultConvertServerScenario(input: {
   return runServerImageConvert({
     file: input.prepared.file,
     targetExtension: input.target.extension,
-    maxWidth: input.preset.maxWidth,
-    maxHeight: input.preset.maxHeight,
+    maxWidth: input.maxWidth ?? input.preset.maxWidth,
+    maxHeight: input.maxHeight ?? input.preset.maxHeight,
     quality: input.quality,
     backgroundColor: input.backgroundColor,
     presetLabel: input.preset.label,

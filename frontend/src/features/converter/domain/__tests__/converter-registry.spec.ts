@@ -40,6 +40,7 @@ describe('converter registry', () => {
     expect((await resolveConverterSourceFormat('cover.eps'))?.sourceStrategyId).toBe(
       'illustration-raster',
     )
+    expect((await resolveConverterSourceFormat('mix.m4a'))?.sourceStrategyId).toBe('audio-media')
   })
 
   it('lists registered targets for supported sources', async () => {
@@ -56,6 +57,19 @@ describe('converter registry', () => {
     ])
   })
 
+  it('lists registered media targets for mp4 sources', async () => {
+    const targets = await listConverterTargetsForSource('clip.mp4')
+
+    expect(targets.map((target) => target.extension)).toEqual([
+      'mp4',
+      'webm',
+      'gif',
+      'mp3',
+      'wav',
+      'aac',
+    ])
+  })
+
   it('resolves registered scenario pairs', async () => {
     expect((await resolveConverterScenario('heic', 'jpg'))?.id).toBe('heic->jpg')
     expect((await resolveConverterScenario('svg', 'png'))?.id).toBe('svg->png')
@@ -65,6 +79,8 @@ describe('converter registry', () => {
     expect((await resolveConverterScenario('psd', 'webp'))?.id).toBe('psd->webp')
     expect((await resolveConverterScenario('ai', 'pdf'))?.id).toBe('ai->pdf')
     expect((await resolveConverterScenario('eps', 'png'))?.id).toBe('eps->png')
+    expect((await resolveConverterScenario('mp4', 'mp4'))?.id).toBe('mp4->mp4')
+    expect((await resolveConverterScenario('m4a', 'mp3'))?.id).toBe('m4a->mp3')
     expect(await resolveConverterScenario('png', 'png')).toBeNull()
   })
 })
