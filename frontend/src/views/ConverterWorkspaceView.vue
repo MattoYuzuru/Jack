@@ -28,6 +28,7 @@ const {
   converterAcceptAttribute,
   imageScenarios,
   documentScenarios,
+  mediaScenarios,
   activeJobId,
   activeJobStatus,
   activeJobProgressPercent,
@@ -140,7 +141,7 @@ function onDrop(event: DragEvent) {
 
       <div class="app-topbar__status">
         <RouterLink class="back-link" to="/">Back to Home</RouterLink>
-        <span class="chip-pill">Image Conversion</span>
+        <span class="chip-pill">File Conversion</span>
         <span class="chip-pill chip-pill--accent">Backend-first route</span>
       </div>
     </header>
@@ -154,19 +155,22 @@ function onDrop(event: DragEvent) {
         </h1>
         <p class="lead">
           Конвертер больше не делит route на "простые локальные" и "тяжёлые серверные" ветки.
-          Любой поддержанный сценарий идёт через backend `IMAGE_CONVERT` jobs, поэтому progress,
-          retry, cancel, artifact reuse и повторное скачивание строятся поверх одного server-owned
-          processing contract.
+          Image-сценарии идут через backend `IMAGE_CONVERT`, office/pdf roundtrip через
+          `OFFICE_CONVERT`, а браузер держит только progress, retry, cancel, artifact reuse и
+          preview уже собранного результата.
         </p>
 
         <div class="converter-signal-row">
           <span class="chip-pill">Backend-first JPG / PNG / WebP</span>
           <span class="chip-pill">Server HEIC / TIFF / RAW / PSD / AI / EPS</span>
+          <span class="chip-pill">DOC / DOCX / PDF / XLSX / ODS / PPTX routes</span>
           <span class="chip-pill">Server AVIF / SVG / ICO / TIFF / PDF targets</span>
+          <span class="chip-pill">PDF -> DOCX/XLSX/PPTX</span>
+          <span class="chip-pill">PPTX -> PDF / image / MP4</span>
           <span class="chip-pill">Job progress + cancel + retry</span>
           <span class="chip-pill">Artifact reuse history</span>
           <span class="chip-pill">Scenario registry</span>
-          <span class="chip-pill">Backend IMAGE_CONVERT jobs</span>
+          <span class="chip-pill">IMAGE_CONVERT + OFFICE_CONVERT</span>
         </div>
       </article>
 
@@ -188,6 +192,16 @@ function onDrop(event: DragEvent) {
 
         <div class="scenario-list scenario-list--secondary" aria-label="Документные сценарии">
           <article v-for="scenario in documentScenarios" :key="scenario.id" class="scenario-item">
+            <div>
+              <h3>{{ scenario.label }}</h3>
+              <p>{{ scenario.notes }}</p>
+            </div>
+            <span class="chip-pill chip-pill--compact">{{ scenario.statusLabel }}</span>
+          </article>
+        </div>
+
+        <div class="scenario-list scenario-list--secondary" aria-label="Media scenarios">
+          <article v-for="scenario in mediaScenarios" :key="scenario.id" class="scenario-item">
             <div>
               <h3>{{ scenario.label }}</h3>
               <p>{{ scenario.notes }}</p>
@@ -230,12 +244,12 @@ function onDrop(event: DragEvent) {
         >
           <span class="converter-dropzone__badge">Drop / Select</span>
           <strong>
-            Загрузи `jpg`, `png`, `webp`, `bmp`, `svg`, `heic`, `tiff`, `raw`, `psd`, `ai` или
-            `eps`.
+            Загрузи image, office или PDF source из capability matrix.
           </strong>
           <span>
-            После intake любой поддержанный сценарий уходит в backend `IMAGE_CONVERT` job. Браузер
-            держит только orchestration, progress UI и preview уже собранного артефакта.
+            После intake image-сценарии идут в backend `IMAGE_CONVERT`, а office/pdf routes в
+            `OFFICE_CONVERT`. Браузер держит только orchestration, progress UI и preview уже
+            собранного артефакта.
           </span>
         </button>
 
@@ -389,15 +403,21 @@ function onDrop(event: DragEvent) {
         <div v-if="result" class="result-stack">
           <div class="result-preview">
             <img
-              v-if="result.kind === 'image'"
+              v-if="result.previewKind === 'image'"
               :src="result.objectUrl"
               :alt="`Converted preview ${result.fileName}`"
+            />
+            <video
+              v-else-if="result.previewKind === 'media'"
+              class="result-preview__frame"
+              :src="result.objectUrl"
+              controls
             />
             <iframe
               v-else
               class="result-preview__frame"
               :src="result.objectUrl"
-              title="PDF preview"
+              title="Converted preview"
             />
           </div>
 
@@ -412,19 +432,25 @@ function onDrop(event: DragEvent) {
             </article>
             <article class="fact-card">
               <span>Тип результата</span>
-              <strong>{{ result.kind === 'document' ? 'Document output' : 'Image output' }}</strong>
+              <strong>{{
+                result.kind === 'document'
+                  ? 'Document output'
+                  : result.kind === 'media'
+                    ? 'Media output'
+                    : 'Image output'
+              }}</strong>
             </article>
             <article class="fact-card">
               <span>Preset</span>
               <strong>{{ result.preset.label }}</strong>
             </article>
-            <article class="fact-card">
-              <span>Размерность</span>
-              <strong>{{ result.width }} x {{ result.height }}</strong>
-            </article>
-            <article class="fact-card">
-              <span>Источник</span>
-              <strong>{{ result.sourceWidth }} x {{ result.sourceHeight }}</strong>
+            <article
+              v-for="fact in [...result.resultFacts, ...result.sourceFacts]"
+              :key="`${fact.label}-${fact.value}`"
+              class="fact-card"
+            >
+              <span>{{ fact.label }}</span>
+              <strong>{{ fact.value }}</strong>
             </article>
             <article class="fact-card">
               <span>Blob size</span>

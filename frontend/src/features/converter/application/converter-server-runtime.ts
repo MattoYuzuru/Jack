@@ -9,6 +9,11 @@ import {
   type ProcessingJobResponse,
 } from '../../processing/application/processing-client'
 
+export interface ConverterFact {
+  label: string
+  value: string
+}
+
 export interface ServerImageConvertManifest {
   operation: string
   sourceWidth: number
@@ -34,6 +39,32 @@ export interface ServerImageConvertResult {
   previewBlob: Blob
 }
 
+export interface ServerOfficeConvertManifest {
+  uploadId: string
+  originalFileName: string
+  sourceExtension: string
+  targetExtension: string
+  resultMediaType: string
+  previewMediaType: string
+  previewKind: 'image' | 'document' | 'media'
+  sourceAdapterLabel: string
+  targetAdapterLabel: string
+  runtimeLabel: string
+  sourceFacts: ConverterFact[]
+  resultFacts: ConverterFact[]
+  warnings: string[]
+}
+
+export interface ServerOfficeConvertResult {
+  job: ProcessingJobResponse
+  manifestArtifact: ProcessingArtifact
+  resultArtifact: ProcessingArtifact
+  previewArtifact: ProcessingArtifact
+  manifest: ServerOfficeConvertManifest
+  resultBlob: Blob
+  previewBlob: Blob
+}
+
 interface RunServerImageConvertInput {
   file: File
   targetExtension: string
@@ -48,6 +79,7 @@ interface RunServerImageConvertInput {
 }
 
 const IMAGE_CONVERT_JOB_TYPE = 'IMAGE_CONVERT'
+const OFFICE_CONVERT_JOB_TYPE = 'OFFICE_CONVERT'
 
 export async function runServerImageConvert(
   input: RunServerImageConvertInput,
@@ -102,6 +134,73 @@ export async function downloadServerConvertArtifacts(
 
   const [manifest, resultBlob, previewBlob] = await Promise.all([
     requestProcessingJson<ServerImageConvertManifest>(manifestArtifact.downloadPath),
+    requestProcessingBlob(resultArtifact.downloadPath),
+    requestProcessingBlob(previewArtifact.downloadPath),
+  ])
+
+  return {
+    job,
+    manifestArtifact,
+    resultArtifact,
+    previewArtifact,
+    manifest,
+    resultBlob,
+    previewBlob,
+  }
+}
+
+export async function runServerOfficeConvert(
+  input: RunServerImageConvertInput,
+): Promise<ServerOfficeConvertResult> {
+  input.reportProgress?.('Проверяю backend OFFICE_CONVERT capability для office/pdf route...')
+  await ensureProcessingCapability('converter', OFFICE_CONVERT_JOB_TYPE)
+
+  input.reportProgress?.('Отправляю source в backend processing storage...')
+  const upload = await uploadProcessingFile(input.file)
+
+  input.reportProgress?.('Создаю backend OFFICE_CONVERT job для office/pdf conversion...')
+  const createdJob = await createProcessingJob({
+    uploadId: upload.id,
+    jobType: OFFICE_CONVERT_JOB_TYPE,
+    parameters: {
+      targetExtension: input.targetExtension,
+      maxWidth: input.maxWidth,
+      maxHeight: input.maxHeight,
+      quality: input.quality,
+      backgroundColor: input.backgroundColor,
+      presetLabel: input.presetLabel,
+    },
+  })
+  input.onJobCreated?.(createdJob)
+
+  const completedJob = await awaitProcessingJob(createdJob.id, {
+    reportProgress: input.reportProgress,
+    timeoutMessage:
+      'Backend OFFICE_CONVERT job не завершился в ожидаемое время. Проверь backend logs или попробуй менее тяжёлый export target.',
+    onUpdate: input.onJobUpdate,
+  })
+
+  input.reportProgress?.('Загружаю backend office result/preview artifacts...')
+  return downloadServerOfficeConvertArtifacts(completedJob)
+}
+
+export async function downloadServerOfficeConvertArtifacts(
+  job: ProcessingJobResponse,
+): Promise<ServerOfficeConvertResult> {
+  const manifestArtifact = job.artifacts.find(
+    (artifact) => artifact.kind === 'office-convert-manifest',
+  )
+  const resultArtifact = job.artifacts.find((artifact) => artifact.kind === 'office-convert-binary')
+  const previewArtifact = job.artifacts.find(
+    (artifact) => artifact.kind === 'office-convert-preview',
+  )
+
+  if (!manifestArtifact || !resultArtifact || !previewArtifact) {
+    throw new Error('Backend OFFICE_CONVERT job завершился без обязательных convert artifacts.')
+  }
+
+  const [manifest, resultBlob, previewBlob] = await Promise.all([
+    requestProcessingJson<ServerOfficeConvertManifest>(manifestArtifact.downloadPath),
     requestProcessingBlob(resultArtifact.downloadPath),
     requestProcessingBlob(previewArtifact.downloadPath),
   ])

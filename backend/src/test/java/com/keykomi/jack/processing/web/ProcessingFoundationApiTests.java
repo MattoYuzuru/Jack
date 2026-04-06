@@ -118,6 +118,7 @@ class ProcessingFoundationApiTests {
 			.andExpect(jsonPath("$.jobTypes[3].implemented").value(true))
 			.andExpect(jsonPath("$.jobTypes[4].implemented").value(true))
 			.andExpect(jsonPath("$.jobTypes[5].implemented").value(true))
+			.andExpect(jsonPath("$.jobTypes[6].implemented").value(true))
 			.andExpect(jsonPath("$.viewerMatrix.acceptAttribute").value(org.hamcrest.Matchers.containsString(".jpg")))
 			.andExpect(jsonPath("$.viewerMatrix.formats[0].extension").value("jpg"));
 
@@ -126,10 +127,11 @@ class ProcessingFoundationApiTests {
 			.andExpect(jsonPath("$.scope").value("converter"))
 			.andExpect(jsonPath("$.phase").value("converter-backend-first"))
 			.andExpect(jsonPath("$.jobTypes[1].implemented").value(false))
-			.andExpect(jsonPath("$.jobTypes[2].implemented").value(false))
-			.andExpect(jsonPath("$.jobTypes[3].implemented").value(true))
+			.andExpect(jsonPath("$.jobTypes[2].implemented").value(true))
+			.andExpect(jsonPath("$.jobTypes[3].implemented").value(false))
 			.andExpect(jsonPath("$.jobTypes[4].implemented").value(true))
-			.andExpect(jsonPath("$.converterMatrix.acceptAttribute").value(""))
+			.andExpect(jsonPath("$.jobTypes[5].implemented").value(true))
+			.andExpect(jsonPath("$.converterMatrix.acceptAttribute").value(org.hamcrest.Matchers.containsString(".pdf")))
 			.andExpect(jsonPath("$.converterMatrix.sourceFormats[0].available").value(false))
 			.andExpect(jsonPath("$.converterMatrix.presets[0].id").value("original"));
 
@@ -141,6 +143,7 @@ class ProcessingFoundationApiTests {
 			.andExpect(jsonPath("$.jobTypes[1].implemented").value(false))
 			.andExpect(jsonPath("$.jobTypes[2].implemented").value(false))
 			.andExpect(jsonPath("$.jobTypes[3].implemented").value(true))
+			.andExpect(jsonPath("$.jobTypes[4].implemented").value(true))
 			.andExpect(jsonPath("$.platformMatrix.modules[0].id").value("compression"))
 			.andExpect(jsonPath("$.platformMatrix.modules[0].foundationReady").value(false))
 			.andExpect(jsonPath("$.platformMatrix.modules[2].id").value("multi-format-editor"))

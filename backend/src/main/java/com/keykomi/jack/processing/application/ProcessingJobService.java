@@ -4,6 +4,7 @@ import com.keykomi.jack.processing.domain.ProcessingJobStatus;
 import com.keykomi.jack.processing.domain.ProcessingJobType;
 import com.keykomi.jack.processing.domain.StoredArtifact;
 import com.keykomi.jack.processing.domain.ImageProcessingRequest;
+import com.keykomi.jack.processing.domain.OfficeConversionRequest;
 import com.keykomi.jack.processing.domain.MetadataPayloads;
 import com.keykomi.jack.processing.domain.MetadataProcessingRequest;
 import com.keykomi.jack.processing.domain.StoredProcessingJob;
@@ -30,6 +31,7 @@ public class ProcessingJobService {
 	private final ArtifactStorageService artifactStorageService;
 	private final MediaPreviewService mediaPreviewService;
 	private final ImageProcessingService imageProcessingService;
+	private final OfficeConversionService officeConversionService;
 	private final DocumentPreviewService documentPreviewService;
 	private final MetadataProcessingService metadataProcessingService;
 	private final ViewerResolveService viewerResolveService;
@@ -42,6 +44,7 @@ public class ProcessingJobService {
 		ArtifactStorageService artifactStorageService,
 		MediaPreviewService mediaPreviewService,
 		ImageProcessingService imageProcessingService,
+		OfficeConversionService officeConversionService,
 		DocumentPreviewService documentPreviewService,
 		MetadataProcessingService metadataProcessingService,
 		ViewerResolveService viewerResolveService,
@@ -51,6 +54,7 @@ public class ProcessingJobService {
 		this.artifactStorageService = artifactStorageService;
 		this.mediaPreviewService = mediaPreviewService;
 		this.imageProcessingService = imageProcessingService;
+		this.officeConversionService = officeConversionService;
 		this.documentPreviewService = documentPreviewService;
 		this.metadataProcessingService = metadataProcessingService;
 		this.viewerResolveService = viewerResolveService;
@@ -116,6 +120,7 @@ public class ProcessingJobService {
 				case UPLOAD_INTAKE_ANALYSIS -> processUploadIntakeAnalysis(job.id(), upload);
 				case MEDIA_PREVIEW -> processMediaPreview(job.id(), upload);
 				case IMAGE_CONVERT -> processImageConvert(job.id(), upload, parseImageJobRequest(job.parameters()));
+				case OFFICE_CONVERT -> processOfficeConvert(job.id(), upload, parseOfficeJobRequest(job.parameters()));
 				case DOCUMENT_PREVIEW -> processDocumentPreview(job.id(), upload);
 				case METADATA_EXPORT -> processMetadataExport(job.id(), upload, parseMetadataJobRequest(job.parameters()));
 				case VIEWER_RESOLVE -> processViewerResolve(job.id(), upload);
@@ -173,6 +178,23 @@ public class ProcessingJobService {
 		);
 		return new JobProcessingResult(
 			"Image processing готов через backend %s.".formatted(result.runtimeLabel()),
+			result.artifacts()
+		);
+	}
+
+	private JobProcessingResult processOfficeConvert(
+		UUID jobId,
+		StoredUpload upload,
+		OfficeConversionRequest request
+	) {
+		updateJob(jobId, currentJob -> currentJob.updateProgress(24, "Подготавливаю backend office/pdf conversion pipeline."));
+		var result = this.officeConversionService.process(jobId, upload, request);
+		updateJob(
+			jobId,
+			currentJob -> currentJob.updateProgress(86, "Office conversion artifacts собраны, сохраняю manifest и output blobs.")
+		);
+		return new JobProcessingResult(
+			"Office conversion готов через backend %s.".formatted(result.runtimeLabel()),
 			result.artifacts()
 		);
 	}
@@ -251,6 +273,7 @@ public class ProcessingJobService {
 			jobType != ProcessingJobType.UPLOAD_INTAKE_ANALYSIS &&
 			jobType != ProcessingJobType.MEDIA_PREVIEW &&
 			jobType != ProcessingJobType.IMAGE_CONVERT &&
+			jobType != ProcessingJobType.OFFICE_CONVERT &&
 			jobType != ProcessingJobType.DOCUMENT_PREVIEW &&
 			jobType != ProcessingJobType.METADATA_EXPORT &&
 			jobType != ProcessingJobType.VIEWER_RESOLVE
@@ -274,6 +297,16 @@ public class ProcessingJobService {
 				throw new ResponseStatusException(
 					HttpStatus.SERVICE_UNAVAILABLE,
 					"IMAGE_CONVERT job требует доступных convert/ffmpeg/potrace/raw-preview binaries в backend окружении."
+				);
+			}
+		}
+
+		if (jobType == ProcessingJobType.OFFICE_CONVERT) {
+			parseOfficeJobRequest(parameters);
+			if (!this.officeConversionService.isAvailable()) {
+				throw new ResponseStatusException(
+					HttpStatus.SERVICE_UNAVAILABLE,
+					"OFFICE_CONVERT job требует доступного backend office/document conversion service."
 				);
 			}
 		}
@@ -356,6 +389,7 @@ public class ProcessingJobService {
 			case UPLOAD_INTAKE_ANALYSIS -> "Начинаю intake-analysis для backend processing foundation.";
 			case MEDIA_PREVIEW -> "Запускаю backend media preview pipeline через ffprobe/ffmpeg.";
 			case IMAGE_CONVERT -> "Запускаю backend imaging pipeline через convert/ffmpeg/potrace.";
+			case OFFICE_CONVERT -> "Запускаю backend office/pdf conversion pipeline.";
 			case DOCUMENT_PREVIEW -> "Запускаю backend document intelligence pipeline.";
 			case METADATA_EXPORT -> "Запускаю backend metadata inspect/export pipeline.";
 			case VIEWER_RESOLVE -> "Запускаю backend viewer resolve pipeline поверх processing services.";
@@ -377,6 +411,19 @@ public class ProcessingJobService {
 		return new ImageProcessingRequest(
 			operation,
 			targetExtension == null ? null : targetExtension.toLowerCase(),
+			readOptionalInteger(parameters, "maxWidth"),
+			readOptionalInteger(parameters, "maxHeight"),
+			readOptionalDouble(parameters, "quality"),
+			readOptionalString(parameters, "backgroundColor"),
+			readOptionalString(parameters, "presetLabel")
+		);
+	}
+
+	private OfficeConversionRequest parseOfficeJobRequest(Map<String, Object> parameters) {
+		var targetExtension = readRequiredString(parameters, "targetExtension");
+
+		return new OfficeConversionRequest(
+			targetExtension.toLowerCase(),
 			readOptionalInteger(parameters, "maxWidth"),
 			readOptionalInteger(parameters, "maxHeight"),
 			readOptionalDouble(parameters, "quality"),

@@ -33,6 +33,7 @@ Backend теперь является processing-platform, которая:
 - `UPLOAD_INTAKE_ANALYSIS`
 - `MEDIA_PREVIEW`
 - `IMAGE_CONVERT`
+- `OFFICE_CONVERT`
 - `DOCUMENT_PREVIEW`
 - `METADATA_EXPORT`
 - `VIEWER_RESOLVE`
@@ -42,6 +43,7 @@ Backend теперь является processing-platform, которая:
 - media processing через `ffprobe` / `ffmpeg`
 - heavy imaging через `ImageMagick`, `Ghostscript`, `potrace`, `libraw`
 - document intelligence для PDF / office / archive / SQLite preview
+- office/pdf conversion для narrative docs, spreadsheet exports, slide decks и slideshow media outputs
 - metadata inspect/export для image/audio flows
 - unified viewer resolve route
 - server-owned capability matrix для viewer, converter и future modules
@@ -86,7 +88,8 @@ Viewer теперь использует backend-first contract для всех 
 
 Converter работает как backend-first route:
 
-- supported сценарии уходят в `IMAGE_CONVERT`
+- supported image сценарии уходят в `IMAGE_CONVERT`
+- supported office/pdf сценарии уходят в `OFFICE_CONVERT`
 - frontend держит progress, retry, cancel и artifact reuse
 - capability/source-target/preset matrix приходит с backend
 
@@ -106,7 +109,7 @@ Converter работает как backend-first route:
 - `OCR`
   - reuse: `DOCUMENT_PREVIEW`, `IMAGE_CONVERT`, общий job/artifact flow
 - `Office/PDF Conversion`
-  - reuse: document contracts, viewer resolve, capability-driven routing
+  - reuse: `OFFICE_CONVERT`, `DOCUMENT_PREVIEW`, `VIEWER_RESOLVE`, capability-driven routing
 
 Это значит, что новые модули должны добавлять свою product-specific orchestration,
 а не заново собирать browser-heavy runtime.
@@ -134,4 +137,4 @@ Converter работает как backend-first route:
 - очередь и retry policy
 - quota / rate limit / audit
 - observability и metrics
-- специализированные job types для compression, OCR, PDF toolkit и office conversion
+- специализированные job types для compression, OCR и PDF toolkit

@@ -14,7 +14,7 @@ public final class ProcessingFileFamilyResolver {
 	);
 	private static final Set<String> DOCUMENT_EXTENSIONS = Set.of(
 		"pdf", "txt", "text", "csv", "html", "htm", "rtf", "doc", "docx",
-		"odt", "xls", "xlsx", "pptx", "epub", "sqlite", "db"
+		"odt", "xls", "xlsx", "ods", "pptx", "epub", "sqlite", "db"
 	);
 
 	private ProcessingFileFamilyResolver() {
