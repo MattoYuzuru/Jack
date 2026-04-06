@@ -57,6 +57,7 @@ Backend теперь является processing-platform, которая:
 - metadata inspect/export для image/audio flows
 - unified viewer resolve route
 - server-owned capability matrix для viewer, converter, compression, pdf-toolkit, editor и future modules
+- browser-native dev-tools route для instant text/url engineering utilities вне queued processing path
 
 ## Разделение Ответственности
 
@@ -80,6 +81,7 @@ Frontend должен оставаться thin, но удобным слоем:
 - browser-native rendering там, где он уже достаточен
 - zoom / rotate / playback / subtitle / search / copy / download UX
 - progress presentation поверх backend job contract
+- и отдельные мгновенные dev utilities там, где server orchestration ничего не даёт кроме лишней латентности
 
 ## Активные Маршруты
 
@@ -134,6 +136,15 @@ Editor теперь тоже работает как отдельный backend-
 - `DOCUMENT_PREVIEW` reuse'ится для html/plain-text outline и text contract там, где это уже готово
 - validate/export больше не живут как ad-hoc local blob flow: они идут через тот же upload/job/artifact lifecycle
 
+### Dev Tools
+
+Dev tools в текущем срезе сознательно остаётся browser-native route:
+
+- encoding/decoding, JWT inspect, hashes, URL cleanup, validators и quick helpers считаются локально
+- browser хранит persisted state, copy/download UX и быстрые form transitions
+- route не использует upload/job/artifact foundation, потому что эти операции не строят server-owned artifacts и не выигрывают от queue/retry
+- это не отменяет backend-first правило для file/business logic; это отдельный класс мгновенных инженерных утилит
+
 ## Platform Reuse Для Следующих Модулей
 
 `GET /api/capabilities/platform` описывает, как следующие roadmap-модули должны стартовать
@@ -173,6 +184,10 @@ Editor теперь тоже работает как отдельный backend-
 
 На frontend её стоит оставлять только тогда, когда это действительно interaction/presentation
 или безопасный browser-native сценарий без заметной выгоды от server orchestration.
+
+Dev Tools iteration 7 является именно таким исключением: текстовые encode/hash/JWT/link/validation
+сценарии выполняются локально, не мутируют backend state и должны ощущаться как мгновенный toolbox,
+а не как ещё один queued processing product.
 
 ## Что Ещё Не Production-Grade
 

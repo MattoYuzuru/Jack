@@ -26,9 +26,10 @@ Jack задуман как практичный рабочий набор инс
 - backend и frontend разнесены по отдельным каталогам
 - backend теперь уже не только health-check bootstrap: есть первый processing foundation с upload/job/artifact/capability API
 - есть новый UI foundation с neumorphic home-dashboard и крупной навигационной сеткой модулей
-- home уже ведёт в пять живых маршрутов: `viewer`, `converter`, `compression`, `pdf-toolkit` и `editor`
+- home уже ведёт в шесть живых маршрутов: `viewer`, `converter`, `compression`, `pdf-toolkit`, `editor` и `dev-tools`
 - есть server-assisted processing layer: backend уже закрывает legacy media preview, heavy image-processing jobs, document intelligence preview и metadata operations
 - есть reusable processing-platform: backend отдаёт viewer/converter/compression/pdf-toolkit/editor capability matrix и `platform`-matrix для следующих queued-модулей
+- есть browser-native `dev-tools` route для мгновенных инженерных утилит: encoding/decoding, JWT inspection, SHA/HMAC, URL cleanup, validators и quick helpers
 - подготовлены логотип и favicon для дальнейшего использования
 - есть `docker compose`-окружение для локального старта
 - задокументированы workflow-правила, финальная platform-архитектура и roadmap для будущих итераций
@@ -122,6 +123,7 @@ Frontend viewer уже использует unified backend route для `avi`, 
 Compression теперь работает как отдельный backend-first route: image/video/audio файл отправляется в `FILE_COMPRESS`, а backend сам подбирает maximum-reduction, target-size или custom candidate ladder и возвращает итоговый artifact вместе с attempt history и preview.
 PDF toolkit теперь тоже работает как отдельный backend-first route: прямой `PDF` intake reuse'ит `VIEWER_RESOLVE`, а совместимые image/office sources сначала проходят backend conversion в `PDF`, после чего тот же workspace закрывает merge/split/rotate, visible signature stamps, term redaction, OCR searchable export и password flows через `PDF_TOOLKIT`.
 Editor теперь тоже работает как отдельный backend-first route: browser держит templates, snippets, formatting и live preview, а `EDITOR_PROCESS` возвращает diagnostics, outline и ready/plain-text artifacts для markdown/html/css/javascript/json/yaml/txt drafts.
+Dev Tools в следующей итерации намеренно не пошёл в upload/job/artifact lifecycle: encode/hash/JWT/link/validation сценарии здесь мгновенные, browser-native и не выигрывают от очереди, artifact storage или server-owned orchestration, поэтому живут как локальный toolbox route внутри того же UI foundation.
 Отдельный `platform` capability scope теперь показывает, как следующие модули (`Batch Conversion`, `OCR`, `Office/PDF Conversion`) должны reuse'ить уже существующий processing stack, а не заводить новый browser-heavy runtime.
 
 ## Локальный Запуск Без Docker
@@ -447,12 +449,19 @@ keyboard shortcuts, local draft persistence, syntax mirror и live preview, а b
 
 ### 7. Dev Tools And Utils
 
-- [ ] Кодировки и декодеры
-- [ ] JWT-декодер и сопутствующие утилиты
-- [ ] Генераторы хешей
-- [ ] Инструменты для коротких ссылок
-- [ ] Валидаторы текстовых форматов
-- [ ] Дополнительные ежедневные дев-утилиты
+- [x] Encoding/decoding lab для `Base64`, `Base64URL`, `URL`, `HTML entities`, `Unicode escapes`
+- [x] JWT inspector с header/payload decode, claim timeline, expiry warnings и готовым `Authorization: Bearer`
+- [x] Hash toolkit для текста и локальных файлов: `SHA-1`, `SHA-256`, `SHA-384`, `SHA-512`, `HMAC-SHA-256`, `HMAC-SHA-512`
+- [x] URL/link utilities вместо нереалистичного hosted shortener: parse, UTM/tracking cleanup, fragment control и share-friendly compact URL
+- [x] Validators для `JSON`, `YAML`, `XML` и `.env` c normalized output и короткими diagnostics
+- [x] Ежедневные quick utils: `UUID`, `ULID`, Unix timestamp converter и `Basic Auth` helper
+- [x] Локальная browser-native архитектура с persisted state, copy/download actions и без лишнего backend orchestration
+
+Dev Tools в итерации 7 закрыт как отдельный frontend-native route.
+Здесь важно именно архитектурное исключение, а не очередное слепое повторение backend-first паттерна:
+инструменты работают на тексте, URL и локальных файлах, считаются мгновенно в браузере, не строят server-owned artifact и не выигрывают от queue/retry/capability routing.
+Поэтому route живёт как локальный toolbox с persisted state, copy/download UX и разбивкой на шесть рабочих наборов:
+`Encoding`, `JWT`, `Hashes`, `Links`, `Validators`, `Quick Utils`.
 
 ## Модель Итераций
 
