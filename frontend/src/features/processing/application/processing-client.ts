@@ -1,6 +1,11 @@
 export type ProcessingJobStatus = 'QUEUED' | 'RUNNING' | 'COMPLETED' | 'FAILED' | 'CANCELLED'
 export type ProcessingProgressReporter = (message: string) => void
-export type ProcessingCapabilityScopeName = 'viewer' | 'converter' | 'compression' | 'platform'
+export type ProcessingCapabilityScopeName =
+  | 'viewer'
+  | 'converter'
+  | 'compression'
+  | 'pdf-toolkit'
+  | 'platform'
 
 export interface ProcessingCapabilityJobType {
   jobType: string
@@ -30,6 +35,13 @@ export interface ProcessingCapabilityScope {
     sourceFormats: unknown[]
     targetFormats: unknown[]
     modes: unknown[]
+  } | null
+  pdfToolkitMatrix?: {
+    acceptAttribute: string
+    importAcceptAttribute: string
+    directSourceFormats: unknown[]
+    importSourceFormats: unknown[]
+    operations: unknown[]
   } | null
   platformMatrix?: ProcessingPlatformCapabilityMatrix | null
 }
@@ -106,7 +118,10 @@ interface AwaitProcessingJobOptions {
 const DEFAULT_API_BASE_URL = 'http://localhost:8080'
 const DEFAULT_MAX_ATTEMPTS = 300
 const DEFAULT_POLL_INTERVAL_MS = 1_000
-const capabilityScopeCache = new Map<ProcessingCapabilityScopeName, Promise<ProcessingCapabilityScope>>()
+const capabilityScopeCache = new Map<
+  ProcessingCapabilityScopeName,
+  Promise<ProcessingCapabilityScope>
+>()
 
 export class ProcessingJobCancelledError extends Error {
   readonly job: ProcessingJobResponse
@@ -130,7 +145,9 @@ export async function getProcessingCapabilityScope(
     return cachedScope
   }
 
-  const scopeRequest = requestProcessingJson<ProcessingCapabilityScope>(`/api/capabilities/${scope}`)
+  const scopeRequest = requestProcessingJson<ProcessingCapabilityScope>(
+    `/api/capabilities/${scope}`,
+  )
   capabilityScopeCache.set(scope, scopeRequest)
 
   try {
@@ -286,10 +303,7 @@ export async function runProcessingJob(
   })
 }
 
-export async function requestProcessingJson<T>(
-  path: string,
-  init: RequestInit = {},
-): Promise<T> {
+export async function requestProcessingJson<T>(path: string, init: RequestInit = {}): Promise<T> {
   const response = await processingFetch(path, init)
 
   if (!response.ok) {
@@ -299,10 +313,7 @@ export async function requestProcessingJson<T>(
   return (await response.json()) as T
 }
 
-export async function requestProcessingBlob(
-  path: string,
-  init: RequestInit = {},
-): Promise<Blob> {
+export async function requestProcessingBlob(path: string, init: RequestInit = {}): Promise<Blob> {
   const response = await processingFetch(path, init)
 
   if (!response.ok) {
