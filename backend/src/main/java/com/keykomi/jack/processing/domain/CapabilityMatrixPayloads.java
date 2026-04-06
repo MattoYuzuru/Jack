@@ -104,6 +104,61 @@ public final class CapabilityMatrixPayloads {
 	) {
 	}
 
+	public record CompressionCapabilityMatrix(
+		String acceptAttribute,
+		List<CompressionSourceCapability> sourceFormats,
+		List<CompressionTargetCapability> targetFormats,
+		List<CompressionModeCapability> modes
+	) {
+	}
+
+	public record CompressionSourceCapability(
+		String extension,
+		List<String> aliases,
+		String label,
+		String family,
+		List<String> mimeTypes,
+		List<String> targetExtensions,
+		String defaultTargetExtension,
+		String statusLabel,
+		String notes,
+		List<String> accents,
+		boolean available,
+		String availabilityDetail,
+		List<ProcessingJobType> requiredJobTypes
+	) {
+	}
+
+	public record CompressionTargetCapability(
+		String extension,
+		String label,
+		String family,
+		boolean supportsQuality,
+		boolean supportsTransparency,
+		boolean supportsResolutionLimits,
+		boolean supportsBitrateControls,
+		boolean supportsFpsControl,
+		Double defaultQuality,
+		String statusLabel,
+		String notes,
+		List<String> accents,
+		boolean available,
+		String availabilityDetail,
+		List<ProcessingJobType> requiredJobTypes
+	) {
+	}
+
+	public record CompressionModeCapability(
+		String id,
+		String label,
+		String detail,
+		List<String> accents,
+		boolean requiresTargetSize,
+		boolean supportsTargetSelection,
+		boolean supportsCustomSettings
+	) {
+	}
+
 	public record PlatformCapabilityMatrix(
 		List<PlatformModuleCapability> modules
 	) {

@@ -16,10 +16,11 @@ describe('App', () => {
     })
 
     expect(wrapper.text()).toContain(
-      'Главный экран Jack теперь ведёт сразу в viewer и converter с image-, document- и processing-oriented runtime.',
+      'Главный экран Jack теперь ведёт уже в три живых file-маршрута: viewer, converter и compression.',
     )
     expect(wrapper.findAll('.tool-card')).toHaveLength(6)
     expect(wrapper.text()).toContain('Open Viewer')
     expect(wrapper.text()).toContain('Open Converter')
+    expect(wrapper.text()).toContain('Open Compressor')
   })
 })

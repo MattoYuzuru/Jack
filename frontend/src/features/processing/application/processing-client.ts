@@ -1,6 +1,6 @@
 export type ProcessingJobStatus = 'QUEUED' | 'RUNNING' | 'COMPLETED' | 'FAILED' | 'CANCELLED'
 export type ProcessingProgressReporter = (message: string) => void
-export type ProcessingCapabilityScopeName = 'viewer' | 'converter' | 'platform'
+export type ProcessingCapabilityScopeName = 'viewer' | 'converter' | 'compression' | 'platform'
 
 export interface ProcessingCapabilityJobType {
   jobType: string
@@ -24,6 +24,12 @@ export interface ProcessingCapabilityScope {
     targetFormats: unknown[]
     scenarios: unknown[]
     presets: unknown[]
+  } | null
+  compressionMatrix?: {
+    acceptAttribute: string
+    sourceFormats: unknown[]
+    targetFormats: unknown[]
+    modes: unknown[]
   } | null
   platformMatrix?: ProcessingPlatformCapabilityMatrix | null
 }

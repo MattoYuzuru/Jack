@@ -136,6 +136,18 @@ class ProcessingFoundationApiTests {
 			.andExpect(jsonPath("$.converterMatrix.sourceFormats[0].available").value(false))
 			.andExpect(jsonPath("$.converterMatrix.presets[0].id").value("original"));
 
+		this.mockMvc.perform(get("/api/capabilities/compression"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.scope").value("compression"))
+			.andExpect(jsonPath("$.phase").value("compression-backend-first"))
+			.andExpect(jsonPath("$.jobTypes[0].implemented").value(true))
+			.andExpect(jsonPath("$.jobTypes[1].implemented").value(false))
+			.andExpect(jsonPath("$.jobTypes[2].implemented").value(false))
+			.andExpect(jsonPath("$.jobTypes[3].implemented").value(false))
+			.andExpect(jsonPath("$.jobTypes[4].implemented").value(false))
+			.andExpect(jsonPath("$.compressionMatrix.modes[0].id").value("maximum"))
+			.andExpect(jsonPath("$.compressionMatrix.sourceFormats[0].available").value(false));
+
 		this.mockMvc.perform(get("/api/capabilities/platform"))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.scope").value("platform"))
@@ -144,8 +156,9 @@ class ProcessingFoundationApiTests {
 			.andExpect(jsonPath("$.jobTypes[1].implemented").value(false))
 			.andExpect(jsonPath("$.jobTypes[2].implemented").value(false))
 			.andExpect(jsonPath("$.jobTypes[3].implemented").value(false))
-			.andExpect(jsonPath("$.jobTypes[4].implemented").value(true))
+			.andExpect(jsonPath("$.jobTypes[4].implemented").value(false))
 			.andExpect(jsonPath("$.jobTypes[5].implemented").value(true))
+			.andExpect(jsonPath("$.jobTypes[6].implemented").value(true))
 			.andExpect(jsonPath("$.platformMatrix.modules[0].id").value("compression"))
 			.andExpect(jsonPath("$.platformMatrix.modules[0].foundationReady").value(false))
 			.andExpect(jsonPath("$.platformMatrix.modules[2].id").value("multi-format-editor"))

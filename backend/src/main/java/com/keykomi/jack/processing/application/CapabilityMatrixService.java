@@ -127,13 +127,13 @@ public class CapabilityMatrixService {
 		platformModule(
 			"compression",
 			"Compression",
-			"Модуль сжатия может стартовать как thin feature поверх уже существующих image/media jobs, quality presets и artifact lifecycle.",
-			"Первый production-срез не должен заново придумывать browser runtime: image compression и target-size UX уже логично строятся поверх IMAGE_CONVERT, а media compression reuse'ит MEDIA_CONVERT/MEDIA_PREVIEW foundation и те же upload/job/artifact контракты.",
+			"Compression уже поднят как отдельный backend-first route поверх existing image/media jobs и общего artifact lifecycle.",
+			"Compression workspace больше не живёт как queued placeholder: dedicated FILE_COMPRESS orchestration reuse'ит IMAGE_CONVERT и MEDIA_CONVERT как внутренние candidate builders и отдаёт единый size-first manifest/result contract.",
 			List.of("Target size", "Quality", "Batch"),
 			List.of("image-processing", "media-processing", "artifact-storage", "capabilities"),
-			List.of(ProcessingJobType.IMAGE_CONVERT, ProcessingJobType.MEDIA_CONVERT, ProcessingJobType.MEDIA_PREVIEW),
+			List.of(ProcessingJobType.FILE_COMPRESS, ProcessingJobType.IMAGE_CONVERT, ProcessingJobType.MEDIA_CONVERT),
 			List.of("image quality presets", "video/audio bitrate targeting", "batch compression"),
-			"Compression module требует доступных IMAGE_CONVERT, MEDIA_CONVERT и MEDIA_PREVIEW capabilities."
+			"Compression module требует доступных FILE_COMPRESS, IMAGE_CONVERT и MEDIA_CONVERT capabilities."
 		),
 		platformModule(
 			"pdf-toolkit",

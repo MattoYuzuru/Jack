@@ -60,6 +60,7 @@ export function createViewerCapabilityScopeFixture(): ProcessingCapabilityScope 
         viewerFormat('aiff', ['aif'], 'AIFF', 'audio', ['audio/aiff'], 'server-assisted', 'server-viewer', ['VIEWER_RESOLVE', 'MEDIA_PREVIEW', 'METADATA_EXPORT']),
       ],
     },
+    compressionMatrix: null,
     converterMatrix: null,
   }
 }
@@ -246,6 +247,46 @@ export function createConverterCapabilityScopeFixture(): ProcessingCapabilitySco
         converterPreset('thumbnail', 'Thumbnail', 512, 512, 0.72, '#f3ede3'),
       ],
     },
+    compressionMatrix: null,
+  }
+}
+
+export function createCompressionCapabilityScopeFixture(): ProcessingCapabilityScope {
+  return {
+    scope: 'compression',
+    phase: 'compression-backend-first',
+    jobTypes: [
+      { jobType: 'UPLOAD_INTAKE_ANALYSIS', implemented: true },
+      { jobType: 'FILE_COMPRESS', implemented: true },
+      { jobType: 'IMAGE_CONVERT', implemented: true },
+      { jobType: 'MEDIA_CONVERT', implemented: true },
+      { jobType: 'MEDIA_PREVIEW', implemented: true },
+    ],
+    notes: [],
+    viewerMatrix: null,
+    converterMatrix: null,
+    compressionMatrix: {
+      acceptAttribute:
+        '.jpg,.jpeg,.png,.webp,.bmp,.svg,.psd,.ai,.eps,.ps,.heic,.heif,.tiff,.tif,.raw,.dng,.cr2,.cr3,.nef,.arw,.raf,.rw2,.orf,.pef,.srw,.mp4,.mov,.mkv,.avi,.webm,.wav,.flac,.mp3,.m4a,.aac',
+      sourceFormats: [
+        compressionSource('jpg', ['jpeg'], 'JPG', 'image', ['image/jpeg'], ['jpg', 'webp', 'avif']),
+        compressionSource('png', [], 'PNG', 'image', ['image/png'], ['png', 'webp', 'avif', 'jpg']),
+        compressionSource('mp4', [], 'MP4', 'media', ['video/mp4'], ['mp4', 'webm']),
+        compressionSource('wav', [], 'WAV', 'audio', ['audio/wav'], ['m4a', 'mp3', 'aac']),
+      ],
+      targetFormats: [
+        compressionTarget('jpg', 'JPG', 'image', true, false, true, false, false, 0.82),
+        compressionTarget('webp', 'WebP', 'image', true, true, true, false, false, 0.78),
+        compressionTarget('mp4', 'MP4', 'media', false, false, true, true, true, null),
+        compressionTarget('m4a', 'M4A', 'audio', false, false, false, true, false, null),
+      ],
+      modes: [
+        compressionMode('maximum', 'Maximum reduction', false, true, false),
+        compressionMode('target-size', 'Target size', true, true, false),
+        compressionMode('custom', 'Custom controls', false, true, true),
+      ],
+    },
+    platformMatrix: null,
   }
 }
 
@@ -265,6 +306,7 @@ export function createPlatformCapabilityScopeFixture(): ProcessingCapabilityScop
     notes: [],
     viewerMatrix: null,
     converterMatrix: null,
+    compressionMatrix: null,
     platformMatrix: {
       modules: [
         platformModule('compression', 'Compression', ['Target size', 'Quality', 'Batch'], ['IMAGE_CONVERT', 'MEDIA_CONVERT', 'MEDIA_PREVIEW']),
@@ -356,6 +398,79 @@ function converterTarget(
     available: true,
     availabilityDetail: null,
     requiredJobTypes,
+  }
+}
+
+function compressionSource(
+  extension: string,
+  aliases: string[],
+  label: string,
+  family: string,
+  mimeTypes: string[],
+  targetExtensions: string[],
+) {
+  return {
+    extension,
+    aliases,
+    label,
+    family,
+    mimeTypes,
+    targetExtensions,
+    defaultTargetExtension: targetExtensions[0] ?? null,
+    statusLabel: 'Compression ready',
+    notes: `${label} compression source fixture`,
+    accents: [label],
+    available: true,
+    availabilityDetail: null,
+    requiredJobTypes: ['FILE_COMPRESS'],
+  }
+}
+
+function compressionTarget(
+  extension: string,
+  label: string,
+  family: string,
+  supportsQuality: boolean,
+  supportsTransparency: boolean,
+  supportsResolutionLimits: boolean,
+  supportsBitrateControls: boolean,
+  supportsFpsControl: boolean,
+  defaultQuality: number | null,
+) {
+  return {
+    extension,
+    label,
+    family,
+    supportsQuality,
+    supportsTransparency,
+    supportsResolutionLimits,
+    supportsBitrateControls,
+    supportsFpsControl,
+    defaultQuality,
+    statusLabel: 'Compression target',
+    notes: `${label} compression target fixture`,
+    accents: [label],
+    available: true,
+    availabilityDetail: null,
+    requiredJobTypes: ['FILE_COMPRESS'],
+  }
+}
+
+function compressionMode(
+  id: 'maximum' | 'target-size' | 'custom',
+  label: string,
+  requiresTargetSize: boolean,
+  supportsTargetSelection: boolean,
+  supportsCustomSettings: boolean,
+) {
+  return {
+    id,
+    label,
+    detail: `${label} mode fixture`,
+    accents: [label],
+    requiresTargetSize,
+    supportsTargetSelection,
+    supportsCustomSettings,
   }
 }
 

@@ -26,6 +26,7 @@ Backend теперь является processing-platform, которая:
 - `GET /api/jobs/{id}/artifacts/{artifactId}`
 - `GET /api/capabilities/viewer`
 - `GET /api/capabilities/converter`
+- `GET /api/capabilities/compression`
 - `GET /api/capabilities/platform`
 
 ### Активные Job Type
@@ -34,6 +35,7 @@ Backend теперь является processing-platform, которая:
 - `MEDIA_PREVIEW`
 - `MEDIA_CONVERT`
 - `IMAGE_CONVERT`
+- `FILE_COMPRESS`
 - `OFFICE_CONVERT`
 - `DOCUMENT_PREVIEW`
 - `METADATA_EXPORT`
@@ -43,11 +45,12 @@ Backend теперь является processing-platform, которая:
 
 - media processing через `ffprobe` / `ffmpeg`
 - heavy imaging через `ImageMagick`, `Ghostscript`, `potrace`, `libraw`
+- dedicated compression orchestration для image/video/audio size-first flows
 - document intelligence для PDF / office / archive / SQLite preview
 - office/pdf conversion для narrative docs, spreadsheet exports, slide decks и slideshow media outputs
 - metadata inspect/export для image/audio flows
 - unified viewer resolve route
-- server-owned capability matrix для viewer, converter и future modules
+- server-owned capability matrix для viewer, converter, compression и future modules
 
 ## Разделение Ответственности
 
@@ -96,13 +99,21 @@ Converter работает как backend-first route:
 - capability/source-target/preset matrix приходит с backend
 - media controls на фронте теперь только задают container target, codec, bitrate, resolution и FPS, а итоговый artifact и warnings собираются server-side
 
+### Compression
+
+Compression теперь тоже работает как отдельный backend-first route:
+
+- image scenarios уходят в `FILE_COMPRESS`, который внутри reuse'ит `IMAGE_CONVERT` как candidate builder
+- video/audio scenarios уходят в `FILE_COMPRESS`, который внутри reuse'ит `MEDIA_CONVERT`
+- frontend держит mode selection, target-size input, custom limit controls и result visualization
+- backend возвращает единый compression manifest с source/result facts, warnings и attempt ladder
+- compression больше не смешивается с converter: задача route теперь size-first, а не format-first
+
 ## Platform Reuse Для Следующих Модулей
 
 `GET /api/capabilities/platform` описывает, как следующие roadmap-модули должны стартовать
 не с нуля, а поверх уже существующей processing-platform:
 
-- `Compression`
-  - reuse: `IMAGE_CONVERT`, `MEDIA_CONVERT`, `MEDIA_PREVIEW`, capability matrix, artifact lifecycle
 - `PDF Toolkit`
   - reuse: `DOCUMENT_PREVIEW`, `IMAGE_CONVERT`, `VIEWER_RESOLVE`
 - `Multi-Format Editor`
@@ -120,6 +131,7 @@ Converter работает как backend-first route:
 - scanned `PDF -> DOCX/TXT/XLSX/CSV/PPTX` пока не делает OCR автоматически и должен явно вести в OCR-слой следующей итерации
 - `CSV` остаётся flattened single-sheet export без formulas, styles и comments
 - media conversion теперь явно разделяет контейнер, codec, bitrate, resolution и FPS, чтобы delivery-ограничения не маскировались одним target-форматом
+- compression target-size route остаётся best-effort: если текущий ladder не может честно уложить файл в budget, backend возвращает самый компактный найденный artifact и явно помечает это в manifest
 
 Это значит, что новые модули должны добавлять свою product-specific orchestration,
 а не заново собирать browser-heavy runtime.
@@ -147,4 +159,4 @@ Converter работает как backend-first route:
 - очередь и retry policy
 - quota / rate limit / audit
 - observability и metrics
-- специализированные job types для compression, OCR и PDF toolkit
+- дополнительные специализированные job types для OCR и PDF toolkit

@@ -13,30 +13,36 @@ public class CapabilityCatalogService {
 	private final MediaPreviewService mediaPreviewService;
 	private final MediaConversionService mediaConversionService;
 	private final ImageProcessingService imageProcessingService;
+	private final CompressionService compressionService;
 	private final OfficeConversionService officeConversionService;
 	private final DocumentPreviewService documentPreviewService;
 	private final MetadataProcessingService metadataProcessingService;
 	private final ViewerResolveService viewerResolveService;
 	private final CapabilityMatrixService capabilityMatrixService;
+	private final CompressionCapabilityMatrixService compressionCapabilityMatrixService;
 
 	public CapabilityCatalogService(
 		MediaPreviewService mediaPreviewService,
 		MediaConversionService mediaConversionService,
 		ImageProcessingService imageProcessingService,
+		CompressionService compressionService,
 		OfficeConversionService officeConversionService,
 		DocumentPreviewService documentPreviewService,
 		MetadataProcessingService metadataProcessingService,
 		ViewerResolveService viewerResolveService,
-		CapabilityMatrixService capabilityMatrixService
+		CapabilityMatrixService capabilityMatrixService,
+		CompressionCapabilityMatrixService compressionCapabilityMatrixService
 	) {
 		this.mediaPreviewService = mediaPreviewService;
 		this.mediaConversionService = mediaConversionService;
 		this.imageProcessingService = imageProcessingService;
+		this.compressionService = compressionService;
 		this.officeConversionService = officeConversionService;
 		this.documentPreviewService = documentPreviewService;
 		this.metadataProcessingService = metadataProcessingService;
 		this.viewerResolveService = viewerResolveService;
 		this.capabilityMatrixService = capabilityMatrixService;
+		this.compressionCapabilityMatrixService = compressionCapabilityMatrixService;
 	}
 
 	public CapabilityScope viewerCapabilities() {
@@ -101,6 +107,7 @@ public class CapabilityCatalogService {
 				"Backend отдаёт format matrix как источник правды, а browser оставляет у себя только native rendering, state и interaction tooling."
 			),
 			this.capabilityMatrixService.viewerMatrix(availabilityByJobType),
+			null,
 			null,
 			null
 		);
@@ -168,7 +175,60 @@ public class CapabilityCatalogService {
 				"Workspace может строить progress, retry, cancel и artifact reuse поверх единых job status и capability rules от backend."
 			),
 			null,
+			null,
 			this.capabilityMatrixService.converterMatrix(availabilityByJobType),
+			null
+		);
+	}
+
+	public CapabilityScope compressionCapabilities() {
+		var availabilityByJobType = availabilityByJobType();
+		var compressionAvailable = availabilityByJobType.getOrDefault(ProcessingJobType.FILE_COMPRESS, false);
+		var imageProcessingAvailable = availabilityByJobType.getOrDefault(ProcessingJobType.IMAGE_CONVERT, false);
+		var mediaConversionAvailable = availabilityByJobType.getOrDefault(ProcessingJobType.MEDIA_CONVERT, false);
+		var mediaPreviewAvailable = availabilityByJobType.getOrDefault(ProcessingJobType.MEDIA_PREVIEW, false);
+
+		return new CapabilityScope(
+			"compression",
+			"compression-backend-first",
+			List.of(
+				new JobTypeCapability(ProcessingJobType.UPLOAD_INTAKE_ANALYSIS, true, "Upload intake уже даёт общий foundation для size-first jobs и artifact reuse."),
+				new JobTypeCapability(
+					ProcessingJobType.FILE_COMPRESS,
+					compressionAvailable,
+					compressionAvailable
+						? "Compression route уже поднимает maximum reduction, target-size и custom limit orchestration поверх existing image/media services."
+						: "Compression route сейчас недоступен: для поддержанных file families не хватает backend image/media foundation."
+				),
+				new JobTypeCapability(
+					ProcessingJobType.IMAGE_CONVERT,
+					imageProcessingAvailable,
+					imageProcessingAvailable
+						? "Compression reuse'ит IMAGE_CONVERT как внутренний candidate builder для image formats."
+						: "Image processing foundation сейчас недоступна и блокирует image compression scenarios."
+				),
+				new JobTypeCapability(
+					ProcessingJobType.MEDIA_CONVERT,
+					mediaConversionAvailable,
+					mediaConversionAvailable
+						? "Compression reuse'ит MEDIA_CONVERT для video/audio bitrate targeting и финальных delivery artifacts."
+						: "Media conversion foundation сейчас недоступна и блокирует video/audio compression scenarios."
+				),
+				new JobTypeCapability(
+					ProcessingJobType.MEDIA_PREVIEW,
+					mediaPreviewAvailable,
+					mediaPreviewAvailable
+						? "Media preview foundation остаётся доступной для preview-aware media reuse и связанных future slices."
+						: "Media preview foundation сейчас недоступна и ограничивает media-side reuse."
+				)
+			),
+			List.of(
+				"Compression route отделён от converter: пользователь формулирует size goal и quality limits, а backend сам подбирает candidate ladder и возвращает единый compression manifest.",
+				"Внутри route reuse'ит IMAGE_CONVERT и MEDIA_CONVERT как временные candidates, но наружу отдаёт только один result/preview contract без дублирования job history в UI."
+			),
+			null,
+			this.compressionCapabilityMatrixService.compressionMatrix(availabilityByJobType),
+			null,
 			null
 		);
 	}
@@ -180,6 +240,13 @@ public class CapabilityCatalogService {
 			"processing-platform",
 			List.of(
 				new JobTypeCapability(ProcessingJobType.UPLOAD_INTAKE_ANALYSIS, true, "Upload intake уже даёт общий foundation для новых thin features поверх processing platform."),
+				new JobTypeCapability(
+					ProcessingJobType.FILE_COMPRESS,
+					availabilityByJobType.getOrDefault(ProcessingJobType.FILE_COMPRESS, false),
+					availabilityByJobType.getOrDefault(ProcessingJobType.FILE_COMPRESS, false)
+						? "Dedicated compression orchestration уже поднята и закрывает size-first product route поверх image/media services."
+						: "Compression orchestration ещё не поднята как отдельный product route поверх existing processing foundation."
+				),
 				new JobTypeCapability(
 					ProcessingJobType.MEDIA_PREVIEW,
 					availabilityByJobType.getOrDefault(ProcessingJobType.MEDIA_PREVIEW, false),
@@ -236,6 +303,7 @@ public class CapabilityCatalogService {
 			),
 			null,
 			null,
+			null,
 			this.capabilityMatrixService.platformMatrix(availabilityByJobType)
 		);
 	}
@@ -245,6 +313,7 @@ public class CapabilityCatalogService {
 		// не абстрактный roadmap, а реальную доступность конкретных format/scenario routes.
 		var availabilityByJobType = new LinkedHashMap<ProcessingJobType, Boolean>();
 		availabilityByJobType.put(ProcessingJobType.UPLOAD_INTAKE_ANALYSIS, true);
+		availabilityByJobType.put(ProcessingJobType.FILE_COMPRESS, this.compressionService.isAvailable());
 		availabilityByJobType.put(ProcessingJobType.MEDIA_PREVIEW, this.mediaPreviewService.isAvailable());
 		availabilityByJobType.put(ProcessingJobType.MEDIA_CONVERT, this.mediaConversionService.isAvailable());
 		availabilityByJobType.put(ProcessingJobType.IMAGE_CONVERT, this.imageProcessingService.isAvailable());
@@ -261,6 +330,7 @@ public class CapabilityCatalogService {
 		List<JobTypeCapability> jobTypes,
 		List<String> notes,
 		CapabilityMatrixPayloads.ViewerCapabilityMatrix viewerMatrix,
+		CapabilityMatrixPayloads.CompressionCapabilityMatrix compressionMatrix,
 		CapabilityMatrixPayloads.ConverterCapabilityMatrix converterMatrix,
 		CapabilityMatrixPayloads.PlatformCapabilityMatrix platformMatrix
 	) {
