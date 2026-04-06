@@ -25,12 +25,13 @@ interface ToolCard {
 }
 
 const signalPills = [
-  'Iteration 06',
+  'Iteration 07',
   'Viewer workspace',
   'Converter route',
   'Compression route',
   'PDF toolkit route',
   'Editor route',
+  'Dev tools route',
   'Processing API client',
   'Platform reuse matrix',
   'Backend document intelligence',
@@ -58,7 +59,7 @@ const foundationPillars: FoundationPillar[] = [
   {
     name: 'Архитектура',
     detail:
-      'Home, viewer, converter и compression разведены по маршрутам, а продуктовые file-flows уже сидят на processing API, server-owned capability matrix и backend artifact jobs вместо browser-heavy runtime orchestration.',
+      'Home, viewer, converter, compression, PDF toolkit, editor и dev tools разведены по маршрутам: file-flows сидят на processing API там, где нужны artifacts и jobs, а browser-native utilities живут локально без лишнего orchestration.',
   },
 ]
 
@@ -134,9 +135,11 @@ const toolCardBlueprints: ToolCard[] = [
     title: 'Dev Utils',
     description:
       'Набор точечных утилит: декодеры, хеши, JWT, валидаторы и прочие ежедневные сценарии для разработчика.',
-    detail: 'Будущий быстрый доступ к мелким, но частым инженерным операциям.',
-    status: 'Queued',
-    accents: ['JWT', 'Hashes', 'Validators'],
+    detail:
+      'Новый route остаётся browser-native по архитектуре: encoding/decoding, JWT inspector, SHA/HMAC, link cleanup, validators и quick helpers работают мгновенно и не требуют backend queue.',
+    status: 'Active route',
+    route: '/dev-tools',
+    accents: ['JWT', 'Hashes', 'Validators', 'Links'],
     span: 'tool-card--standard',
   },
 ]
@@ -187,23 +190,23 @@ void hydrateQueuedModuleCards().catch(() => undefined)
       </div>
 
       <div class="app-topbar__status">
-        <span class="chip-pill">Iteration 06</span>
+        <span class="chip-pill">Iteration 07</span>
         <span class="chip-pill chip-pill--accent"
-          >Viewer + Converter + Compression + PDF Toolkit + Editor</span
+          >Viewer + Converter + Compression + PDF Toolkit + Editor + Dev Tools</span
         >
       </div>
     </header>
 
     <section class="hero-grid">
       <article class="panel-surface hero-copy">
-        <p class="eyebrow">Iteration 06 · Multi-Format Editor Live</p>
+        <p class="eyebrow">Iteration 07 · Dev Tools And Utils Live</p>
         <h1>
-          Главный экран Jack теперь ведёт уже в пять живых file-маршрутов: viewer, converter,
-          compression, PDF toolkit и editor.
+          Главный экран Jack теперь ведёт уже в шесть живых маршрутов: viewer, converter,
+          compression, PDF toolkit, editor и dev tools.
         </h1>
         <p class="lead">
-          Home сохраняет soft industrial foundation, но теперь работает как switchboard уже для пяти
-          backend-first продуктов: viewer отвечает за preview и analysis через unified
+          Home сохраняет soft industrial foundation, но теперь работает как switchboard уже для
+          шести продуктовых маршрутов: viewer отвечает за preview и analysis через unified
           `VIEWER_RESOLVE`, converter закрывает format-to-format сценарии через `IMAGE_CONVERT`,
           `OFFICE_CONVERT` и `MEDIA_CONVERT`, а compression решает size-first задачу через новый
           `FILE_COMPRESS`, где backend сам подбирает candidate ladder и возвращает единый
@@ -211,7 +214,10 @@ void hydrateQueuedModuleCards().catch(() => undefined)
           merge/split/rotate, OCR, visible signature stamps, term redaction и password flows в
           dedicated `PDF_TOOLKIT` route без browser-side PDF mutation. Новый editor удерживает
           formatting, snippets, shortcuts и live preview в браузере, а validate/export гонит в
-          `EDITOR_PROCESS`, чтобы diagnostics и artifacts оставались server-owned.
+          `EDITOR_PROCESS`, чтобы diagnostics и artifacts оставались server-owned. Dev tools при
+          этом сознательно не тащит мгновенные encode/hash/JWT/link/validation utilities в backend:
+          этот модуль живёт как browser-native инженерный toolbox внутри того же продуктового
+          foundation.
         </p>
 
         <div class="signal-row">
@@ -220,7 +226,7 @@ void hydrateQueuedModuleCards().catch(() => undefined)
 
         <div class="stats-grid" aria-label="Ключевые показатели foundation">
           <article class="stats-card">
-            <strong>6</strong>
+            <strong>7</strong>
             <span>экрана уже разведены через router</span>
           </article>
           <article class="stats-card">
@@ -234,8 +240,8 @@ void hydrateQueuedModuleCards().catch(() => undefined)
             <strong>9</strong>
             <span
               >слоёв foundation: processing client, registry, adapters, compression orchestration,
-              editor diagnostics/export, metadata, workspace state, color lab и media/document
-              UX</span
+              editor diagnostics/export, metadata, browser-native dev utils, workspace state, color
+              lab и media/document UX</span
             >
           </article>
         </div>

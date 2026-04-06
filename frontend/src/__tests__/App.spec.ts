@@ -16,7 +16,7 @@ describe('App', () => {
     })
 
     expect(wrapper.text()).toContain(
-      'Главный экран Jack теперь ведёт уже в пять живых file-маршрутов: viewer, converter, compression, PDF toolkit и editor.',
+      'Главный экран Jack теперь ведёт уже в шесть живых маршрутов: viewer, converter, compression, PDF toolkit, editor и dev tools.',
     )
     expect(wrapper.findAll('.tool-card')).toHaveLength(6)
     expect(wrapper.text()).toContain('Open Viewer')
@@ -24,5 +24,6 @@ describe('App', () => {
     expect(wrapper.text()).toContain('Open Compressor')
     expect(wrapper.text()).toContain('Open PDF Toolkit')
     expect(wrapper.text()).toContain('Open Editor')
+    expect(wrapper.text()).toContain('Open Dev Utils')
   })
 })
