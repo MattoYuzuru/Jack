@@ -27,6 +27,7 @@ Backend теперь является processing-platform, которая:
 - `GET /api/capabilities/viewer`
 - `GET /api/capabilities/converter`
 - `GET /api/capabilities/compression`
+- `GET /api/capabilities/pdf-toolkit`
 - `GET /api/capabilities/platform`
 
 ### Активные Job Type
@@ -36,6 +37,7 @@ Backend теперь является processing-platform, которая:
 - `MEDIA_CONVERT`
 - `IMAGE_CONVERT`
 - `FILE_COMPRESS`
+- `PDF_TOOLKIT`
 - `OFFICE_CONVERT`
 - `DOCUMENT_PREVIEW`
 - `METADATA_EXPORT`
@@ -46,11 +48,12 @@ Backend теперь является processing-platform, которая:
 - media processing через `ffprobe` / `ffmpeg`
 - heavy imaging через `ImageMagick`, `Ghostscript`, `potrace`, `libraw`
 - dedicated compression orchestration для image/video/audio size-first flows
+- dedicated PDF toolkit orchestration для merge/split/rotate/reorder, OCR, redaction и protection flows
 - document intelligence для PDF / office / archive / SQLite preview
 - office/pdf conversion для narrative docs, spreadsheet exports, slide decks и slideshow media outputs
 - metadata inspect/export для image/audio flows
 - unified viewer resolve route
-- server-owned capability matrix для viewer, converter, compression и future modules
+- server-owned capability matrix для viewer, converter, compression, pdf-toolkit и future modules
 
 ## Разделение Ответственности
 
@@ -109,13 +112,21 @@ Compression теперь тоже работает как отдельный bac
 - backend возвращает единый compression manifest с source/result facts, warnings и attempt ladder
 - compression больше не смешивается с converter: задача route теперь size-first, а не format-first
 
+### PDF Toolkit
+
+PDF toolkit теперь тоже работает как отдельный backend-first route:
+
+- прямой PDF intake идёт в `PDF_TOOLKIT` и reuse'ит `VIEWER_RESOLVE` для preview/stats/search layer
+- совместимые image/office sources сначала идут в `IMAGE_CONVERT` или `OFFICE_CONVERT` с target `pdf`, а потом переводятся в тот же page-aware workspace
+- `PDF_TOOLKIT` закрывает merge/split/rotate/reorder, OCR searchable export, visible signature stamps, term redaction и password protect/unlock
+- frontend держит только workspace state, page/range forms, result history и download/load-as-current UX
+- backend возвращает единый PDF toolkit manifest, preview artifact, result artifact и при необходимости OCR text export
+
 ## Platform Reuse Для Следующих Модулей
 
 `GET /api/capabilities/platform` описывает, как следующие roadmap-модули должны стартовать
 не с нуля, а поверх уже существующей processing-platform:
 
-- `PDF Toolkit`
-  - reuse: `DOCUMENT_PREVIEW`, `IMAGE_CONVERT`, `VIEWER_RESOLVE`
 - `Multi-Format Editor`
   - reuse: `DOCUMENT_PREVIEW`, `METADATA_EXPORT`, safe export contracts
 - `Batch Conversion`
@@ -132,6 +143,9 @@ Compression теперь тоже работает как отдельный bac
 - `CSV` остаётся flattened single-sheet export без formulas, styles и comments
 - media conversion теперь явно разделяет контейнер, codec, bitrate, resolution и FPS, чтобы delivery-ограничения не маскировались одним target-форматом
 - compression target-size route остаётся best-effort: если текущий ladder не может честно уложить файл в budget, backend возвращает самый компактный найденный artifact и явно помечает это в manifest
+- PDF toolkit `e-sign` в текущем срезе является видимым stamp-mark, а не certificate-based digital signature
+- PDF toolkit redaction сознательно пересобирает страницы как raster PDF, поэтому selectable text/vector layer после этого не сохраняются
+- PDF toolkit OCR по умолчанию зависит от доступного `tesseract` language profile и без дополнительных traineddata стартует с `eng`
 
 Это значит, что новые модули должны добавлять свою product-specific orchestration,
 а не заново собирать browser-heavy runtime.
@@ -159,4 +173,5 @@ Compression теперь тоже работает как отдельный bac
 - очередь и retry policy
 - quota / rate limit / audit
 - observability и metrics
-- дополнительные специализированные job types для OCR и PDF toolkit
+- постоянное artifact-хранилище вместо локального temp storage для крупных PDF/OCR bundles
+- отдельный certificate-based e-sign layer и richer OCR language packs поверх уже поднятого PDF toolkit route
