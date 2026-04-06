@@ -25,11 +25,12 @@ interface ToolCard {
 }
 
 const signalPills = [
-  'Iteration 05',
+  'Iteration 06',
   'Viewer workspace',
   'Converter route',
   'Compression route',
   'PDF toolkit route',
+  'Editor route',
   'Processing API client',
   'Platform reuse matrix',
   'Backend document intelligence',
@@ -119,9 +120,11 @@ const toolCardBlueprints: ToolCard[] = [
     label: '05 · Multi-Format Editor',
     title: 'Editor',
     description:
-      'Редактор для текстовых форматов, Markdown, HTML, CSS и JS с live preview и рабочими шорткатами.',
-    detail: 'Каркас под split-view и дальнейшие форматно-специфичные инструменты.',
-    status: 'Queued',
+      'Активный split-view редактор для Markdown, HTML, CSS, JavaScript, JSON, YAML и plain text с backend diagnostics и export flow.',
+    detail:
+      'Editor уже работает как отдельный backend-first модуль: browser держит formatting, shortcuts, templates и live preview, а EDITOR_PROCESS собирает diagnostics, outline и ready/plain-text artifacts.',
+    status: 'Active route',
+    route: '/editor',
     accents: ['Preview', 'Markdown', 'Format'],
     span: 'tool-card--standard',
   },
@@ -184,29 +187,31 @@ void hydrateQueuedModuleCards().catch(() => undefined)
       </div>
 
       <div class="app-topbar__status">
-        <span class="chip-pill">Iteration 05</span>
+        <span class="chip-pill">Iteration 06</span>
         <span class="chip-pill chip-pill--accent"
-          >Viewer + Converter + Compression + PDF Toolkit</span
+          >Viewer + Converter + Compression + PDF Toolkit + Editor</span
         >
       </div>
     </header>
 
     <section class="hero-grid">
       <article class="panel-surface hero-copy">
-        <p class="eyebrow">Iteration 05 · PDF Toolkit Live</p>
+        <p class="eyebrow">Iteration 06 · Multi-Format Editor Live</p>
         <h1>
-          Главный экран Jack теперь ведёт уже в четыре живых file-маршрута: viewer, converter,
-          compression и PDF toolkit.
+          Главный экран Jack теперь ведёт уже в пять живых file-маршрутов: viewer, converter,
+          compression, PDF toolkit и editor.
         </h1>
         <p class="lead">
-          Home сохраняет soft industrial foundation, но теперь работает как switchboard уже для
-          четырёх backend-first продуктов: viewer отвечает за preview и analysis через unified
+          Home сохраняет soft industrial foundation, но теперь работает как switchboard уже для пяти
+          backend-first продуктов: viewer отвечает за preview и analysis через unified
           `VIEWER_RESOLVE`, converter закрывает format-to-format сценарии через `IMAGE_CONVERT`,
           `OFFICE_CONVERT` и `MEDIA_CONVERT`, а compression решает size-first задачу через новый
           `FILE_COMPRESS`, где backend сам подбирает candidate ladder и возвращает единый
           compression manifest/result contract. Поверх этого PDF toolkit заводит import-to-PDF,
           merge/split/rotate, OCR, visible signature stamps, term redaction и password flows в
-          dedicated `PDF_TOOLKIT` route без browser-side PDF mutation.
+          dedicated `PDF_TOOLKIT` route без browser-side PDF mutation. Новый editor удерживает
+          formatting, snippets, shortcuts и live preview в браузере, а validate/export гонит в
+          `EDITOR_PROCESS`, чтобы diagnostics и artifacts оставались server-owned.
         </p>
 
         <div class="signal-row">
@@ -215,7 +220,7 @@ void hydrateQueuedModuleCards().catch(() => undefined)
 
         <div class="stats-grid" aria-label="Ключевые показатели foundation">
           <article class="stats-card">
-            <strong>5</strong>
+            <strong>6</strong>
             <span>экрана уже разведены через router</span>
           </article>
           <article class="stats-card">
@@ -226,10 +231,11 @@ void hydrateQueuedModuleCards().catch(() => undefined)
             >
           </article>
           <article class="stats-card">
-            <strong>8</strong>
+            <strong>9</strong>
             <span
               >слоёв foundation: processing client, registry, adapters, compression orchestration,
-              metadata, workspace state, color lab и media/document UX</span
+              editor diagnostics/export, metadata, workspace state, color lab и media/document
+              UX</span
             >
           </article>
         </div>

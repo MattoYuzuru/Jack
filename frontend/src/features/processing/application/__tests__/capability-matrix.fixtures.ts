@@ -800,19 +800,65 @@ export function createPdfToolkitCapabilityScopeFixture(): ProcessingCapabilitySc
   }
 }
 
+export function createEditorCapabilityScopeFixture(): ProcessingCapabilityScope {
+  return {
+    scope: 'editor',
+    phase: 'editor-backend-first',
+    jobTypes: [
+      { jobType: 'UPLOAD_INTAKE_ANALYSIS', implemented: true },
+      { jobType: 'DOCUMENT_PREVIEW', implemented: true },
+      { jobType: 'EDITOR_PROCESS', implemented: true },
+    ],
+    notes: [],
+    viewerMatrix: null,
+    converterMatrix: null,
+    compressionMatrix: null,
+    pdfToolkitMatrix: null,
+    editorMatrix: {
+      acceptAttribute: '.md,.markdown,.html,.htm,.css,.js,.mjs,.cjs,.json,.yaml,.yml,.txt,.text',
+      formats: [
+        editorFormat('markdown', 'Markdown', ['md', 'markdown'], 'markdown', 'rendered', true),
+        editorFormat('html', 'HTML', ['html', 'htm'], 'html', 'sandbox', true, [
+          'EDITOR_PROCESS',
+          'DOCUMENT_PREVIEW',
+        ]),
+        editorFormat('css', 'CSS', ['css'], 'css', 'sandbox', true),
+        editorFormat(
+          'javascript',
+          'JavaScript',
+          ['js', 'mjs', 'cjs'],
+          'javascript',
+          'syntax',
+          true,
+        ),
+        editorFormat('json', 'JSON', ['json'], 'json', 'structured', true),
+        editorFormat('yaml', 'YAML', ['yaml', 'yml'], 'yaml', 'structured', true),
+        editorFormat('txt', 'Plain Text', ['txt', 'text'], 'txt', 'text', false, [
+          'EDITOR_PROCESS',
+          'DOCUMENT_PREVIEW',
+        ]),
+      ],
+    },
+    platformMatrix: null,
+  }
+}
+
 export function createPlatformCapabilityScopeFixture(): ProcessingCapabilityScope {
   return {
     scope: 'platform',
     phase: 'processing-platform',
     jobTypes: [
       { jobType: 'UPLOAD_INTAKE_ANALYSIS', implemented: true },
+      { jobType: 'FILE_COMPRESS', implemented: true },
+      { jobType: 'PDF_TOOLKIT', implemented: true },
       { jobType: 'MEDIA_PREVIEW', implemented: true },
       { jobType: 'MEDIA_CONVERT', implemented: true },
       { jobType: 'IMAGE_CONVERT', implemented: true },
-      { jobType: 'PDF_TOOLKIT', implemented: true },
+      { jobType: 'OFFICE_CONVERT', implemented: true },
       { jobType: 'DOCUMENT_PREVIEW', implemented: true },
       { jobType: 'METADATA_EXPORT', implemented: true },
       { jobType: 'VIEWER_RESOLVE', implemented: true },
+      { jobType: 'EDITOR_PROCESS', implemented: true },
     ],
     notes: [],
     viewerMatrix: null,
@@ -836,7 +882,7 @@ export function createPlatformCapabilityScopeFixture(): ProcessingCapabilityScop
           'multi-format-editor',
           'Multi-Format Editor',
           ['Preview', 'Validate', 'Export'],
-          ['DOCUMENT_PREVIEW', 'METADATA_EXPORT'],
+          ['EDITOR_PROCESS', 'DOCUMENT_PREVIEW'],
         ),
         platformModule(
           'batch-conversion',
@@ -1107,6 +1153,33 @@ function converterPreset(
     defaultBackgroundColor,
     available: true,
     availabilityDetail: null,
+  }
+}
+
+function editorFormat(
+  id: string,
+  label: string,
+  extensions: string[],
+  syntaxMode: string,
+  previewMode: string,
+  supportsFormatting: boolean,
+  requiredJobTypes: string[] = ['EDITOR_PROCESS'],
+) {
+  return {
+    id,
+    label,
+    extensions,
+    mimeTypes: [],
+    syntaxMode,
+    previewMode,
+    supportsFormatting,
+    supportsPlainTextExport: true,
+    statusLabel: 'Editor format',
+    notes: `${label} editor fixture`,
+    accents: [label],
+    available: true,
+    availabilityDetail: null,
+    requiredJobTypes,
   }
 }
 

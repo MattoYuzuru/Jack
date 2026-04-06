@@ -5,6 +5,7 @@ export type ProcessingCapabilityScopeName =
   | 'converter'
   | 'compression'
   | 'pdf-toolkit'
+  | 'editor'
   | 'platform'
 
 export interface ProcessingCapabilityJobType {
@@ -42,6 +43,10 @@ export interface ProcessingCapabilityScope {
     directSourceFormats: unknown[]
     importSourceFormats: unknown[]
     operations: unknown[]
+  } | null
+  editorMatrix?: {
+    acceptAttribute: string
+    formats: unknown[]
   } | null
   platformMatrix?: ProcessingPlatformCapabilityMatrix | null
 }
