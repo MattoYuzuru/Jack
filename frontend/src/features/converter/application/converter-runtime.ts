@@ -5,8 +5,11 @@ import {
   type RasterImageFrame,
 } from '../../imaging/application/browser-raster'
 import {
+  runServerOfficeConvert,
+  type ConverterFact,
   runServerImageConvert,
   type ServerImageConvertResult,
+  type ServerOfficeConvertResult,
 } from './converter-server-runtime'
 import { resolveConverterPreset, type ConverterPresetDefinition } from '../domain/converter-presets'
 import {
@@ -23,6 +26,9 @@ import {
   type ConverterTargetStrategyId,
 } from '../domain/converter-registry'
 
+export type ConverterResultKind = 'image' | 'document' | 'media'
+export type ConverterPreviewKind = 'image' | 'document' | 'media'
+
 export interface ConverterPreparedSource {
   file: File
   extension: string
@@ -32,11 +38,12 @@ export interface ConverterPreparedSource {
 }
 
 export interface ConverterResult {
-  kind: 'image' | 'document'
+  kind: ConverterResultKind
   fileName: string
   blob: Blob
   previewBlob: Blob
   previewMimeType: string
+  previewKind: ConverterPreviewKind
   preset: ConverterPresetDefinition
   source: ConverterSourceFormatDefinition
   target: ConverterTargetFormatDefinition
@@ -45,6 +52,8 @@ export interface ConverterResult {
   sourceHeight: number
   width: number
   height: number
+  sourceFacts: ConverterFact[]
+  resultFacts: ConverterFact[]
   warnings: string[]
   backendJobId: string | null
   backendCompletedAt: string | null
@@ -95,6 +104,8 @@ interface ConverterEncodedArtifact {
   previewMimeType?: string
   warnings: string[]
 }
+
+type ServerConverterResult = ServerImageConvertResult | ServerOfficeConvertResult
 
 export interface ConverterRuntimeDependencies {
   decodeNativeRaster?: (prepared: ConverterPreparedSource) => Promise<ConverterDecodedSourceArtifact>
@@ -166,6 +177,7 @@ export interface ConverterRuntimeDependencies {
     prepared: ConverterPreparedSource
     target: ConverterTargetFormatDefinition
     preset: ConverterPresetDefinition
+    scenario: ConverterScenarioDefinition
     quality?: number
     backgroundColor?: string
     onProgress?: (message: string) => void
@@ -177,7 +189,7 @@ export interface ConverterRuntimeDependencies {
       message: string
       errorMessage: string | null
     }) => void
-  }) => Promise<ServerImageConvertResult>
+  }) => Promise<ServerConverterResult>
 }
 
 interface RasterTransformArtifact {
@@ -212,6 +224,7 @@ export function createConverterRuntime(
       const scenarios = (await Promise.all([
         listConverterScenariosByFamily('image'),
         listConverterScenariosByFamily('document'),
+        listConverterScenariosByFamily('media'),
       ]))
         .flat()
         .filter((scenario) => scenario.sourceExtension === source.extension && scenario.available)
@@ -247,7 +260,7 @@ export function createConverterRuntime(
         throw new Error('Для выбранной пары source/target сценарий пока не зарегистрирован.')
       }
 
-      if (!target.available) {
+      if (!target.available && !scenario.available) {
         throw new Error(
           target.availabilityDetail ||
             `Target ${target.label} сейчас отключён в backend capability matrix.`,
@@ -266,6 +279,7 @@ export function createConverterRuntime(
           prepared,
           target,
           preset,
+          scenario,
           quality: target.supportsQuality
             ? (quality ?? preset.preferredQuality ?? target.defaultQuality ?? undefined)
             : undefined,
@@ -275,8 +289,36 @@ export function createConverterRuntime(
           onJobUpdate,
         })
 
+        if ('previewKind' in serverResult.manifest) {
+          return {
+            kind: target.family,
+            fileName: replaceExtension(prepared.file.name, target.extension),
+            blob: serverResult.resultBlob,
+            previewBlob: serverResult.previewBlob,
+            previewMimeType:
+              serverResult.manifest.previewMediaType ||
+              serverResult.previewBlob.type ||
+              target.mimeType,
+            previewKind: serverResult.manifest.previewKind,
+            preset,
+            source: prepared.source,
+            target,
+            scenario,
+            sourceWidth: 0,
+            sourceHeight: 0,
+            width: 0,
+            height: 0,
+            sourceFacts: serverResult.manifest.sourceFacts,
+            resultFacts: serverResult.manifest.resultFacts,
+            warnings: serverResult.manifest.warnings,
+            backendJobId: serverResult.job.id,
+            backendCompletedAt: serverResult.job.completedAt,
+            backendRuntimeLabel: serverResult.manifest.runtimeLabel,
+          }
+        }
+
         return {
-          kind: target.family === 'document' ? 'document' : 'image',
+          kind: target.family,
           fileName: replaceExtension(prepared.file.name, target.extension),
           blob: serverResult.resultBlob,
           previewBlob: serverResult.previewBlob,
@@ -284,6 +326,8 @@ export function createConverterRuntime(
             serverResult.manifest.previewMediaType ||
             serverResult.previewBlob.type ||
             target.mimeType,
+          previewKind:
+            target.family === 'media' ? 'media' : target.family === 'document' ? 'document' : 'image',
           preset,
           source: prepared.source,
           target,
@@ -292,6 +336,8 @@ export function createConverterRuntime(
           sourceHeight: serverResult.manifest.sourceHeight,
           width: serverResult.manifest.width,
           height: serverResult.manifest.height,
+          sourceFacts: buildImageSourceFacts(prepared.source, prepared.file, serverResult.manifest),
+          resultFacts: buildImageResultFacts(target, serverResult.manifest),
           warnings: serverResult.manifest.warnings,
           backendJobId: serverResult.job.id,
           backendCompletedAt: serverResult.job.completedAt,
@@ -321,11 +367,13 @@ export function createConverterRuntime(
       }
 
       return {
-        kind: target.family === 'document' ? 'document' : 'image',
+        kind: target.family,
         fileName: replaceExtension(prepared.file.name, target.extension),
         blob: encoded.blob,
         previewBlob: encoded.previewBlob ?? encoded.blob,
         previewMimeType: encoded.previewMimeType ?? target.mimeType,
+        previewKind:
+          target.family === 'media' ? 'media' : target.family === 'document' ? 'document' : 'image',
         preset,
         source: prepared.source,
         target,
@@ -334,6 +382,8 @@ export function createConverterRuntime(
         sourceHeight: decoded.raster.height,
         width: transformed.raster.width,
         height: transformed.raster.height,
+        sourceFacts: buildLocalRasterSourceFacts(prepared.source, prepared.file, decoded.raster),
+        resultFacts: buildLocalRasterResultFacts(target, transformed.raster),
         warnings,
         backendJobId: null,
         backendCompletedAt: null,
@@ -365,6 +415,18 @@ function createSourceStrategies(
     'illustration-raster': {
       decode: dependencies.decodeIllustrationSource ?? defaultDecodeIllustrationSource,
     },
+    'pdf-document': {
+      decode: defaultDecodeOfficeSource,
+    },
+    'office-document': {
+      decode: defaultDecodeOfficeSource,
+    },
+    'spreadsheet-document': {
+      decode: defaultDecodeOfficeSource,
+    },
+    'presentation-document': {
+      decode: defaultDecodeOfficeSource,
+    },
   }
 }
 
@@ -395,6 +457,36 @@ function createTargetStrategies(
     },
     'ico-image': {
       encode: dependencies.encodeIco ?? defaultEncodeIco,
+    },
+    'docx-document': {
+      encode: defaultEncodeOfficeTarget,
+    },
+    'txt-document': {
+      encode: defaultEncodeOfficeTarget,
+    },
+    'html-document': {
+      encode: defaultEncodeOfficeTarget,
+    },
+    'rtf-document': {
+      encode: defaultEncodeOfficeTarget,
+    },
+    'odt-document': {
+      encode: defaultEncodeOfficeTarget,
+    },
+    'xlsx-document': {
+      encode: defaultEncodeOfficeTarget,
+    },
+    'csv-document': {
+      encode: defaultEncodeOfficeTarget,
+    },
+    'ods-document': {
+      encode: defaultEncodeOfficeTarget,
+    },
+    'pptx-document': {
+      encode: defaultEncodeOfficeTarget,
+    },
+    'mp4-video': {
+      encode: defaultEncodeOfficeTarget,
     },
   }
 }
@@ -436,6 +528,14 @@ async function defaultDecodeIllustrationSource(
   _prepared: ConverterPreparedSource,
 ): Promise<ConverterDecodedSourceArtifact> {
   throw new Error('AI/EPS local fallback отключён: heavy imaging должен идти через backend IMAGE_CONVERT.')
+}
+
+async function defaultDecodeOfficeSource(
+  _prepared: ConverterPreparedSource,
+): Promise<ConverterDecodedSourceArtifact> {
+  throw new Error(
+    'Office local fallback отключён: document/spreadsheet/presentation conversion должен идти через backend OFFICE_CONVERT.',
+  )
 }
 
 async function defaultApplyPreset(
@@ -537,6 +637,12 @@ async function defaultEncodeIco(_input: {
   throw new Error('ICO local fallback отключён: heavy imaging должен идти через backend IMAGE_CONVERT.')
 }
 
+async function defaultEncodeOfficeTarget(): Promise<ConverterEncodedArtifact> {
+  throw new Error(
+    'Office local fallback отключён: document/spreadsheet/presentation conversion должен идти через backend OFFICE_CONVERT.',
+  )
+}
+
 function defaultIsServerScenario(
   _prepared: ConverterPreparedSource,
   _target: ConverterTargetFormatDefinition,
@@ -549,6 +655,7 @@ async function defaultConvertServerScenario(input: {
   prepared: ConverterPreparedSource
   target: ConverterTargetFormatDefinition
   preset: ConverterPresetDefinition
+  scenario: ConverterScenarioDefinition
   quality?: number
   backgroundColor?: string
   onProgress?: (message: string) => void
@@ -560,7 +667,28 @@ async function defaultConvertServerScenario(input: {
     message: string
     errorMessage: string | null
   }) => void
-}): Promise<ServerImageConvertResult> {
+}): Promise<ServerConverterResult> {
+  const requiresOfficeRuntime =
+    input.prepared.source.family === 'document' ||
+    input.scenario.requiredJobTypes.includes('OFFICE_CONVERT')
+
+  if (requiresOfficeRuntime) {
+    return runServerOfficeConvert({
+      file: input.prepared.file,
+      targetExtension: input.target.extension,
+      maxWidth: input.preset.maxWidth,
+      maxHeight: input.preset.maxHeight,
+      quality: input.quality,
+      backgroundColor: input.backgroundColor,
+      presetLabel: input.preset.label,
+      reportProgress: input.onProgress,
+      onJobCreated(job) {
+        input.onJobCreated?.(job.id)
+      },
+      onJobUpdate: input.onJobUpdate,
+    })
+  }
+
   return runServerImageConvert({
     file: input.prepared.file,
     targetExtension: input.target.extension,
@@ -575,6 +703,54 @@ async function defaultConvertServerScenario(input: {
     },
     onJobUpdate: input.onJobUpdate,
   })
+}
+
+function buildLocalRasterSourceFacts(
+  source: ConverterSourceFormatDefinition,
+  file: File,
+  raster: RasterImageFrame,
+): ConverterFact[] {
+  return [
+    { label: 'Источник', value: source.label },
+    { label: 'Файл', value: file.name },
+    { label: 'Blob size', value: new Intl.NumberFormat('ru-RU').format(file.size) + ' bytes' },
+    { label: 'Размерность', value: `${raster.width} x ${raster.height}` },
+  ]
+}
+
+function buildLocalRasterResultFacts(
+  target: ConverterTargetFormatDefinition,
+  raster: RasterImageFrame,
+): ConverterFact[] {
+  return [
+    { label: 'Тип результата', value: target.label },
+    { label: 'Размерность', value: `${raster.width} x ${raster.height}` },
+    { label: 'Pipeline', value: target.statusLabel },
+  ]
+}
+
+function buildImageSourceFacts(
+  source: ConverterSourceFormatDefinition,
+  file: File,
+  manifest: ServerImageConvertResult['manifest'],
+): ConverterFact[] {
+  return [
+    { label: 'Источник', value: source.label },
+    { label: 'Файл', value: file.name },
+    { label: 'Blob size', value: new Intl.NumberFormat('ru-RU').format(file.size) + ' bytes' },
+    { label: 'Размерность', value: `${manifest.sourceWidth} x ${manifest.sourceHeight}` },
+  ]
+}
+
+function buildImageResultFacts(
+  target: ConverterTargetFormatDefinition,
+  manifest: ServerImageConvertResult['manifest'],
+): ConverterFact[] {
+  return [
+    { label: 'Тип результата', value: target.label },
+    { label: 'Размерность', value: `${manifest.width} x ${manifest.height}` },
+    { label: 'Media type', value: manifest.resultMediaType },
+  ]
 }
 
 function replaceExtension(fileName: string, targetExtension: string): string {

@@ -31,6 +31,7 @@ const signalPills = [
   'Processing API client',
   'Platform reuse matrix',
   'Backend document intelligence',
+  'Office/PDF conversion',
   'Backend metadata service',
   'Video tooling',
   'Audio workbench',
@@ -78,10 +79,10 @@ const toolCardBlueprints: ToolCard[] = [
     description:
       'Backend-first converter отправляет любой поддержанный сценарий в processing pipeline, а браузер держит orchestration, progress UX и preview готового результата.',
     detail:
-      'HEIC, TIFF, RAW, PSD, AI/EPS intake, привычные JPG/PNG/WebP сценарии, AVIF/ICO/vector trace targets и single-page PDF output теперь живут поверх backend IMAGE_CONVERT jobs, retry/cancel и artifact reuse.',
+      'HEIC, TIFF, RAW, PSD, AI/EPS intake и привычные JPG/PNG/WebP сценарии идут через IMAGE_CONVERT, а DOC/DOCX/RTF/ODT, CSV/XLSX/ODS, PDF и PPTX office-потоки закрываются через OFFICE_CONVERT с тем же retry/cancel, manifest и artifact reuse contract.',
     status: 'Active route',
     route: '/converter',
-    accents: ['Image', 'AVIF', 'ICO', 'Presets'],
+    accents: ['Image', 'Office', 'PDF', 'Presets'],
     span: 'tool-card--standard',
   },
   {
@@ -193,10 +194,10 @@ void hydrateQueuedModuleCards().catch(() => undefined)
           Home сохраняет soft industrial foundation, но теперь работает как switchboard для двух
           живых маршрутов: viewer отвечает за preview, analysis, backend-powered document
           intelligence, backend-powered metadata service, video tooling, audio workbench и image
-          tooling через unified `VIEWER_RESOLVE` route, а converter закрывает первую волну
-          image-конвертаций, vector/icon targets, archive-friendly TIFF target и document-target
-          через scenario registry, processing API и backend-first job contract, где browser больше
-          не вычисляет conversion result самостоятельно.
+          tooling через unified `VIEWER_RESOLVE` route, а converter теперь закрывает и image-блок,
+          и офисные сценарии с `DOC/DOCX/RTF/ODT`, `CSV/XLSX/ODS`, `PDF`, `PPTX`, vector/icon
+          targets и slideshow-export через backend-first job contract, где browser больше не
+          вычисляет conversion result самостоятельно.
         </p>
 
         <div class="signal-row">
@@ -209,7 +210,7 @@ void hydrateQueuedModuleCards().catch(() => undefined)
             <span>экрана уже разведены через router</span>
           </article>
           <article class="stats-card">
-            <strong>41</strong>
+            <strong>65</strong>
             <span
               >conversion-сценариев уже заведены в converter registry вместе с
               preset-профилями</span

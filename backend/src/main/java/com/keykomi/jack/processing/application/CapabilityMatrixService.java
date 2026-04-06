@@ -66,18 +66,37 @@ public class CapabilityMatrixService {
 		sourceFormat("eps", List.of("ps"), "EPS", "image", List.of(), "illustration-raster", "Server illustration", "PostScript source растеризуется через backend IMAGE_CONVERT.", List.of(ProcessingJobType.IMAGE_CONVERT), "EPS source требует доступного backend IMAGE_CONVERT capability."),
 		sourceFormat("heic", List.of("heif"), "HEIC", "image", List.of("image/heic", "image/heif"), "heic-raster", "Server rasterization", "HEIC source декодируется через backend IMAGE_CONVERT.", List.of(ProcessingJobType.IMAGE_CONVERT), "HEIC source требует доступного backend IMAGE_CONVERT capability."),
 		sourceFormat("tiff", List.of("tif"), "TIFF", "image", List.of("image/tiff"), "tiff-raster", "Server rasterization", "TIFF source декодируется через backend IMAGE_CONVERT.", List.of(ProcessingJobType.IMAGE_CONVERT), "TIFF source требует доступного backend IMAGE_CONVERT capability."),
-		sourceFormat("raw", List.of("dng", "cr2", "cr3", "nef", "arw", "raf", "rw2", "orf", "pef", "srw"), "RAW", "image", List.of(), "raw-raster", "Server rasterization", "RAW family идёт через backend preview extraction.", List.of(ProcessingJobType.IMAGE_CONVERT), "RAW source требует доступного backend IMAGE_CONVERT capability.")
+		sourceFormat("raw", List.of("dng", "cr2", "cr3", "nef", "arw", "raf", "rw2", "orf", "pef", "srw"), "RAW", "image", List.of(), "raw-raster", "Server rasterization", "RAW family идёт через backend preview extraction.", List.of(ProcessingJobType.IMAGE_CONVERT), "RAW source требует доступного backend IMAGE_CONVERT capability."),
+		sourceFormat("pdf", List.of(), "PDF", "document", List.of("application/pdf"), "pdf-document", "Office route", "PDF source теперь идёт в OFFICE_CONVERT для text/table/image/presentation roundtrip сценариев.", List.of(ProcessingJobType.OFFICE_CONVERT), "PDF source требует доступного backend OFFICE_CONVERT capability."),
+		sourceFormat("doc", List.of(), "DOC", "document", List.of("application/msword"), "office-document", "Office route", "Legacy Word document использует OFFICE_CONVERT поверх backend text extraction и structured export.", List.of(ProcessingJobType.OFFICE_CONVERT), "DOC source требует доступного backend OFFICE_CONVERT capability."),
+		sourceFormat("docx", List.of(), "DOCX", "document", List.of("application/vnd.openxmlformats-officedocument.wordprocessingml.document"), "office-document", "Office route", "DOCX source теперь идёт в OFFICE_CONVERT для PDF/TXT/HTML/RTF/ODT roundtrip сценариев.", List.of(ProcessingJobType.OFFICE_CONVERT), "DOCX source требует доступного backend OFFICE_CONVERT capability."),
+		sourceFormat("rtf", List.of(), "RTF", "document", List.of("application/rtf", "text/rtf"), "office-document", "Office route", "RTF source использует OFFICE_CONVERT для DOCX compatibility export.", List.of(ProcessingJobType.OFFICE_CONVERT), "RTF source требует доступного backend OFFICE_CONVERT capability."),
+		sourceFormat("odt", List.of(), "ODT", "document", List.of("application/vnd.oasis.opendocument.text"), "office-document", "Office route", "ODT source использует OFFICE_CONVERT для DOCX roundtrip и structured export.", List.of(ProcessingJobType.OFFICE_CONVERT), "ODT source требует доступного backend OFFICE_CONVERT capability."),
+		sourceFormat("csv", List.of(), "CSV", "document", List.of("text/csv", "application/csv"), "spreadsheet-document", "Office route", "CSV source теперь идёт в OFFICE_CONVERT для workbook export.", List.of(ProcessingJobType.OFFICE_CONVERT), "CSV source требует доступного backend OFFICE_CONVERT capability."),
+		sourceFormat("xlsx", List.of(), "XLSX", "document", List.of("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"), "spreadsheet-document", "Office route", "XLSX source идёт в OFFICE_CONVERT для CSV/PDF/ODS export.", List.of(ProcessingJobType.OFFICE_CONVERT), "XLSX source требует доступного backend OFFICE_CONVERT capability."),
+		sourceFormat("ods", List.of(), "ODS", "document", List.of("application/vnd.oasis.opendocument.spreadsheet"), "spreadsheet-document", "Office route", "ODS source идёт в OFFICE_CONVERT для XLSX roundtrip.", List.of(ProcessingJobType.OFFICE_CONVERT), "ODS source требует доступного backend OFFICE_CONVERT capability."),
+		sourceFormat("pptx", List.of(), "PPTX", "document", List.of("application/vnd.openxmlformats-officedocument.presentationml.presentation"), "presentation-document", "Office route", "PPTX source идёт в OFFICE_CONVERT для PDF/image/video export.", List.of(ProcessingJobType.OFFICE_CONVERT), "PPTX source требует доступного backend OFFICE_CONVERT capability.")
 	);
 
 	private static final List<ConverterTargetSpec> CONVERTER_TARGET_SPECS = List.of(
-		targetFormat("jpg", "JPG", "image", "image/jpeg", "jpeg-encoder", true, false, 0.9, "Backend encode", "Практичный совместимый raster target теперь собирается через backend-first contract.", List.of(ProcessingJobType.IMAGE_CONVERT), "JPG target требует доступного backend IMAGE_CONVERT capability."),
-		targetFormat("png", "PNG", "image", "image/png", "png-encoder", false, true, null, "Backend encode", "Lossless target с transparency теперь тоже собирается через backend jobs.", List.of(ProcessingJobType.IMAGE_CONVERT), "PNG target требует доступного backend IMAGE_CONVERT capability."),
-		targetFormat("webp", "WebP", "image", "image/webp", "webp-encoder", true, true, 0.9, "Backend encode", "Компактный modern raster target собирается через backend IMAGE_CONVERT.", List.of(ProcessingJobType.IMAGE_CONVERT), "WebP target требует доступного backend IMAGE_CONVERT capability."),
-		targetFormat("avif", "AVIF", "image", "image/avif", "avif-encoder", true, true, 0.78, "Backend encode", "AVIF target собирается через backend IMAGE_CONVERT.", List.of(ProcessingJobType.IMAGE_CONVERT), "AVIF target требует доступного backend IMAGE_CONVERT capability."),
-		targetFormat("svg", "SVG", "image", "image/svg+xml", "svg-vectorizer", false, true, null, "Backend trace", "SVG target собирается через backend trace path.", List.of(ProcessingJobType.IMAGE_CONVERT), "SVG target требует доступного backend IMAGE_CONVERT capability."),
-		targetFormat("ico", "ICO", "image", "image/x-icon", "ico-image", false, true, null, "Backend icon pack", "ICO target собирается через backend multi-size icon path.", List.of(ProcessingJobType.IMAGE_CONVERT), "ICO target требует доступного backend IMAGE_CONVERT capability."),
-		targetFormat("pdf", "PDF", "document", "application/pdf", "pdf-document", true, false, 0.92, "Backend document", "PDF target собирается через backend document raster path.", List.of(ProcessingJobType.IMAGE_CONVERT), "PDF target требует доступного backend IMAGE_CONVERT capability."),
-		targetFormat("tiff", "TIFF", "image", "image/tiff", "tiff-image", false, true, null, "Backend archive encode", "TIFF target собирается через backend archive-friendly encode path.", List.of(ProcessingJobType.IMAGE_CONVERT), "TIFF target требует доступного backend IMAGE_CONVERT capability.")
+		targetFormat("jpg", "JPG", "image", "image/jpeg", "jpeg-encoder", true, false, 0.9, "Server target", "Практичный raster target теперь используется и в image, и в office contact-sheet сценариях.", List.of()),
+		targetFormat("png", "PNG", "image", "image/png", "png-encoder", false, true, null, "Server target", "Lossless raster target теперь используется и для office page/slide exports.", List.of()),
+		targetFormat("webp", "WebP", "image", "image/webp", "webp-encoder", true, true, 0.9, "Server target", "Компактный modern raster target собирается через backend conversion routes.", List.of()),
+		targetFormat("avif", "AVIF", "image", "image/avif", "avif-encoder", true, true, 0.78, "Server target", "AVIF target собирается через backend conversion routes.", List.of()),
+		targetFormat("svg", "SVG", "image", "image/svg+xml", "svg-vectorizer", false, true, null, "Server target", "SVG target собирается через backend trace path.", List.of()),
+		targetFormat("ico", "ICO", "image", "image/x-icon", "ico-image", false, true, null, "Server target", "ICO target собирается через backend multi-size icon path.", List.of()),
+		targetFormat("pdf", "PDF", "document", "application/pdf", "pdf-document", false, false, null, "Server target", "PDF target теперь покрывает и image raster export, и office document export.", List.of()),
+		targetFormat("tiff", "TIFF", "image", "image/tiff", "tiff-image", false, true, null, "Server target", "TIFF target собирается через backend archive-friendly encode path.", List.of()),
+		targetFormat("docx", "DOCX", "document", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "docx-document", false, true, null, "Office export", "DOCX target собирается через OFFICE_CONVERT как structured narrative export.", List.of()),
+		targetFormat("txt", "TXT", "document", "text/plain", "txt-document", false, true, null, "Office export", "TXT target собирается через OFFICE_CONVERT из extracted text layer.", List.of()),
+		targetFormat("html", "HTML", "document", "text/html", "html-document", false, true, null, "Office export", "HTML target собирается через OFFICE_CONVERT как safe preview/export document.", List.of()),
+		targetFormat("rtf", "RTF", "document", "application/rtf", "rtf-document", false, true, null, "Office export", "RTF target собирается через OFFICE_CONVERT как compatibility export.", List.of()),
+		targetFormat("odt", "ODT", "document", "application/vnd.oasis.opendocument.text", "odt-document", false, true, null, "Office export", "ODT target собирается через OFFICE_CONVERT как OpenDocument text export.", List.of()),
+		targetFormat("xlsx", "XLSX", "document", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "xlsx-document", false, true, null, "Office export", "XLSX target собирается через OFFICE_CONVERT как workbook export.", List.of()),
+		targetFormat("csv", "CSV", "document", "text/csv", "csv-document", false, true, null, "Office export", "CSV target собирается через OFFICE_CONVERT как flattened table export.", List.of()),
+		targetFormat("ods", "ODS", "document", "application/vnd.oasis.opendocument.spreadsheet", "ods-document", false, true, null, "Office export", "ODS target собирается через OFFICE_CONVERT как OpenDocument spreadsheet export.", List.of()),
+		targetFormat("pptx", "PPTX", "document", "application/vnd.openxmlformats-officedocument.presentationml.presentation", "pptx-document", false, true, null, "Office export", "PPTX target собирается через OFFICE_CONVERT как image-slide deck export.", List.of()),
+		targetFormat("mp4", "MP4", "media", "video/mp4", "mp4-video", false, true, null, "Office export", "MP4 target собирается через OFFICE_CONVERT как slide-reel video export.", List.of())
 	);
 
 	private static final List<ConverterPresetSpec> CONVERTER_PRESET_SPECS = List.of(
@@ -146,13 +165,13 @@ public class CapabilityMatrixService {
 		platformModule(
 			"office-pdf-conversion",
 			"Office/PDF Conversion",
-			"Будущие DOCX/PDF/XLSX/PPTX conversion flows уже имеют backend foundation: document contracts, artifacts и capability-driven routing.",
-			"Следующие office/pdf routes должны садиться поверх processing platform как отдельные job types и reuse'ить существующие contracts для upload, status, artifacts и source-of-truth capability matrix.",
+			"Office/PDF conversion теперь уже живёт как отдельный backend-first route поверх processing platform.",
+			"OFFICE_CONVERT reuse'ит existing upload/job/artifact contracts и document intelligence, а browser держит только orchestration, preview и retry/cancel UX без нового browser-heavy runtime.",
 			List.of("DOCX", "PDF", "Office"),
-			List.of("document-processing", "job-orchestration", "artifact-storage", "capabilities"),
-			List.of(ProcessingJobType.DOCUMENT_PREVIEW, ProcessingJobType.VIEWER_RESOLVE),
-			List.of("docx/pdf roundtrip", "xlsx/csv flows", "presentation export"),
-			"Office/PDF conversion foundation требует доступных DOCUMENT_PREVIEW и VIEWER_RESOLVE capabilities."
+			List.of("document-processing", "job-orchestration", "artifact-storage", "capabilities", "media-processing"),
+			List.of(ProcessingJobType.OFFICE_CONVERT, ProcessingJobType.DOCUMENT_PREVIEW),
+			List.of("docx/pdf roundtrip", "xlsx/csv/ods flows", "presentation export"),
+			"Office/PDF conversion foundation требует доступных OFFICE_CONVERT и DOCUMENT_PREVIEW capabilities."
 		)
 	);
 
@@ -299,7 +318,7 @@ public class CapabilityMatrixService {
 			spec.defaultQuality(),
 			available ? spec.statusLabel() : "Capability unavailable",
 			spec.notes(),
-			buildAccents(spec.accents(), spec.requiredJobTypes().isEmpty() ? "browser-native" : "server-assisted"),
+			buildAccents(spec.accents(), "server-assisted"),
 			available,
 			available ? null : spec.unavailableDetail(),
 			spec.requiredJobTypes()
@@ -314,18 +333,24 @@ public class CapabilityMatrixService {
 	) {
 		var source = sourceByExtension.get(spec.sourceExtension());
 		var target = targetByExtension.get(spec.targetExtension());
-		var requiredJobTypes = new ArrayList<ProcessingJobType>();
-		if (source != null) {
-			requiredJobTypes.addAll(source.requiredJobTypes());
-		}
-		if (target != null) {
-			for (ProcessingJobType requiredJobType : target.requiredJobTypes()) {
-				if (!requiredJobTypes.contains(requiredJobType)) {
-					requiredJobTypes.add(requiredJobType);
+		var requiredJobTypes = new ArrayList<>(spec.requiredJobTypes());
+		if (requiredJobTypes.isEmpty()) {
+			if (source != null) {
+				requiredJobTypes.addAll(source.requiredJobTypes());
+			}
+			if (target != null) {
+				for (ProcessingJobType requiredJobType : target.requiredJobTypes()) {
+					if (!requiredJobTypes.contains(requiredJobType)) {
+						requiredJobTypes.add(requiredJobType);
+					}
 				}
 			}
 		}
 		var available = allRequiredJobsAvailable(requiredJobTypes, availabilityByJobType);
+		var officeScenario = requiredJobTypes.contains(ProcessingJobType.OFFICE_CONVERT);
+		var detail = officeScenario
+			? "Сценарий идёт через backend OFFICE_CONVERT jobs: frontend держит progress/retry/cancel/reuse UX и получает preview/result artifacts."
+			: "Сценарий идёт через backend IMAGE_CONVERT jobs: frontend держит progress/retry/cancel/reuse UX и получает preview/result artifacts.";
 
 		return new CapabilityMatrixPayloads.ConverterScenarioCapability(
 			buildScenarioKey(spec.sourceExtension(), spec.targetExtension()),
@@ -335,7 +360,7 @@ public class CapabilityMatrixService {
 			spec.targetExtension(),
 			available ? ("server-assisted".equals(spec.executionMode()) ? "Server-assisted" : "Browser-native") : "Capability unavailable",
 			"server-assisted".equals(spec.executionMode())
-				? "Сценарий идёт через backend IMAGE_CONVERT jobs: frontend держит progress/retry/cancel/reuse UX и получает preview/result artifacts."
+				? detail
 				: "Сценарий закрывается локально через browser-native raster pipeline без backend round-trip.",
 			List.of(spec.sourceExtension().toUpperCase(), spec.targetExtension().toUpperCase()),
 			spec.executionMode(),
@@ -388,52 +413,76 @@ public class CapabilityMatrixService {
 
 	private static List<ConverterScenarioSpec> buildConverterScenarioSpecs() {
 		return List.of(
-			scenario("heic", "jpg", "HEIC decode -> JPG"),
-			scenario("heic", "avif", "HEIC -> AVIF"),
-			scenario("heic", "tiff", "HEIC -> TIFF"),
-			scenario("png", "jpg", "PNG -> JPG"),
-			scenario("png", "webp", "PNG -> WebP"),
-			scenario("png", "avif", "PNG -> AVIF"),
-			scenario("png", "svg", "PNG -> SVG trace"),
-			scenario("png", "ico", "PNG -> ICO"),
-			scenario("png", "tiff", "PNG -> TIFF"),
-			scenario("jpg", "png", "JPG -> PNG"),
-			scenario("jpg", "webp", "JPG -> WebP"),
-			scenario("jpg", "avif", "JPG -> AVIF"),
-			scenario("jpg", "tiff", "JPG -> TIFF"),
-			scenario("webp", "jpg", "WebP -> JPG"),
-			scenario("webp", "png", "WebP -> PNG"),
-			scenario("webp", "tiff", "WebP -> TIFF"),
-			scenario("bmp", "jpg", "BMP -> JPG"),
-			scenario("bmp", "png", "BMP -> PNG"),
-			scenario("bmp", "tiff", "BMP -> TIFF"),
-			scenario("psd", "jpg", "PSD -> JPG"),
-			scenario("psd", "png", "PSD -> PNG"),
-			scenario("psd", "webp", "PSD -> WebP"),
-			scenario("tiff", "jpg", "TIFF -> JPG"),
-			scenario("tiff", "pdf", "TIFF -> PDF", "document"),
-			scenario("tiff", "tiff", "TIFF -> TIFF refresh"),
-			scenario("raw", "jpg", "RAW -> JPG"),
-			scenario("raw", "pdf", "RAW -> PDF", "document"),
-			scenario("raw", "tiff", "RAW -> TIFF"),
-			scenario("jpg", "pdf", "JPG -> PDF", "document"),
-			scenario("png", "pdf", "PNG -> PDF", "document"),
-			scenario("webp", "pdf", "WebP -> PDF", "document"),
-			scenario("bmp", "pdf", "BMP -> PDF", "document"),
-			scenario("heic", "pdf", "HEIC -> PDF", "document"),
-			scenario("svg", "png", "SVG -> PNG"),
-			scenario("svg", "ico", "SVG -> ICO"),
-			scenario("svg", "tiff", "SVG -> TIFF"),
-			scenario("svg", "pdf", "SVG -> PDF", "document"),
-			scenario("ai", "png", "AI -> PNG"),
-			scenario("ai", "pdf", "AI -> PDF", "document"),
-			scenario("eps", "png", "EPS -> PNG"),
-			scenario("eps", "pdf", "EPS -> PDF", "document")
+			scenario("heic", "jpg", "HEIC decode -> JPG", "image", List.of(ProcessingJobType.IMAGE_CONVERT)),
+			scenario("heic", "avif", "HEIC -> AVIF", "image", List.of(ProcessingJobType.IMAGE_CONVERT)),
+			scenario("heic", "tiff", "HEIC -> TIFF", "image", List.of(ProcessingJobType.IMAGE_CONVERT)),
+			scenario("png", "jpg", "PNG -> JPG", "image", List.of(ProcessingJobType.IMAGE_CONVERT)),
+			scenario("png", "webp", "PNG -> WebP", "image", List.of(ProcessingJobType.IMAGE_CONVERT)),
+			scenario("png", "avif", "PNG -> AVIF", "image", List.of(ProcessingJobType.IMAGE_CONVERT)),
+			scenario("png", "svg", "PNG -> SVG trace", "image", List.of(ProcessingJobType.IMAGE_CONVERT)),
+			scenario("png", "ico", "PNG -> ICO", "image", List.of(ProcessingJobType.IMAGE_CONVERT)),
+			scenario("png", "tiff", "PNG -> TIFF", "image", List.of(ProcessingJobType.IMAGE_CONVERT)),
+			scenario("jpg", "png", "JPG -> PNG", "image", List.of(ProcessingJobType.IMAGE_CONVERT)),
+			scenario("jpg", "webp", "JPG -> WebP", "image", List.of(ProcessingJobType.IMAGE_CONVERT)),
+			scenario("jpg", "avif", "JPG -> AVIF", "image", List.of(ProcessingJobType.IMAGE_CONVERT)),
+			scenario("jpg", "tiff", "JPG -> TIFF", "image", List.of(ProcessingJobType.IMAGE_CONVERT)),
+			scenario("webp", "jpg", "WebP -> JPG", "image", List.of(ProcessingJobType.IMAGE_CONVERT)),
+			scenario("webp", "png", "WebP -> PNG", "image", List.of(ProcessingJobType.IMAGE_CONVERT)),
+			scenario("webp", "tiff", "WebP -> TIFF", "image", List.of(ProcessingJobType.IMAGE_CONVERT)),
+			scenario("bmp", "jpg", "BMP -> JPG", "image", List.of(ProcessingJobType.IMAGE_CONVERT)),
+			scenario("bmp", "png", "BMP -> PNG", "image", List.of(ProcessingJobType.IMAGE_CONVERT)),
+			scenario("bmp", "tiff", "BMP -> TIFF", "image", List.of(ProcessingJobType.IMAGE_CONVERT)),
+			scenario("psd", "jpg", "PSD -> JPG", "image", List.of(ProcessingJobType.IMAGE_CONVERT)),
+			scenario("psd", "png", "PSD -> PNG", "image", List.of(ProcessingJobType.IMAGE_CONVERT)),
+			scenario("psd", "webp", "PSD -> WebP", "image", List.of(ProcessingJobType.IMAGE_CONVERT)),
+			scenario("tiff", "jpg", "TIFF -> JPG", "image", List.of(ProcessingJobType.IMAGE_CONVERT)),
+			scenario("tiff", "pdf", "TIFF -> PDF", "document", List.of(ProcessingJobType.IMAGE_CONVERT)),
+			scenario("tiff", "tiff", "TIFF -> TIFF refresh", "image", List.of(ProcessingJobType.IMAGE_CONVERT)),
+			scenario("raw", "jpg", "RAW -> JPG", "image", List.of(ProcessingJobType.IMAGE_CONVERT)),
+			scenario("raw", "pdf", "RAW -> PDF", "document", List.of(ProcessingJobType.IMAGE_CONVERT)),
+			scenario("raw", "tiff", "RAW -> TIFF", "image", List.of(ProcessingJobType.IMAGE_CONVERT)),
+			scenario("jpg", "pdf", "JPG -> PDF", "document", List.of(ProcessingJobType.IMAGE_CONVERT)),
+			scenario("png", "pdf", "PNG -> PDF", "document", List.of(ProcessingJobType.IMAGE_CONVERT)),
+			scenario("webp", "pdf", "WebP -> PDF", "document", List.of(ProcessingJobType.IMAGE_CONVERT)),
+			scenario("bmp", "pdf", "BMP -> PDF", "document", List.of(ProcessingJobType.IMAGE_CONVERT)),
+			scenario("heic", "pdf", "HEIC -> PDF", "document", List.of(ProcessingJobType.IMAGE_CONVERT)),
+			scenario("svg", "png", "SVG -> PNG", "image", List.of(ProcessingJobType.IMAGE_CONVERT)),
+			scenario("svg", "ico", "SVG -> ICO", "image", List.of(ProcessingJobType.IMAGE_CONVERT)),
+			scenario("svg", "tiff", "SVG -> TIFF", "image", List.of(ProcessingJobType.IMAGE_CONVERT)),
+			scenario("svg", "pdf", "SVG -> PDF", "document", List.of(ProcessingJobType.IMAGE_CONVERT)),
+			scenario("ai", "png", "AI -> PNG", "image", List.of(ProcessingJobType.IMAGE_CONVERT)),
+			scenario("ai", "pdf", "AI -> PDF", "document", List.of(ProcessingJobType.IMAGE_CONVERT)),
+			scenario("eps", "png", "EPS -> PNG", "image", List.of(ProcessingJobType.IMAGE_CONVERT)),
+			scenario("eps", "pdf", "EPS -> PDF", "document", List.of(ProcessingJobType.IMAGE_CONVERT)),
+			scenario("doc", "docx", "DOC -> DOCX", "document", List.of(ProcessingJobType.OFFICE_CONVERT)),
+			scenario("docx", "pdf", "DOCX -> PDF", "document", List.of(ProcessingJobType.OFFICE_CONVERT)),
+			scenario("pdf", "docx", "PDF -> DOCX", "document", List.of(ProcessingJobType.OFFICE_CONVERT)),
+			scenario("docx", "txt", "DOCX -> TXT", "document", List.of(ProcessingJobType.OFFICE_CONVERT)),
+			scenario("docx", "html", "DOCX -> HTML", "document", List.of(ProcessingJobType.OFFICE_CONVERT)),
+			scenario("rtf", "docx", "RTF -> DOCX", "document", List.of(ProcessingJobType.OFFICE_CONVERT)),
+			scenario("docx", "rtf", "DOCX -> RTF", "document", List.of(ProcessingJobType.OFFICE_CONVERT)),
+			scenario("odt", "docx", "ODT -> DOCX", "document", List.of(ProcessingJobType.OFFICE_CONVERT)),
+			scenario("docx", "odt", "DOCX -> ODT", "document", List.of(ProcessingJobType.OFFICE_CONVERT)),
+			scenario("pdf", "jpg", "PDF -> JPG", "image", List.of(ProcessingJobType.OFFICE_CONVERT)),
+			scenario("pdf", "png", "PDF -> PNG", "image", List.of(ProcessingJobType.OFFICE_CONVERT)),
+			scenario("pdf", "txt", "PDF -> TXT", "document", List.of(ProcessingJobType.OFFICE_CONVERT)),
+			scenario("pdf", "xlsx", "PDF -> XLSX", "document", List.of(ProcessingJobType.OFFICE_CONVERT)),
+			scenario("pdf", "csv", "PDF -> CSV", "document", List.of(ProcessingJobType.OFFICE_CONVERT)),
+			scenario("pdf", "pptx", "PDF -> PPTX", "document", List.of(ProcessingJobType.OFFICE_CONVERT)),
+			scenario("xlsx", "csv", "XLSX -> CSV", "document", List.of(ProcessingJobType.OFFICE_CONVERT)),
+			scenario("csv", "xlsx", "CSV -> XLSX", "document", List.of(ProcessingJobType.OFFICE_CONVERT)),
+			scenario("xlsx", "pdf", "XLSX -> PDF", "document", List.of(ProcessingJobType.OFFICE_CONVERT)),
+			scenario("ods", "xlsx", "ODS -> XLSX", "document", List.of(ProcessingJobType.OFFICE_CONVERT)),
+			scenario("xlsx", "ods", "XLSX -> ODS", "document", List.of(ProcessingJobType.OFFICE_CONVERT)),
+			scenario("pptx", "pdf", "PPTX -> PDF", "document", List.of(ProcessingJobType.OFFICE_CONVERT)),
+			scenario("pptx", "jpg", "PPTX -> JPG", "image", List.of(ProcessingJobType.OFFICE_CONVERT)),
+			scenario("pptx", "png", "PPTX -> PNG", "image", List.of(ProcessingJobType.OFFICE_CONVERT)),
+			scenario("pptx", "mp4", "PPTX -> MP4 video", "media", List.of(ProcessingJobType.OFFICE_CONVERT, ProcessingJobType.MEDIA_PREVIEW))
 		);
 	}
 
 	private static ConverterScenarioSpec scenario(String sourceExtension, String targetExtension, String label) {
-		return scenario(sourceExtension, targetExtension, label, "image");
+		return scenario(sourceExtension, targetExtension, label, "image", List.of());
 	}
 
 	private static ConverterScenarioSpec scenario(
@@ -442,6 +491,16 @@ public class CapabilityMatrixService {
 		String label,
 		String family
 	) {
+		return scenario(sourceExtension, targetExtension, label, family, List.of());
+	}
+
+	private static ConverterScenarioSpec scenario(
+		String sourceExtension,
+		String targetExtension,
+		String label,
+		String family,
+		List<ProcessingJobType> requiredJobTypes
+	) {
 		var executionMode = isServerScenario(sourceExtension, targetExtension) ? "server-assisted" : "browser-native";
 		return new ConverterScenarioSpec(
 			sourceExtension,
@@ -449,9 +508,22 @@ public class CapabilityMatrixService {
 			label,
 			family,
 			executionMode,
-			"%s -> %s требует доступного backend IMAGE_CONVERT capability."
-				.formatted(sourceExtension.toUpperCase(), targetExtension.toUpperCase())
+			unavailableDetail(sourceExtension, targetExtension, requiredJobTypes),
+			requiredJobTypes
 		);
+	}
+
+	private static String unavailableDetail(
+		String sourceExtension,
+		String targetExtension,
+		List<ProcessingJobType> requiredJobTypes
+	) {
+		if (requiredJobTypes.contains(ProcessingJobType.OFFICE_CONVERT)) {
+			return "%s -> %s требует доступного backend OFFICE_CONVERT capability."
+				.formatted(sourceExtension.toUpperCase(), targetExtension.toUpperCase());
+		}
+		return "%s -> %s требует доступного backend IMAGE_CONVERT capability."
+			.formatted(sourceExtension.toUpperCase(), targetExtension.toUpperCase());
 	}
 
 	private static boolean isServerScenario(String sourceExtension, String targetExtension) {
@@ -693,7 +765,8 @@ public class CapabilityMatrixService {
 		String label,
 		String family,
 		String executionMode,
-		String unavailableDetail
+		String unavailableDetail,
+		List<ProcessingJobType> requiredJobTypes
 	) {
 	}
 

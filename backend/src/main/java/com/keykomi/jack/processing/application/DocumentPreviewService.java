@@ -93,7 +93,7 @@ public class DocumentPreviewService {
 			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "DOCUMENT_PREVIEW job принимает только document uploads.");
 		}
 
-		var payload = buildPayload(upload);
+		var payload = analyze(upload);
 		var artifacts = new ArrayList<StoredArtifact>();
 		artifacts.add(
 			this.artifactStorageService.storeJsonArtifact(
@@ -119,7 +119,7 @@ public class DocumentPreviewService {
 		return new DocumentPreviewResult(artifacts, "Document intelligence service");
 	}
 
-	private DocumentPreviewPayload buildPayload(StoredUpload upload) {
+	public DocumentPreviewPayload analyze(StoredUpload upload) {
 		var extension = normalizeExtension(upload.extension());
 
 		return switch (extension) {

@@ -10,6 +10,10 @@ export type ConverterSourceStrategyId =
   | 'raw-raster'
   | 'psd-raster'
   | 'illustration-raster'
+  | 'pdf-document'
+  | 'office-document'
+  | 'spreadsheet-document'
+  | 'presentation-document'
 
 export type ConverterTargetStrategyId =
   | 'jpeg-encoder'
@@ -20,6 +24,16 @@ export type ConverterTargetStrategyId =
   | 'avif-encoder'
   | 'svg-vectorizer'
   | 'ico-image'
+  | 'docx-document'
+  | 'txt-document'
+  | 'html-document'
+  | 'rtf-document'
+  | 'odt-document'
+  | 'xlsx-document'
+  | 'csv-document'
+  | 'ods-document'
+  | 'pptx-document'
+  | 'mp4-video'
 
 export interface ConverterSourceFormatDefinition {
   extension: string

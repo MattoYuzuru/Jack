@@ -53,6 +53,7 @@ export function useConverterWorkspace() {
   const availablePresets = ref<ConverterPresetDefinition[]>([])
   const imageScenarios = ref<ConverterScenarioDefinition[]>([])
   const documentScenarios = ref<ConverterScenarioDefinition[]>([])
+  const mediaScenarios = ref<ConverterScenarioDefinition[]>([])
   const selectedTargetExtension = ref('')
   const selectedPresetId = ref<ConverterPresetDefinition['id']>('original')
   const quality = ref(0.9)
@@ -107,6 +108,9 @@ export function useConverterWorkspace() {
     )
     documentScenarios.value = matrix.scenarios.filter(
       (scenario) => scenario.family === 'document' && scenario.available,
+    )
+    mediaScenarios.value = matrix.scenarios.filter(
+      (scenario) => scenario.family === 'media' && scenario.available,
     )
   }
 
@@ -481,6 +485,7 @@ export function useConverterWorkspace() {
     converterAcceptAttribute,
     imageScenarios,
     documentScenarios,
+    mediaScenarios,
     activeJobId,
     activeJobStatus,
     activeJobProgressPercent,

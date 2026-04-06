@@ -12,6 +12,7 @@ public class CapabilityCatalogService {
 
 	private final MediaPreviewService mediaPreviewService;
 	private final ImageProcessingService imageProcessingService;
+	private final OfficeConversionService officeConversionService;
 	private final DocumentPreviewService documentPreviewService;
 	private final MetadataProcessingService metadataProcessingService;
 	private final ViewerResolveService viewerResolveService;
@@ -20,6 +21,7 @@ public class CapabilityCatalogService {
 	public CapabilityCatalogService(
 		MediaPreviewService mediaPreviewService,
 		ImageProcessingService imageProcessingService,
+		OfficeConversionService officeConversionService,
 		DocumentPreviewService documentPreviewService,
 		MetadataProcessingService metadataProcessingService,
 		ViewerResolveService viewerResolveService,
@@ -27,6 +29,7 @@ public class CapabilityCatalogService {
 	) {
 		this.mediaPreviewService = mediaPreviewService;
 		this.imageProcessingService = imageProcessingService;
+		this.officeConversionService = officeConversionService;
 		this.documentPreviewService = documentPreviewService;
 		this.metadataProcessingService = metadataProcessingService;
 		this.viewerResolveService = viewerResolveService;
@@ -37,6 +40,7 @@ public class CapabilityCatalogService {
 		var availabilityByJobType = availabilityByJobType();
 		var mediaPreviewAvailable = availabilityByJobType.getOrDefault(ProcessingJobType.MEDIA_PREVIEW, false);
 		var imageProcessingAvailable = availabilityByJobType.getOrDefault(ProcessingJobType.IMAGE_CONVERT, false);
+		var officeConversionAvailable = availabilityByJobType.getOrDefault(ProcessingJobType.OFFICE_CONVERT, false);
 		var documentPreviewAvailable = availabilityByJobType.getOrDefault(ProcessingJobType.DOCUMENT_PREVIEW, false);
 		var metadataProcessingAvailable = availabilityByJobType.getOrDefault(ProcessingJobType.METADATA_EXPORT, false);
 		var viewerResolveAvailable = availabilityByJobType.getOrDefault(ProcessingJobType.VIEWER_RESOLVE, false);
@@ -59,6 +63,13 @@ public class CapabilityCatalogService {
 					imageProcessingAvailable
 						? "Backend уже умеет собирать HEIC/TIFF/RAW preview и heavy image conversion через convert/ffmpeg/potrace/libraw."
 						: "Image processing service требует доступных convert/ffmpeg/potrace/raw-preview binaries в backend окружении."
+				),
+				new JobTypeCapability(
+					ProcessingJobType.OFFICE_CONVERT,
+					officeConversionAvailable,
+					officeConversionAvailable
+						? "Backend уже умеет собирать office/pdf conversion artifacts для DOC/DOCX/RTF/ODT/XLSX/ODS/PDF/PPTX сценариев."
+						: "Office conversion service пока недоступна в текущем backend окружении."
 				),
 				new JobTypeCapability(
 					ProcessingJobType.DOCUMENT_PREVIEW,
@@ -96,6 +107,7 @@ public class CapabilityCatalogService {
 		var availabilityByJobType = availabilityByJobType();
 		var mediaPreviewAvailable = availabilityByJobType.getOrDefault(ProcessingJobType.MEDIA_PREVIEW, false);
 		var imageProcessingAvailable = availabilityByJobType.getOrDefault(ProcessingJobType.IMAGE_CONVERT, false);
+		var officeConversionAvailable = availabilityByJobType.getOrDefault(ProcessingJobType.OFFICE_CONVERT, false);
 		var documentPreviewAvailable = availabilityByJobType.getOrDefault(ProcessingJobType.DOCUMENT_PREVIEW, false);
 		var metadataProcessingAvailable = availabilityByJobType.getOrDefault(ProcessingJobType.METADATA_EXPORT, false);
 
@@ -110,6 +122,13 @@ public class CapabilityCatalogService {
 					imageProcessingAvailable
 						? "Converter backend-first route уже гонит supported scenarios через IMAGE_CONVERT jobs с preview/result artifacts."
 						: "Image processing service требует доступных convert/ffmpeg/potrace/raw-preview binaries и пока не активна в текущем окружении."
+				),
+				new JobTypeCapability(
+					ProcessingJobType.OFFICE_CONVERT,
+					officeConversionAvailable,
+					officeConversionAvailable
+						? "Converter route теперь может гнать office/pdf scenarios через OFFICE_CONVERT jobs с preview/result artifacts."
+						: "Office conversion service пока недоступна и office/pdf scenarios не могут быть включены в converter matrix."
 				),
 				new JobTypeCapability(
 					ProcessingJobType.MEDIA_PREVIEW,
@@ -134,7 +153,7 @@ public class CapabilityCatalogService {
 				)
 			),
 			List.of(
-				"Converter route теперь backend-first: любой supported сценарий идёт через backend job/artifact contract, а browser остаётся orchestration/preview слоем.",
+				"Converter route теперь backend-first: image scenarios идут через IMAGE_CONVERT, а office/pdf scenarios через OFFICE_CONVERT; browser остаётся orchestration/preview слоем.",
 				"Workspace может строить progress, retry, cancel и artifact reuse поверх единых job status и capability rules от backend."
 			),
 			null,
@@ -163,6 +182,13 @@ public class CapabilityCatalogService {
 					availabilityByJobType.getOrDefault(ProcessingJobType.IMAGE_CONVERT, false)
 						? "Image processing foundation уже готова к reuse в compression, OCR, PDF toolkit и batch conversion."
 						: "Для reuse imaging foundation нужны доступные convert/ffmpeg/potrace/raw-preview binaries."
+				),
+				new JobTypeCapability(
+					ProcessingJobType.OFFICE_CONVERT,
+					availabilityByJobType.getOrDefault(ProcessingJobType.OFFICE_CONVERT, false),
+					availabilityByJobType.getOrDefault(ProcessingJobType.OFFICE_CONVERT, false)
+						? "Office conversion foundation уже готова к reuse в converter, PDF toolkit и future delivery/export flows."
+						: "Office conversion foundation сейчас недоступна и блокирует document-roundtrip reuse."
 				),
 				new JobTypeCapability(
 					ProcessingJobType.DOCUMENT_PREVIEW,
@@ -203,6 +229,7 @@ public class CapabilityCatalogService {
 		availabilityByJobType.put(ProcessingJobType.UPLOAD_INTAKE_ANALYSIS, true);
 		availabilityByJobType.put(ProcessingJobType.MEDIA_PREVIEW, this.mediaPreviewService.isAvailable());
 		availabilityByJobType.put(ProcessingJobType.IMAGE_CONVERT, this.imageProcessingService.isAvailable());
+		availabilityByJobType.put(ProcessingJobType.OFFICE_CONVERT, this.officeConversionService.isAvailable());
 		availabilityByJobType.put(ProcessingJobType.DOCUMENT_PREVIEW, this.documentPreviewService.isAvailable());
 		availabilityByJobType.put(ProcessingJobType.METADATA_EXPORT, this.metadataProcessingService.isAvailable());
 		availabilityByJobType.put(ProcessingJobType.VIEWER_RESOLVE, this.viewerResolveService.isAvailable());
