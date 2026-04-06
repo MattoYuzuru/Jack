@@ -35,6 +35,11 @@ public class CapabilityController {
 		return this.capabilityCatalogService.pdfToolkitCapabilities();
 	}
 
+	@GetMapping("/editor")
+	public CapabilityCatalogService.CapabilityScope editorCapabilities() {
+		return this.capabilityCatalogService.editorCapabilities();
+	}
+
 	@GetMapping("/platform")
 	public CapabilityCatalogService.CapabilityScope platformCapabilities() {
 		return this.capabilityCatalogService.platformCapabilities();

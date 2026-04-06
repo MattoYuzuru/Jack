@@ -28,6 +28,11 @@ const router = createRouter({
       name: 'pdf-toolkit',
       component: () => import('../views/PdfToolkitWorkspaceView.vue'),
     },
+    {
+      path: '/editor',
+      name: 'editor',
+      component: () => import('../views/EditorWorkspaceView.vue'),
+    },
   ],
 })
 

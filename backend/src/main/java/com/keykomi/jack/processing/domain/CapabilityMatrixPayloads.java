@@ -199,6 +199,30 @@ public final class CapabilityMatrixPayloads {
 	) {
 	}
 
+	public record EditorCapabilityMatrix(
+		String acceptAttribute,
+		List<EditorFormatCapability> formats
+	) {
+	}
+
+	public record EditorFormatCapability(
+		String id,
+		String label,
+		List<String> extensions,
+		List<String> mimeTypes,
+		String syntaxMode,
+		String previewMode,
+		boolean supportsFormatting,
+		boolean supportsPlainTextExport,
+		String statusLabel,
+		String notes,
+		List<String> accents,
+		boolean available,
+		String availabilityDetail,
+		List<ProcessingJobType> requiredJobTypes
+	) {
+	}
+
 	public record PlatformCapabilityMatrix(
 		List<PlatformModuleCapability> modules
 	) {

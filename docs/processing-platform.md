@@ -28,6 +28,7 @@ Backend теперь является processing-platform, которая:
 - `GET /api/capabilities/converter`
 - `GET /api/capabilities/compression`
 - `GET /api/capabilities/pdf-toolkit`
+- `GET /api/capabilities/editor`
 - `GET /api/capabilities/platform`
 
 ### Активные Job Type
@@ -42,6 +43,7 @@ Backend теперь является processing-platform, которая:
 - `DOCUMENT_PREVIEW`
 - `METADATA_EXPORT`
 - `VIEWER_RESOLVE`
+- `EDITOR_PROCESS`
 
 ### Processing Domains
 
@@ -49,11 +51,12 @@ Backend теперь является processing-platform, которая:
 - heavy imaging через `ImageMagick`, `Ghostscript`, `potrace`, `libraw`
 - dedicated compression orchestration для image/video/audio size-first flows
 - dedicated PDF toolkit orchestration для merge/split/rotate/reorder, OCR, redaction и protection flows
+- dedicated editor diagnostics/export orchestration для markdown/html/css/javascript/json/yaml/txt drafts
 - document intelligence для PDF / office / archive / SQLite preview
 - office/pdf conversion для narrative docs, spreadsheet exports, slide decks и slideshow media outputs
 - metadata inspect/export для image/audio flows
 - unified viewer resolve route
-- server-owned capability matrix для viewer, converter, compression, pdf-toolkit и future modules
+- server-owned capability matrix для viewer, converter, compression, pdf-toolkit, editor и future modules
 
 ## Разделение Ответственности
 
@@ -122,13 +125,20 @@ PDF toolkit теперь тоже работает как отдельный bac
 - frontend держит только workspace state, page/range forms, result history и download/load-as-current UX
 - backend возвращает единый PDF toolkit manifest, preview artifact, result artifact и при необходимости OCR text export
 
+### Editor
+
+Editor теперь тоже работает как отдельный backend-first route:
+
+- frontend держит split-view, templates, snippets, formatting, local draft persistence и live preview
+- backend `EDITOR_PROCESS` собирает diagnostics, outline и ready/plain-text export artifacts
+- `DOCUMENT_PREVIEW` reuse'ится для html/plain-text outline и text contract там, где это уже готово
+- validate/export больше не живут как ad-hoc local blob flow: они идут через тот же upload/job/artifact lifecycle
+
 ## Platform Reuse Для Следующих Модулей
 
 `GET /api/capabilities/platform` описывает, как следующие roadmap-модули должны стартовать
 не с нуля, а поверх уже существующей processing-platform:
 
-- `Multi-Format Editor`
-  - reuse: `DOCUMENT_PREVIEW`, `METADATA_EXPORT`, safe export contracts
 - `Batch Conversion`
   - reuse: upload/job/artifact foundation и `IMAGE_CONVERT`
 - `OCR`

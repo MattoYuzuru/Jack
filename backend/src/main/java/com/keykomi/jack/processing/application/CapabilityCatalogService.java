@@ -19,9 +19,11 @@ public class CapabilityCatalogService {
 	private final DocumentPreviewService documentPreviewService;
 	private final MetadataProcessingService metadataProcessingService;
 	private final ViewerResolveService viewerResolveService;
+	private final EditorProcessingService editorProcessingService;
 	private final CapabilityMatrixService capabilityMatrixService;
 	private final CompressionCapabilityMatrixService compressionCapabilityMatrixService;
 	private final PdfToolkitCapabilityMatrixService pdfToolkitCapabilityMatrixService;
+	private final EditorCapabilityMatrixService editorCapabilityMatrixService;
 
 	public CapabilityCatalogService(
 		MediaPreviewService mediaPreviewService,
@@ -33,9 +35,11 @@ public class CapabilityCatalogService {
 		DocumentPreviewService documentPreviewService,
 		MetadataProcessingService metadataProcessingService,
 		ViewerResolveService viewerResolveService,
+		EditorProcessingService editorProcessingService,
 		CapabilityMatrixService capabilityMatrixService,
 		CompressionCapabilityMatrixService compressionCapabilityMatrixService,
-		PdfToolkitCapabilityMatrixService pdfToolkitCapabilityMatrixService
+		PdfToolkitCapabilityMatrixService pdfToolkitCapabilityMatrixService,
+		EditorCapabilityMatrixService editorCapabilityMatrixService
 	) {
 		this.mediaPreviewService = mediaPreviewService;
 		this.mediaConversionService = mediaConversionService;
@@ -46,9 +50,11 @@ public class CapabilityCatalogService {
 		this.documentPreviewService = documentPreviewService;
 		this.metadataProcessingService = metadataProcessingService;
 		this.viewerResolveService = viewerResolveService;
+		this.editorProcessingService = editorProcessingService;
 		this.capabilityMatrixService = capabilityMatrixService;
 		this.compressionCapabilityMatrixService = compressionCapabilityMatrixService;
 		this.pdfToolkitCapabilityMatrixService = pdfToolkitCapabilityMatrixService;
+		this.editorCapabilityMatrixService = editorCapabilityMatrixService;
 	}
 
 	public CapabilityScope viewerCapabilities() {
@@ -113,6 +119,7 @@ public class CapabilityCatalogService {
 				"Backend отдаёт format matrix как источник правды, а browser оставляет у себя только native rendering, state и interaction tooling."
 			),
 			this.capabilityMatrixService.viewerMatrix(availabilityByJobType),
+			null,
 			null,
 			null,
 			null,
@@ -185,6 +192,7 @@ public class CapabilityCatalogService {
 			null,
 			this.capabilityMatrixService.converterMatrix(availabilityByJobType),
 			null,
+			null,
 			null
 		);
 	}
@@ -236,6 +244,7 @@ public class CapabilityCatalogService {
 			),
 			null,
 			this.compressionCapabilityMatrixService.compressionMatrix(availabilityByJobType),
+			null,
 			null,
 			null,
 			null
@@ -299,7 +308,50 @@ public class CapabilityCatalogService {
 			null,
 			null,
 			this.pdfToolkitCapabilityMatrixService.pdfToolkitMatrix(availabilityByJobType, this.pdfToolkitService.isOcrAvailable()),
+			null,
 			null
+		);
+	}
+
+	public CapabilityScope editorCapabilities() {
+		var availabilityByJobType = availabilityByJobType();
+		var editorProcessingAvailable = availabilityByJobType.getOrDefault(ProcessingJobType.EDITOR_PROCESS, false);
+		var documentPreviewAvailable = availabilityByJobType.getOrDefault(ProcessingJobType.DOCUMENT_PREVIEW, false);
+
+		return new CapabilityScope(
+			"editor",
+			"editor-backend-first",
+			List.of(
+				new JobTypeCapability(
+					ProcessingJobType.UPLOAD_INTAKE_ANALYSIS,
+					true,
+					"Upload intake остаётся базовым foundation для editor export/diff/diagnostics jobs."
+				),
+				new JobTypeCapability(
+					ProcessingJobType.DOCUMENT_PREVIEW,
+					documentPreviewAvailable,
+					documentPreviewAvailable
+						? "Editor reuse'ит DOCUMENT_PREVIEW там, где уже готов structured text/html contract и outline extraction."
+						: "DOCUMENT_PREVIEW сейчас недоступен и часть html/plain-text editor hints будет ограничена."
+				),
+				new JobTypeCapability(
+					ProcessingJobType.EDITOR_PROCESS,
+					editorProcessingAvailable,
+					editorProcessingAvailable
+						? "Backend editor route уже умеет собирать diagnostics, safe export artifacts и format-aware outline для text-centric formats."
+						: "EDITOR_PROCESS сейчас недоступен в текущем backend окружении."
+				)
+			),
+			List.of(
+				"Editor route держит interaction, formatting и shortcut flow на frontend, а backend владеет diagnostics, sanitization-aware checks и export artifact contract.",
+				"Markdown/HTML/CSS preview остаются мгновенными в браузере, но validate/export шаг уходит в EDITOR_PROCESS job вместо ad-hoc local blobs."
+			),
+			null,
+			null,
+			null,
+			null,
+			null,
+			this.editorCapabilityMatrixService.editorMatrix(availabilityByJobType)
 		);
 	}
 
@@ -372,6 +424,13 @@ public class CapabilityCatalogService {
 					availabilityByJobType.getOrDefault(ProcessingJobType.VIEWER_RESOLVE, false)
 						? "Unified viewer route уже даёт reusable file-resolve contract для новых product modules."
 						: "VIEWER_RESOLVE сейчас недоступен и часть future module entry points останется fragmented."
+				),
+				new JobTypeCapability(
+					ProcessingJobType.EDITOR_PROCESS,
+					availabilityByJobType.getOrDefault(ProcessingJobType.EDITOR_PROCESS, false),
+					availabilityByJobType.getOrDefault(ProcessingJobType.EDITOR_PROCESS, false)
+						? "Editor diagnostics/export route уже поднят и закрывает text-centric validate/export reuse поверх processing platform."
+						: "EDITOR_PROCESS сейчас недоступен и editor module не сможет работать как backend-first route."
 				)
 			),
 			List.of(
@@ -382,7 +441,8 @@ public class CapabilityCatalogService {
 			null,
 			null,
 			null,
-			this.capabilityMatrixService.platformMatrix(availabilityByJobType)
+			this.capabilityMatrixService.platformMatrix(availabilityByJobType),
+			null
 		);
 	}
 
@@ -400,6 +460,7 @@ public class CapabilityCatalogService {
 		availabilityByJobType.put(ProcessingJobType.DOCUMENT_PREVIEW, this.documentPreviewService.isAvailable());
 		availabilityByJobType.put(ProcessingJobType.METADATA_EXPORT, this.metadataProcessingService.isAvailable());
 		availabilityByJobType.put(ProcessingJobType.VIEWER_RESOLVE, this.viewerResolveService.isAvailable());
+		availabilityByJobType.put(ProcessingJobType.EDITOR_PROCESS, this.editorProcessingService.isAvailable());
 		return availabilityByJobType;
 	}
 
@@ -412,7 +473,8 @@ public class CapabilityCatalogService {
 		CapabilityMatrixPayloads.CompressionCapabilityMatrix compressionMatrix,
 		CapabilityMatrixPayloads.ConverterCapabilityMatrix converterMatrix,
 		CapabilityMatrixPayloads.PdfToolkitCapabilityMatrix pdfToolkitMatrix,
-		CapabilityMatrixPayloads.PlatformCapabilityMatrix platformMatrix
+		CapabilityMatrixPayloads.PlatformCapabilityMatrix platformMatrix,
+		CapabilityMatrixPayloads.EditorCapabilityMatrix editorMatrix
 	) {
 	}
 

@@ -32,6 +32,7 @@ dependencies {
 	implementation("com.drewnoakes:metadata-extractor:2.19.0")
 	implementation("org.apache.commons:commons-imaging:1.0.0-alpha6")
 	implementation("org.jaudiotagger:jaudiotagger:2.0.1")
+	implementation("org.yaml:snakeyaml:2.4")
 	implementation("org.xerial:sqlite-jdbc:3.50.3.0")
 	compileOnly("org.projectlombok:lombok")
 	runtimeOnly("org.postgresql:postgresql")

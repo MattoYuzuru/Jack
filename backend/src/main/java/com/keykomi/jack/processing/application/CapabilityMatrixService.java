@@ -149,13 +149,13 @@ public class CapabilityMatrixService {
 		platformModule(
 			"multi-format-editor",
 			"Multi-Format Editor",
-			"Editor может использовать backend document contracts как safe inspect/validate/export base, а frontend оставить за interaction и live preview.",
-			"Structured document payload, HTML sanitization и file artifact lifecycle уже готовы. Новый editor должен держать editing UX на фронте, а validation, conversion и risky file mutation выносить в processing platform.",
+			"Editor уже поднят как отдельный backend-first route для text-centric diagnostics и export flows поверх processing platform.",
+			"Workspace держит split-view, formatting и shortcuts на клиенте, а backend EDITOR_PROCESS собирает diagnostics, outline и safe export artifacts с reuse DOCUMENT_PREVIEW там, где уже готов structured HTML/text contract.",
 			List.of("Preview", "Validate", "Export"),
-			List.of("document-processing", "metadata-processing", "artifact-storage"),
-			List.of(ProcessingJobType.DOCUMENT_PREVIEW, ProcessingJobType.METADATA_EXPORT),
-			List.of("markdown/html preview", "safe export", "format-specific validation"),
-			"Editor module требует доступных DOCUMENT_PREVIEW и METADATA_EXPORT capabilities."
+			List.of("document-processing", "editor-processing", "artifact-storage"),
+			List.of(ProcessingJobType.EDITOR_PROCESS, ProcessingJobType.DOCUMENT_PREVIEW),
+			List.of("markdown/html preview", "format-aware diagnostics", "safe export"),
+			"Editor module требует доступных EDITOR_PROCESS и DOCUMENT_PREVIEW capabilities."
 		),
 		platformModule(
 			"batch-conversion",

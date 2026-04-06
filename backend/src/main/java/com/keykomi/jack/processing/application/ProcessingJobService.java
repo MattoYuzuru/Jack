@@ -4,6 +4,7 @@ import com.keykomi.jack.processing.domain.ProcessingJobStatus;
 import com.keykomi.jack.processing.domain.ProcessingJobType;
 import com.keykomi.jack.processing.domain.StoredArtifact;
 import com.keykomi.jack.processing.domain.CompressionRequest;
+import com.keykomi.jack.processing.domain.EditorRequest;
 import com.keykomi.jack.processing.domain.ImageProcessingRequest;
 import com.keykomi.jack.processing.domain.MediaConversionRequest;
 import com.keykomi.jack.processing.domain.MetadataPayloads;
@@ -41,6 +42,7 @@ public class ProcessingJobService {
 	private final DocumentPreviewService documentPreviewService;
 	private final MetadataProcessingService metadataProcessingService;
 	private final ViewerResolveService viewerResolveService;
+	private final EditorProcessingService editorProcessingService;
 	private final ExecutorService processingExecutor;
 	private final Map<UUID, StoredProcessingJob> jobs = new ConcurrentHashMap<>();
 	private final Map<UUID, Future<?>> submittedJobs = new ConcurrentHashMap<>();
@@ -57,6 +59,7 @@ public class ProcessingJobService {
 		DocumentPreviewService documentPreviewService,
 		MetadataProcessingService metadataProcessingService,
 		ViewerResolveService viewerResolveService,
+		EditorProcessingService editorProcessingService,
 		ExecutorService processingExecutor
 	) {
 		this.uploadStorageService = uploadStorageService;
@@ -70,6 +73,7 @@ public class ProcessingJobService {
 		this.documentPreviewService = documentPreviewService;
 		this.metadataProcessingService = metadataProcessingService;
 		this.viewerResolveService = viewerResolveService;
+		this.editorProcessingService = editorProcessingService;
 		this.processingExecutor = processingExecutor;
 	}
 
@@ -139,6 +143,7 @@ public class ProcessingJobService {
 				case DOCUMENT_PREVIEW -> processDocumentPreview(job.id(), upload);
 				case METADATA_EXPORT -> processMetadataExport(job.id(), upload, parseMetadataJobRequest(job.parameters()));
 				case VIEWER_RESOLVE -> processViewerResolve(job.id(), upload);
+				case EDITOR_PROCESS -> processEditor(job.id(), upload, parseEditorJobRequest(job.parameters()));
 				default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Для этого job type backend processor ещё не реализован.");
 			};
 			throwIfCancellationRequested(jobId);
@@ -318,6 +323,19 @@ public class ProcessingJobService {
 		);
 	}
 
+	private JobProcessingResult processEditor(UUID jobId, StoredUpload upload, EditorRequest request) {
+		updateJob(jobId, currentJob -> currentJob.updateProgress(22, "Подготавливаю backend editor diagnostics и export pipeline."));
+		var result = this.editorProcessingService.process(jobId, upload, request);
+		updateJob(
+			jobId,
+			currentJob -> currentJob.updateProgress(88, "Editor manifest и export artifacts собраны, сохраняю результат.")
+		);
+		return new JobProcessingResult(
+			"Editor processing готов через backend %s.".formatted(result.runtimeLabel()),
+			result.artifacts()
+		);
+	}
+
 	private StoredArtifact buildUploadIntakeArtifact(UUID jobId, StoredUpload upload) {
 		try {
 			// Первый artifact здесь намеренно простой: он доказывает, что upload уже
@@ -355,7 +373,8 @@ public class ProcessingJobService {
 			jobType != ProcessingJobType.OFFICE_CONVERT &&
 			jobType != ProcessingJobType.DOCUMENT_PREVIEW &&
 			jobType != ProcessingJobType.METADATA_EXPORT &&
-			jobType != ProcessingJobType.VIEWER_RESOLVE
+			jobType != ProcessingJobType.VIEWER_RESOLVE &&
+			jobType != ProcessingJobType.EDITOR_PROCESS
 		) {
 			throw new ResponseStatusException(
 				HttpStatus.BAD_REQUEST,
@@ -443,6 +462,17 @@ public class ProcessingJobService {
 				"VIEWER_RESOLVE job недоступен для этого upload в текущем backend окружении."
 			);
 		}
+
+		if (jobType == ProcessingJobType.EDITOR_PROCESS) {
+			var request = parseEditorJobRequest(parameters);
+			this.editorProcessingService.ensureSupported(upload, request);
+			if (!this.editorProcessingService.isAvailable()) {
+				throw new ResponseStatusException(
+					HttpStatus.SERVICE_UNAVAILABLE,
+					"EDITOR_PROCESS job требует доступного backend editor processing service."
+				);
+			}
+		}
 	}
 
 	private void updateJob(UUID jobId, UnaryOperator<StoredProcessingJob> mutation) {
@@ -505,6 +535,7 @@ public class ProcessingJobService {
 			case DOCUMENT_PREVIEW -> "Запускаю backend document intelligence pipeline.";
 			case METADATA_EXPORT -> "Запускаю backend metadata inspect/export pipeline.";
 			case VIEWER_RESOLVE -> "Запускаю backend viewer resolve pipeline поверх processing services.";
+			case EDITOR_PROCESS -> "Запускаю backend editor diagnostics/export pipeline.";
 			default -> "Запускаю backend processing job.";
 		};
 	}
@@ -681,6 +712,10 @@ public class ProcessingJobService {
 				"METADATA_EXPORT принимает operation только inspect-image, inspect-audio или export-image."
 			);
 		};
+	}
+
+	private EditorRequest parseEditorJobRequest(Map<String, Object> parameters) {
+		return new EditorRequest(readOptionalString(parameters, "formatId"));
 	}
 
 	private MetadataPayloads.EditableMetadata parseEditableMetadata(Object rawMetadata) {
