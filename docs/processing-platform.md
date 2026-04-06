@@ -32,6 +32,7 @@ Backend теперь является processing-platform, которая:
 
 - `UPLOAD_INTAKE_ANALYSIS`
 - `MEDIA_PREVIEW`
+- `MEDIA_CONVERT`
 - `IMAGE_CONVERT`
 - `OFFICE_CONVERT`
 - `DOCUMENT_PREVIEW`
@@ -90,8 +91,10 @@ Converter работает как backend-first route:
 
 - supported image сценарии уходят в `IMAGE_CONVERT`
 - supported office/pdf сценарии уходят в `OFFICE_CONVERT`
+- supported video/audio delivery и transcode сценарии уходят в `MEDIA_CONVERT`
 - frontend держит progress, retry, cancel и artifact reuse
 - capability/source-target/preset matrix приходит с backend
+- media controls на фронте теперь только задают container target, codec, bitrate, resolution и FPS, а итоговый artifact и warnings собираются server-side
 
 ## Platform Reuse Для Следующих Модулей
 
@@ -99,7 +102,7 @@ Converter работает как backend-first route:
 не с нуля, а поверх уже существующей processing-platform:
 
 - `Compression`
-  - reuse: `IMAGE_CONVERT`, `MEDIA_PREVIEW`, capability matrix, artifact lifecycle
+  - reuse: `IMAGE_CONVERT`, `MEDIA_CONVERT`, `MEDIA_PREVIEW`, capability matrix, artifact lifecycle
 - `PDF Toolkit`
   - reuse: `DOCUMENT_PREVIEW`, `IMAGE_CONVERT`, `VIEWER_RESOLVE`
 - `Multi-Format Editor`
@@ -110,6 +113,13 @@ Converter работает как backend-first route:
   - reuse: `DOCUMENT_PREVIEW`, `IMAGE_CONVERT`, общий job/artifact flow
 - `Office/PDF Conversion`
   - reuse: `OFFICE_CONVERT`, `DOCUMENT_PREVIEW`, `VIEWER_RESOLVE`, capability-driven routing
+
+## Осознанные Ограничения Текущего Среза
+
+- `PDF -> DOCX` остаётся text-flow export и может терять сложную вёрстку, positioned blocks и колонки
+- scanned `PDF -> DOCX/TXT/XLSX/CSV/PPTX` пока не делает OCR автоматически и должен явно вести в OCR-слой следующей итерации
+- `CSV` остаётся flattened single-sheet export без formulas, styles и comments
+- media conversion теперь явно разделяет контейнер, codec, bitrate, resolution и FPS, чтобы delivery-ограничения не маскировались одним target-форматом
 
 Это значит, что новые модули должны добавлять свою product-specific orchestration,
 а не заново собирать browser-heavy runtime.

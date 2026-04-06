@@ -32,6 +32,7 @@ const signalPills = [
   'Platform reuse matrix',
   'Backend document intelligence',
   'Office/PDF conversion',
+  'Media conversion',
   'Backend metadata service',
   'Video tooling',
   'Audio workbench',
@@ -79,10 +80,10 @@ const toolCardBlueprints: ToolCard[] = [
     description:
       'Backend-first converter отправляет любой поддержанный сценарий в processing pipeline, а браузер держит orchestration, progress UX и preview готового результата.',
     detail:
-      'HEIC, TIFF, RAW, PSD, AI/EPS intake и привычные JPG/PNG/WebP сценарии идут через IMAGE_CONVERT, а DOC/DOCX/RTF/ODT, CSV/XLSX/ODS, PDF и PPTX office-потоки закрываются через OFFICE_CONVERT с тем же retry/cancel, manifest и artifact reuse contract.',
+      'HEIC, TIFF, RAW, PSD, AI/EPS intake и привычные JPG/PNG/WebP сценарии идут через IMAGE_CONVERT, DOC/DOCX/RTF/ODT, CSV/XLSX/ODS, PDF и PPTX office-потоки закрываются через OFFICE_CONVERT, а MOV/MKV/AVI/WebM/MP4 и WAV/FLAC/MP3/M4A delivery-сценарии теперь идут через MEDIA_CONVERT с тем же retry/cancel, manifest и artifact reuse contract.',
     status: 'Active route',
     route: '/converter',
-    accents: ['Image', 'Office', 'PDF', 'Presets'],
+    accents: ['Image', 'Office', 'Media', 'Presets'],
     span: 'tool-card--standard',
   },
   {
@@ -195,9 +196,10 @@ void hydrateQueuedModuleCards().catch(() => undefined)
           живых маршрутов: viewer отвечает за preview, analysis, backend-powered document
           intelligence, backend-powered metadata service, video tooling, audio workbench и image
           tooling через unified `VIEWER_RESOLVE` route, а converter теперь закрывает и image-блок,
-          и офисные сценарии с `DOC/DOCX/RTF/ODT`, `CSV/XLSX/ODS`, `PDF`, `PPTX`, vector/icon
-          targets и slideshow-export через backend-first job contract, где browser больше не
-          вычисляет conversion result самостоятельно.
+          и офисные сценарии с `DOC/DOCX/RTF/ODT`, `CSV/XLSX/ODS`, `PDF`, `PPTX`, и media delivery
+          с `MOV/MKV/AVI/WebM/MP4`, `WAV/FLAC/MP3/M4A`, vector/icon targets и slideshow-export
+          через backend-first job contract, где browser больше не вычисляет conversion result
+          самостоятельно.
         </p>
 
         <div class="signal-row">

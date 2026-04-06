@@ -25,6 +25,23 @@ const {
   selectedPresetId,
   quality,
   backgroundColor,
+  selectedVideoCodec,
+  selectedMediaResolution,
+  selectedTargetFps,
+  selectedVideoBitrateKbps,
+  selectedAudioBitrateKbps,
+  showMediaControls,
+  showVideoCodecControl,
+  showResolutionControl,
+  showFpsControl,
+  showVideoBitrateControl,
+  showAudioBitrateControl,
+  availableVideoCodecOptions,
+  resolvedAudioCodec,
+  resolutionOptions,
+  fpsOptions,
+  videoBitrateOptions,
+  audioBitrateOptions,
   converterAcceptAttribute,
   imageScenarios,
   documentScenarios,
@@ -76,6 +93,45 @@ const currentStatusLabel = computed(() =>
 )
 const progressWidth = computed(() => `${Math.max(0, Math.min(activeJobProgressPercent.value, 100))}%`)
 const historyEntries = computed(() => resultHistory.value.slice(0, 6))
+const hasAudioPreview = computed(() => result.value?.previewMimeType.startsWith('audio/') ?? false)
+const activeLimitations = computed(() => {
+  if (!prepared.value || !currentScenario.value) {
+    return []
+  }
+
+  const limitations: string[] = []
+  const sourceExtension = prepared.value.source.extension
+  const targetExtension = selectedTargetExtension.value
+
+  if (currentScenario.value.family === 'media') {
+    limitations.push(
+      'Target format выбирает контейнер, а codec, bitrate, resolution и FPS задаются отдельно в media controls ниже.',
+    )
+  }
+
+  if (sourceExtension === 'pdf' && targetExtension === 'docx') {
+    limitations.push(
+      'PDF -> DOCX переносит текстовый поток, но сложная вёрстка, колонки и positioned blocks могут измениться.',
+    )
+  }
+
+  if (
+    sourceExtension === 'pdf' &&
+    ['docx', 'txt', 'xlsx', 'csv', 'pptx'].includes(targetExtension)
+  ) {
+    limitations.push(
+      'Если исходный PDF отсканирован и без текстового слоя, сначала понадобится OCR: текущий export это явно подсветит.',
+    )
+  }
+
+  if (targetExtension === 'csv') {
+    limitations.push(
+      'CSV остаётся flattened table export: formulas, styling, comments и multi-sheet structure не переносятся полностью.',
+    )
+  }
+
+  return limitations
+})
 
 function formatBytes(value: number): string {
   return new Intl.NumberFormat('ru-RU').format(value) + ' bytes'
@@ -156,21 +212,24 @@ function onDrop(event: DragEvent) {
         <p class="lead">
           Конвертер больше не делит route на "простые локальные" и "тяжёлые серверные" ветки.
           Image-сценарии идут через backend `IMAGE_CONVERT`, office/pdf roundtrip через
-          `OFFICE_CONVERT`, а браузер держит только progress, retry, cancel, artifact reuse и
-          preview уже собранного результата.
+          `OFFICE_CONVERT`, video/audio delivery через `MEDIA_CONVERT`, а браузер держит только
+          progress, retry, cancel, artifact reuse и preview уже собранного результата.
         </p>
 
         <div class="converter-signal-row">
           <span class="chip-pill">Backend-first JPG / PNG / WebP</span>
           <span class="chip-pill">Server HEIC / TIFF / RAW / PSD / AI / EPS</span>
           <span class="chip-pill">DOC / DOCX / PDF / XLSX / ODS / PPTX routes</span>
+          <span class="chip-pill">MOV / MKV / AVI / WebM / MP4 routes</span>
           <span class="chip-pill">Server AVIF / SVG / ICO / TIFF / PDF targets</span>
           <span class="chip-pill">PDF -> DOCX/XLSX/PPTX</span>
           <span class="chip-pill">PPTX -> PDF / image / MP4</span>
+          <span class="chip-pill">MP4 / WebM / GIF / MP3 / WAV / AAC / FLAC / M4A</span>
+          <span class="chip-pill">Codec + bitrate + resolution + FPS controls</span>
           <span class="chip-pill">Job progress + cancel + retry</span>
           <span class="chip-pill">Artifact reuse history</span>
           <span class="chip-pill">Scenario registry</span>
-          <span class="chip-pill">IMAGE_CONVERT + OFFICE_CONVERT</span>
+          <span class="chip-pill">IMAGE_CONVERT + OFFICE_CONVERT + MEDIA_CONVERT</span>
         </div>
       </article>
 
@@ -217,7 +276,7 @@ function onDrop(event: DragEvent) {
         <div class="panel-header">
           <div>
             <p class="eyebrow">Source Intake</p>
-            <h2>Выбери изображение и подходящий target.</h2>
+            <h2>Выбери source и подходящий target/runtime profile.</h2>
           </div>
 
           <button v-if="prepared" type="button" class="action-button" @click="clearSelection">
@@ -244,12 +303,12 @@ function onDrop(event: DragEvent) {
         >
           <span class="converter-dropzone__badge">Drop / Select</span>
           <strong>
-            Загрузи image, office или PDF source из capability matrix.
+            Загрузи image, office, PDF или media source из capability matrix.
           </strong>
           <span>
-            После intake image-сценарии идут в backend `IMAGE_CONVERT`, а office/pdf routes в
-            `OFFICE_CONVERT`. Браузер держит только orchestration, progress UI и preview уже
-            собранного артефакта.
+            После intake image-сценарии идут в backend `IMAGE_CONVERT`, office/pdf routes в
+            `OFFICE_CONVERT`, а video/audio delivery в `MEDIA_CONVERT`. Браузер держит только
+            orchestration, progress UI и preview уже собранного артефакта.
           </span>
         </button>
 
@@ -310,6 +369,12 @@ function onDrop(event: DragEvent) {
               <p>{{ currentScenario.notes }}</p>
             </div>
 
+            <div v-if="activeLimitations.length" class="scenario-callout scenario-callout--limits">
+              <p class="control-label">Known limits</p>
+              <h3>Что важно учитывать до запуска</h3>
+              <p v-for="item in activeLimitations" :key="item">{{ item }}</p>
+            </div>
+
             <div class="scenario-callout scenario-callout--job">
               <p class="control-label">Job lifecycle</p>
               <h3>{{ currentStatusLabel }}</h3>
@@ -333,6 +398,69 @@ function onDrop(event: DragEvent) {
               <p class="control-label">Активный пресет</p>
               <h3>{{ activePreset.label }}</h3>
               <p>{{ activePreset.detail }}</p>
+            </div>
+
+            <label v-if="showVideoCodecControl" class="form-field">
+              <span class="control-label">Video codec</span>
+              <select v-model="selectedVideoCodec" class="surface-select">
+                <option
+                  v-for="option in availableVideoCodecOptions"
+                  :key="option.value"
+                  :value="option.value"
+                >
+                  {{ option.label }}
+                </option>
+              </select>
+            </label>
+
+            <label v-if="showResolutionControl" class="form-field">
+              <span class="control-label">Resolution</span>
+              <select v-model="selectedMediaResolution" class="surface-select">
+                <option v-for="option in resolutionOptions" :key="option.value" :value="option.value">
+                  {{ option.label }}
+                </option>
+              </select>
+            </label>
+
+            <label v-if="showFpsControl" class="form-field">
+              <span class="control-label">FPS</span>
+              <select v-model="selectedTargetFps" class="surface-select">
+                <option v-for="option in fpsOptions" :key="option.value" :value="option.value">
+                  {{ option.label }}
+                </option>
+              </select>
+            </label>
+
+            <label v-if="showVideoBitrateControl" class="form-field">
+              <span class="control-label">Video bitrate</span>
+              <select v-model="selectedVideoBitrateKbps" class="surface-select">
+                <option
+                  v-for="option in videoBitrateOptions"
+                  :key="option.value"
+                  :value="option.value"
+                >
+                  {{ option.label }}
+                </option>
+              </select>
+            </label>
+
+            <label v-if="showAudioBitrateControl" class="form-field">
+              <span class="control-label">Audio bitrate</span>
+              <select v-model="selectedAudioBitrateKbps" class="surface-select">
+                <option
+                  v-for="option in audioBitrateOptions"
+                  :key="option.value"
+                  :value="option.value"
+                >
+                  {{ option.label }}
+                </option>
+              </select>
+            </label>
+
+            <div v-if="showMediaControls && resolvedAudioCodec" class="scenario-callout">
+              <p class="control-label">Resolved audio codec</p>
+              <h3>{{ resolvedAudioCodec }}</h3>
+              <p>Контейнер выбирается target format, а audio codec показан отдельно, чтобы delivery-ограничения не смешивались в один выбор.</p>
             </div>
 
             <label v-if="activeTarget?.supportsQuality" class="form-field">
@@ -406,6 +534,12 @@ function onDrop(event: DragEvent) {
               v-if="result.previewKind === 'image'"
               :src="result.objectUrl"
               :alt="`Converted preview ${result.fileName}`"
+            />
+            <audio
+              v-else-if="hasAudioPreview"
+              class="result-preview__audio"
+              :src="result.objectUrl"
+              controls
             />
             <video
               v-else-if="result.previewKind === 'media'"
@@ -804,6 +938,17 @@ h1 {
   background: rgba(255, 255, 255, 0.22);
 }
 
+.surface-select {
+  width: 100%;
+  padding: 12px 14px;
+  border: 0;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--text-main);
+  font: inherit;
+  box-shadow: var(--shadow-pressed);
+}
+
 .job-progress {
   overflow: hidden;
   height: 12px;
@@ -895,6 +1040,10 @@ h1 {
   border-radius: 22px;
   background: rgba(255, 255, 255, 0.75);
   box-shadow: var(--shadow-floating);
+}
+
+.result-preview__audio {
+  width: min(100%, 560px);
 }
 
 .result-placeholder {

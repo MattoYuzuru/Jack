@@ -477,4 +477,107 @@ describe('converter runtime', () => {
     ])
     expect(progressMessages).toContain('Backend IMAGE_CONVERT in progress...')
   })
+
+  it('routes media scenarios through the backend media convert client and keeps separated facts', async () => {
+    const runtime = createConverterRuntime({
+      convertServerScenario: async ({ target, videoCodec, targetFps, videoBitrateKbps }) => {
+        expect(target.extension).toBe('mp4')
+        expect(videoCodec).toBe('h264')
+        expect(targetFps).toBe(24)
+        expect(videoBitrateKbps).toBe(2500)
+
+        return {
+          job: {
+            id: 'job-media-1',
+            uploadId: 'upload-media-1',
+            jobType: 'MEDIA_CONVERT',
+            status: 'COMPLETED',
+            progressPercent: 100,
+            message: 'done',
+            errorMessage: null,
+            createdAt: new Date().toISOString(),
+            startedAt: new Date().toISOString(),
+            completedAt: new Date().toISOString(),
+            artifacts: [],
+          },
+          manifestArtifact: {
+            id: 'manifest-media-1',
+            kind: 'media-convert-manifest',
+            fileName: 'clip-manifest.json',
+            mediaType: 'application/json',
+            sizeBytes: 64,
+            createdAt: new Date().toISOString(),
+            downloadPath: '/api/jobs/job-media-1/artifacts/manifest-media-1',
+          },
+          resultArtifact: {
+            id: 'result-media-1',
+            kind: 'media-convert-binary',
+            fileName: 'clip.mp4',
+            mediaType: 'video/mp4',
+            sizeBytes: 128,
+            createdAt: new Date().toISOString(),
+            downloadPath: '/api/jobs/job-media-1/artifacts/result-media-1',
+          },
+          previewArtifact: {
+            id: 'preview-media-1',
+            kind: 'media-convert-preview',
+            fileName: 'clip.preview.mp4',
+            mediaType: 'video/mp4',
+            sizeBytes: 128,
+            createdAt: new Date().toISOString(),
+            downloadPath: '/api/jobs/job-media-1/artifacts/preview-media-1',
+          },
+          manifest: {
+            uploadId: 'upload-media-1',
+            originalFileName: 'clip.mkv',
+            sourceExtension: 'mkv',
+            targetExtension: 'mp4',
+            resultMediaType: 'video/mp4',
+            previewMediaType: 'video/mp4',
+            previewKind: 'media',
+            sourceAdapterLabel: 'FFmpeg video intake',
+            targetAdapterLabel: 'MP4 H.264 transcode',
+            runtimeLabel: 'FFmpeg video intake -> MP4 H.264 transcode',
+            sourceFacts: [
+              { label: 'Контейнер', value: 'MKV' },
+              { label: 'Video codec', value: 'H.265 / HEVC' },
+            ],
+            resultFacts: [
+              { label: 'Контейнер', value: 'MP4' },
+              { label: 'Video codec', value: 'H.264' },
+              { label: 'Resolution', value: '1280 x 720' },
+            ],
+            warnings: ['Resolution изменена отдельно от контейнера: 3840 x 2160 -> 1280 x 720.'],
+          },
+          resultBlob: new Blob(['mp4'], { type: 'video/mp4' }),
+          previewBlob: new Blob(['mp4-preview'], { type: 'video/mp4' }),
+        }
+      },
+    })
+
+    const prepared = await runtime.inspect(new File(['video'], 'clip.mkv', { type: 'video/x-matroska' }))
+
+    if (!prepared) {
+      throw new Error('Expected a prepared source for MKV.')
+    }
+
+    const result = await runtime.convert({
+      prepared,
+      targetExtension: 'mp4',
+      presetId: 'email-attachment',
+      maxWidth: 1280,
+      maxHeight: 720,
+      videoCodec: 'h264',
+      targetFps: 24,
+      videoBitrateKbps: 2500,
+      audioBitrateKbps: 160,
+    })
+
+    expect(result.backendJobId).toBe('job-media-1')
+    expect(result.previewMimeType).toBe('video/mp4')
+    expect(result.resultFacts).toContainEqual({ label: 'Video codec', value: 'H.264' })
+    expect(result.warnings).toContain(
+      'Resolution изменена отдельно от контейнера: 3840 x 2160 -> 1280 x 720.',
+    )
+  })
 })

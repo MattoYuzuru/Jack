@@ -34,11 +34,189 @@ interface ConverterRunRequest {
   presetId: ConverterPresetDefinition['id']
   quality: number
   backgroundColor: string
+  maxWidth: number | null
+  maxHeight: number | null
+  videoCodec: string
+  audioCodec: string
+  targetFps: number | null
+  videoBitrateKbps: number | null
+  audioBitrateKbps: number | null
   cacheKey: string
+}
+
+interface SelectOption {
+  value: string
+  label: string
 }
 
 const MAX_RESULT_HISTORY = 8
 const converterRuntime = createConverterRuntime()
+const MEDIA_SOURCE_EXTENSIONS = new Set([
+  'mp4',
+  'mov',
+  'mkv',
+  'avi',
+  'webm',
+  'wav',
+  'flac',
+  'mp3',
+  'm4a',
+])
+const VIDEO_SOURCE_EXTENSIONS = new Set(['mp4', 'mov', 'mkv', 'avi', 'webm'])
+const VIDEO_TARGET_EXTENSIONS = new Set(['mp4', 'webm', 'gif'])
+const LOSSY_AUDIO_TARGET_EXTENSIONS = new Set(['mp3', 'aac', 'm4a'])
+const RESOLUTION_OPTIONS: SelectOption[] = [
+  { value: 'original', label: 'Original' },
+  { value: '2160p', label: '2160p / 4K' },
+  { value: '1440p', label: '1440p' },
+  { value: '1080p', label: '1080p' },
+  { value: '720p', label: '720p' },
+  { value: '480p', label: '480p' },
+]
+const FPS_OPTIONS: SelectOption[] = [
+  { value: '', label: 'Original FPS' },
+  { value: '60', label: '60 fps' },
+  { value: '30', label: '30 fps' },
+  { value: '24', label: '24 fps' },
+  { value: '15', label: '15 fps' },
+  { value: '10', label: '10 fps' },
+]
+const VIDEO_BITRATE_OPTIONS: SelectOption[] = [
+  { value: '', label: 'Auto bitrate' },
+  { value: '8000', label: '8000 kbps' },
+  { value: '5000', label: '5000 kbps' },
+  { value: '2500', label: '2500 kbps' },
+  { value: '1200', label: '1200 kbps' },
+]
+const AUDIO_BITRATE_OPTIONS: SelectOption[] = [
+  { value: '', label: 'Auto bitrate' },
+  { value: '320', label: '320 kbps' },
+  { value: '192', label: '192 kbps' },
+  { value: '128', label: '128 kbps' },
+  { value: '96', label: '96 kbps' },
+]
+const VIDEO_CODEC_OPTIONS_BY_TARGET: Record<string, SelectOption[]> = {
+  mp4: [
+    { value: 'h264', label: 'H.264' },
+    { value: 'av1', label: 'AV1' },
+  ],
+  webm: [
+    { value: 'vp9', label: 'VP9' },
+    { value: 'av1', label: 'AV1' },
+  ],
+}
+
+function resolveMediaDefaults(presetId: ConverterPresetDefinition['id']) {
+  switch (presetId) {
+    case 'web-balanced':
+      return {
+        resolution: '1080p',
+        fps: '30',
+        videoBitrateKbps: '5000',
+        audioBitrateKbps: '192',
+      }
+    case 'email-attachment':
+      return {
+        resolution: '720p',
+        fps: '24',
+        videoBitrateKbps: '2500',
+        audioBitrateKbps: '128',
+      }
+    case 'thumbnail':
+      return {
+        resolution: '480p',
+        fps: '10',
+        videoBitrateKbps: '1200',
+        audioBitrateKbps: '96',
+      }
+    default:
+      return {
+        resolution: 'original',
+        fps: '',
+        videoBitrateKbps: '',
+        audioBitrateKbps: '',
+      }
+  }
+}
+
+function resolveDefaultVideoCodec(targetExtension: string): string {
+  if (targetExtension === 'webm') {
+    return 'vp9'
+  }
+
+  if (targetExtension === 'mp4') {
+    return 'h264'
+  }
+
+  return ''
+}
+
+function resolveAudioCodecForTarget(targetExtension: string): string {
+  switch (targetExtension) {
+    case 'mp4':
+    case 'm4a':
+    case 'aac':
+      return 'AAC'
+    case 'webm':
+      return 'Opus'
+    case 'mp3':
+      return 'MP3'
+    case 'wav':
+      return 'PCM 16-bit'
+    case 'flac':
+      return 'FLAC'
+    default:
+      return ''
+  }
+}
+
+function resolveMediaSizing(resolutionId: string): { maxWidth: number | null; maxHeight: number | null } {
+  switch (resolutionId) {
+    case '2160p':
+      return { maxWidth: 3840, maxHeight: 2160 }
+    case '1440p':
+      return { maxWidth: 2560, maxHeight: 1440 }
+    case '1080p':
+      return { maxWidth: 1920, maxHeight: 1080 }
+    case '720p':
+      return { maxWidth: 1280, maxHeight: 720 }
+    case '480p':
+      return { maxWidth: 854, maxHeight: 480 }
+    default:
+      return { maxWidth: null, maxHeight: null }
+  }
+}
+
+function resolveMediaResolutionFromSizing(
+  maxWidth: number | null,
+  maxHeight: number | null,
+): string {
+  if (maxWidth === 3840 && maxHeight === 2160) {
+    return '2160p'
+  }
+  if (maxWidth === 2560 && maxHeight === 1440) {
+    return '1440p'
+  }
+  if (maxWidth === 1920 && maxHeight === 1080) {
+    return '1080p'
+  }
+  if (maxWidth === 1280 && maxHeight === 720) {
+    return '720p'
+  }
+  if (maxWidth === 854 && maxHeight === 480) {
+    return '480p'
+  }
+  return 'original'
+}
+
+function parseNullableInteger(value: string): number | null {
+  if (!value.trim()) {
+    return null
+  }
+
+  const parsed = Number.parseInt(value, 10)
+  return Number.isFinite(parsed) ? parsed : null
+}
 
 export function useConverterWorkspace() {
   const prepared = shallowRef<ConverterPreparedSource | null>(null)
@@ -58,6 +236,11 @@ export function useConverterWorkspace() {
   const selectedPresetId = ref<ConverterPresetDefinition['id']>('original')
   const quality = ref(0.9)
   const backgroundColor = ref('#fffaf0')
+  const selectedVideoCodec = ref('h264')
+  const selectedMediaResolution = ref('original')
+  const selectedTargetFps = ref('')
+  const selectedVideoBitrateKbps = ref('')
+  const selectedAudioBitrateKbps = ref('')
   const activeJobId = ref('')
   const activeJobStatus = ref<ProcessingJobStatus | ''>('')
   const activeJobProgressPercent = ref(0)
@@ -75,6 +258,37 @@ export function useConverterWorkspace() {
   const activePreset = computed(() =>
     resolveConverterPresetFromDefinitions(availablePresets.value, selectedPresetId.value),
   )
+  const hasMediaSource = computed(() =>
+    Boolean(prepared.value && MEDIA_SOURCE_EXTENSIONS.has(prepared.value.source.extension)),
+  )
+  const hasVideoSource = computed(() =>
+    Boolean(prepared.value && VIDEO_SOURCE_EXTENSIONS.has(prepared.value.source.extension)),
+  )
+  const showMediaControls = computed(() => hasMediaSource.value)
+  const showVideoCodecControl = computed(
+    () => hasVideoSource.value && Boolean(activeTarget.value && ['mp4', 'webm'].includes(activeTarget.value.extension)),
+  )
+  const showResolutionControl = computed(
+    () => hasVideoSource.value && Boolean(activeTarget.value && VIDEO_TARGET_EXTENSIONS.has(activeTarget.value.extension)),
+  )
+  const showFpsControl = computed(
+    () => hasVideoSource.value && Boolean(activeTarget.value && VIDEO_TARGET_EXTENSIONS.has(activeTarget.value.extension)),
+  )
+  const showVideoBitrateControl = computed(
+    () => hasVideoSource.value && Boolean(activeTarget.value && ['mp4', 'webm'].includes(activeTarget.value.extension)),
+  )
+  const showAudioBitrateControl = computed(
+    () =>
+      Boolean(
+        activeTarget.value &&
+          (['mp4', 'webm'].includes(activeTarget.value.extension) ||
+            LOSSY_AUDIO_TARGET_EXTENSIONS.has(activeTarget.value.extension)),
+      ),
+  )
+  const availableVideoCodecOptions = computed<SelectOption[]>(
+    () => (activeTarget.value ? VIDEO_CODEC_OPTIONS_BY_TARGET[activeTarget.value.extension] ?? [] : []),
+  )
+  const resolvedAudioCodec = computed(() => resolveAudioCodecForTarget(activeTarget.value?.extension ?? ''))
   const result = computed<ConverterResultViewModel | null>(
     () =>
       resultHistory.value.find((entry) => entry.id === selectedResultId.value) ??
@@ -123,6 +337,24 @@ export function useConverterWorkspace() {
 
     quality.value = preset.preferredQuality ?? target.defaultQuality ?? quality.value
     backgroundColor.value = preset.defaultBackgroundColor ?? backgroundColor.value
+
+    if (hasMediaSource.value) {
+      const defaults = resolveMediaDefaults(preset.id)
+      selectedVideoCodec.value = resolveDefaultVideoCodec(target.extension)
+      selectedMediaResolution.value = hasVideoSource.value && VIDEO_TARGET_EXTENSIONS.has(target.extension)
+        ? defaults.resolution
+        : 'original'
+      selectedTargetFps.value = hasVideoSource.value && VIDEO_TARGET_EXTENSIONS.has(target.extension)
+        ? defaults.fps
+        : ''
+      selectedVideoBitrateKbps.value = hasVideoSource.value && ['mp4', 'webm'].includes(target.extension)
+        ? defaults.videoBitrateKbps
+        : ''
+      selectedAudioBitrateKbps.value =
+        ['mp4', 'webm'].includes(target.extension) || LOSSY_AUDIO_TARGET_EXTENSIONS.has(target.extension)
+          ? defaults.audioBitrateKbps
+          : ''
+    }
   })
 
   function buildCacheKey(request: {
@@ -131,6 +363,13 @@ export function useConverterWorkspace() {
     presetId: string
     quality: number
     backgroundColor: string
+    maxWidth: number | null
+    maxHeight: number | null
+    videoCodec: string
+    audioCodec: string
+    targetFps: number | null
+    videoBitrateKbps: number | null
+    audioBitrateKbps: number | null
   }): string {
     const source = request.prepared.file
     return [
@@ -143,6 +382,13 @@ export function useConverterWorkspace() {
       request.presetId,
       request.quality.toFixed(4),
       request.backgroundColor.trim().toLowerCase(),
+      request.maxWidth ?? 'auto-width',
+      request.maxHeight ?? 'auto-height',
+      request.videoCodec || 'auto-video-codec',
+      request.audioCodec || 'auto-audio-codec',
+      request.targetFps ?? 'auto-fps',
+      request.videoBitrateKbps ?? 'auto-video-bitrate',
+      request.audioBitrateKbps ?? 'auto-audio-bitrate',
     ].join('::')
   }
 
@@ -187,7 +433,7 @@ export function useConverterWorkspace() {
     resultHistory.value.unshift(existingEntry)
     selectedResultId.value = existingEntry.id
     processingMessage.value =
-      'Переиспользую уже собранный backend artifact из текущей сессии без повторного IMAGE_CONVERT job.'
+      'Переиспользую уже собранный backend artifact из текущей сессии без повторного processing job.'
   }
 
   function registerJobSnapshot(job: ProcessingJobResponse) {
@@ -211,18 +457,43 @@ export function useConverterWorkspace() {
       return null
     }
 
+    const mediaSizing = resolveMediaSizing(selectedMediaResolution.value)
+    const audioCodec = resolvedAudioCodec.value
+
     return {
       prepared: prepared.value,
       targetExtension: selectedTargetExtension.value,
       presetId: selectedPresetId.value,
       quality: quality.value,
       backgroundColor: backgroundColor.value,
+      maxWidth: hasMediaSource.value ? mediaSizing.maxWidth : null,
+      maxHeight: hasMediaSource.value ? mediaSizing.maxHeight : null,
+      videoCodec: hasMediaSource.value ? selectedVideoCodec.value : '',
+      audioCodec,
+      targetFps: hasMediaSource.value ? parseNullableInteger(selectedTargetFps.value) : null,
+      videoBitrateKbps: hasMediaSource.value
+        ? parseNullableInteger(selectedVideoBitrateKbps.value)
+        : null,
+      audioBitrateKbps: hasMediaSource.value
+        ? parseNullableInteger(selectedAudioBitrateKbps.value)
+        : null,
       cacheKey: buildCacheKey({
         prepared: prepared.value,
         targetExtension: selectedTargetExtension.value,
         presetId: selectedPresetId.value,
         quality: quality.value,
         backgroundColor: backgroundColor.value,
+        maxWidth: hasMediaSource.value ? mediaSizing.maxWidth : null,
+        maxHeight: hasMediaSource.value ? mediaSizing.maxHeight : null,
+        videoCodec: hasMediaSource.value ? selectedVideoCodec.value : '',
+        audioCodec,
+        targetFps: hasMediaSource.value ? parseNullableInteger(selectedTargetFps.value) : null,
+        videoBitrateKbps: hasMediaSource.value
+          ? parseNullableInteger(selectedVideoBitrateKbps.value)
+          : null,
+        audioBitrateKbps: hasMediaSource.value
+          ? parseNullableInteger(selectedAudioBitrateKbps.value)
+          : null,
       }),
     }
   }
@@ -298,6 +569,11 @@ export function useConverterWorkspace() {
     isLoading.value = false
     selectedTargetExtension.value = ''
     selectedPresetId.value = 'original'
+    selectedVideoCodec.value = 'h264'
+    selectedMediaResolution.value = 'original'
+    selectedTargetFps.value = ''
+    selectedVideoBitrateKbps.value = ''
+    selectedAudioBitrateKbps.value = ''
     lastRequest.value = null
     processingMessage.value = result.value
       ? 'Последний backend result сохранён в session history и доступен для повторного скачивания.'
@@ -328,6 +604,13 @@ export function useConverterWorkspace() {
         presetId: request.presetId,
         quality: request.quality,
         backgroundColor: request.backgroundColor,
+        maxWidth: request.maxWidth,
+        maxHeight: request.maxHeight,
+        videoCodec: request.videoCodec,
+        audioCodec: request.audioCodec,
+        targetFps: request.targetFps,
+        videoBitrateKbps: request.videoBitrateKbps,
+        audioBitrateKbps: request.audioBitrateKbps,
         onProgress(message) {
           if (isCurrentConversion(conversionToken, revision)) {
             processingMessage.value = message
@@ -401,6 +684,18 @@ export function useConverterWorkspace() {
     selectedPresetId.value = lastRequest.value.presetId
     quality.value = lastRequest.value.quality
     backgroundColor.value = lastRequest.value.backgroundColor
+    selectedVideoCodec.value = lastRequest.value.videoCodec
+    selectedMediaResolution.value = resolveMediaResolutionFromSizing(
+      lastRequest.value.maxWidth,
+      lastRequest.value.maxHeight,
+    )
+    selectedTargetFps.value = lastRequest.value.targetFps ? String(lastRequest.value.targetFps) : ''
+    selectedVideoBitrateKbps.value = lastRequest.value.videoBitrateKbps
+      ? String(lastRequest.value.videoBitrateKbps)
+      : ''
+    selectedAudioBitrateKbps.value = lastRequest.value.audioBitrateKbps
+      ? String(lastRequest.value.audioBitrateKbps)
+      : ''
 
     await runConversion(lastRequest.value)
   }
@@ -412,7 +707,7 @@ export function useConverterWorkspace() {
 
     isCancelling.value = true
     if (!options.silent) {
-      processingMessage.value = 'Отправляю запрос на отмену backend IMAGE_CONVERT job...'
+      processingMessage.value = 'Отправляю запрос на отмену активного backend processing job...'
     }
 
     try {
@@ -482,6 +777,23 @@ export function useConverterWorkspace() {
     selectedPresetId,
     quality,
     backgroundColor,
+    selectedVideoCodec,
+    selectedMediaResolution,
+    selectedTargetFps,
+    selectedVideoBitrateKbps,
+    selectedAudioBitrateKbps,
+    showMediaControls,
+    showVideoCodecControl,
+    showResolutionControl,
+    showFpsControl,
+    showVideoBitrateControl,
+    showAudioBitrateControl,
+    availableVideoCodecOptions,
+    resolvedAudioCodec,
+    resolutionOptions: RESOLUTION_OPTIONS,
+    fpsOptions: FPS_OPTIONS,
+    videoBitrateOptions: VIDEO_BITRATE_OPTIONS,
+    audioBitrateOptions: AUDIO_BITRATE_OPTIONS,
     converterAcceptAttribute,
     imageScenarios,
     documentScenarios,

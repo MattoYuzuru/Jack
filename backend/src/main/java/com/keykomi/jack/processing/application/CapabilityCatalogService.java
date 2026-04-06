@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 public class CapabilityCatalogService {
 
 	private final MediaPreviewService mediaPreviewService;
+	private final MediaConversionService mediaConversionService;
 	private final ImageProcessingService imageProcessingService;
 	private final OfficeConversionService officeConversionService;
 	private final DocumentPreviewService documentPreviewService;
@@ -20,6 +21,7 @@ public class CapabilityCatalogService {
 
 	public CapabilityCatalogService(
 		MediaPreviewService mediaPreviewService,
+		MediaConversionService mediaConversionService,
 		ImageProcessingService imageProcessingService,
 		OfficeConversionService officeConversionService,
 		DocumentPreviewService documentPreviewService,
@@ -28,6 +30,7 @@ public class CapabilityCatalogService {
 		CapabilityMatrixService capabilityMatrixService
 	) {
 		this.mediaPreviewService = mediaPreviewService;
+		this.mediaConversionService = mediaConversionService;
 		this.imageProcessingService = imageProcessingService;
 		this.officeConversionService = officeConversionService;
 		this.documentPreviewService = documentPreviewService;
@@ -106,6 +109,7 @@ public class CapabilityCatalogService {
 	public CapabilityScope converterCapabilities() {
 		var availabilityByJobType = availabilityByJobType();
 		var mediaPreviewAvailable = availabilityByJobType.getOrDefault(ProcessingJobType.MEDIA_PREVIEW, false);
+		var mediaConversionAvailable = availabilityByJobType.getOrDefault(ProcessingJobType.MEDIA_CONVERT, false);
 		var imageProcessingAvailable = availabilityByJobType.getOrDefault(ProcessingJobType.IMAGE_CONVERT, false);
 		var officeConversionAvailable = availabilityByJobType.getOrDefault(ProcessingJobType.OFFICE_CONVERT, false);
 		var documentPreviewAvailable = availabilityByJobType.getOrDefault(ProcessingJobType.DOCUMENT_PREVIEW, false);
@@ -138,6 +142,13 @@ public class CapabilityCatalogService {
 						: "Media preview foundation требует доступных ffmpeg/ffprobe binaries и пока не активна в текущем окружении."
 				),
 				new JobTypeCapability(
+					ProcessingJobType.MEDIA_CONVERT,
+					mediaConversionAvailable,
+					mediaConversionAvailable
+						? "Converter route уже умеет гнать video/audio delivery-сценарии через MEDIA_CONVERT jobs с preview/result artifacts."
+						: "Media conversion foundation требует доступных ffmpeg/ffprobe binaries и пока не активна в текущем окружении."
+				),
+				new JobTypeCapability(
 					ProcessingJobType.DOCUMENT_PREVIEW,
 					documentPreviewAvailable,
 					documentPreviewAvailable
@@ -153,7 +164,7 @@ public class CapabilityCatalogService {
 				)
 			),
 			List.of(
-				"Converter route теперь backend-first: image scenarios идут через IMAGE_CONVERT, а office/pdf scenarios через OFFICE_CONVERT; browser остаётся orchestration/preview слоем.",
+				"Converter route теперь backend-first: image scenarios идут через IMAGE_CONVERT, office/pdf scenarios через OFFICE_CONVERT, а video/audio scenarios через MEDIA_CONVERT; browser остаётся orchestration/preview слоем.",
 				"Workspace может строить progress, retry, cancel и artifact reuse поверх единых job status и capability rules от backend."
 			),
 			null,
@@ -175,6 +186,13 @@ public class CapabilityCatalogService {
 					availabilityByJobType.getOrDefault(ProcessingJobType.MEDIA_PREVIEW, false)
 						? "Media preview foundation уже готова к reuse в compression, batch и future delivery flows."
 						: "Для reuse media foundation нужны доступные ffmpeg/ffprobe binaries."
+				),
+				new JobTypeCapability(
+					ProcessingJobType.MEDIA_CONVERT,
+					availabilityByJobType.getOrDefault(ProcessingJobType.MEDIA_CONVERT, false),
+					availabilityByJobType.getOrDefault(ProcessingJobType.MEDIA_CONVERT, false)
+						? "Media conversion foundation уже готова к reuse в converter, compression и future delivery/export flows."
+						: "Для reuse media conversion foundation нужны доступные ffmpeg/ffprobe binaries."
 				),
 				new JobTypeCapability(
 					ProcessingJobType.IMAGE_CONVERT,
@@ -228,6 +246,7 @@ public class CapabilityCatalogService {
 		var availabilityByJobType = new LinkedHashMap<ProcessingJobType, Boolean>();
 		availabilityByJobType.put(ProcessingJobType.UPLOAD_INTAKE_ANALYSIS, true);
 		availabilityByJobType.put(ProcessingJobType.MEDIA_PREVIEW, this.mediaPreviewService.isAvailable());
+		availabilityByJobType.put(ProcessingJobType.MEDIA_CONVERT, this.mediaConversionService.isAvailable());
 		availabilityByJobType.put(ProcessingJobType.IMAGE_CONVERT, this.imageProcessingService.isAvailable());
 		availabilityByJobType.put(ProcessingJobType.OFFICE_CONVERT, this.officeConversionService.isAvailable());
 		availabilityByJobType.put(ProcessingJobType.DOCUMENT_PREVIEW, this.documentPreviewService.isAvailable());

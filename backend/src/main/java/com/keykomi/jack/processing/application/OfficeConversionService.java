@@ -232,6 +232,10 @@ public class OfficeConversionService {
 		var payload = this.documentPreviewService.analyze(upload);
 		var structuredDocument = buildStructuredDocument(payload);
 		var warnings = new ArrayList<>(structuredDocument.warnings());
+		var sourceExtension = normalizeExtension(upload.extension());
+		if ("pdf".equals(sourceExtension) && "docx".equals(targetExtension)) {
+			warnings.add("PDF -> DOCX переносит текстовый поток и базовую структуру, но сложная вёрстка, колонки, positioned blocks и page-perfect layout могут измениться.");
+		}
 		var resultFileName = replaceExtension(upload.originalFileName(), targetExtension);
 		var previewFileName = derivedPreviewFileName(upload.originalFileName(), "html");
 		var resultPath = workingDirectory.resolve(resultFileName);
@@ -331,6 +335,7 @@ public class OfficeConversionService {
 				resultFacts = buildWorkbookResultFacts("XLSX", spreadsheetBundle.sheets());
 			}
 			case "csv" -> {
+				warnings.add("CSV target остаётся flattened table export: formulas, styling, comments и rich workbook structure не переносятся.");
 				if (spreadsheetBundle.sheets().size() > 1) {
 					warnings.add("CSV target может унести только один лист, поэтому экспортирует первый sheet из workbook source.");
 				}

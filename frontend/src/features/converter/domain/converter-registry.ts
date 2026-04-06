@@ -14,6 +14,8 @@ export type ConverterSourceStrategyId =
   | 'office-document'
   | 'spreadsheet-document'
   | 'presentation-document'
+  | 'video-media'
+  | 'audio-media'
 
 export type ConverterTargetStrategyId =
   | 'jpeg-encoder'
@@ -34,6 +36,13 @@ export type ConverterTargetStrategyId =
   | 'ods-document'
   | 'pptx-document'
   | 'mp4-video'
+  | 'webm-video'
+  | 'gif-image'
+  | 'mp3-audio'
+  | 'wav-audio'
+  | 'aac-audio'
+  | 'm4a-audio'
+  | 'flac-audio'
 
 export interface ConverterSourceFormatDefinition {
   extension: string
