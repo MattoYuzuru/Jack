@@ -25,6 +25,11 @@ public class CapabilityController {
 		return this.capabilityCatalogService.converterCapabilities();
 	}
 
+	@GetMapping("/compression")
+	public CapabilityCatalogService.CapabilityScope compressionCapabilities() {
+		return this.capabilityCatalogService.compressionCapabilities();
+	}
+
 	@GetMapping("/platform")
 	public CapabilityCatalogService.CapabilityScope platformCapabilities() {
 		return this.capabilityCatalogService.platformCapabilities();

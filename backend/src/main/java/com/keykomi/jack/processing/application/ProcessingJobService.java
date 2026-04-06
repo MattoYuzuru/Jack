@@ -3,6 +3,7 @@ package com.keykomi.jack.processing.application;
 import com.keykomi.jack.processing.domain.ProcessingJobStatus;
 import com.keykomi.jack.processing.domain.ProcessingJobType;
 import com.keykomi.jack.processing.domain.StoredArtifact;
+import com.keykomi.jack.processing.domain.CompressionRequest;
 import com.keykomi.jack.processing.domain.ImageProcessingRequest;
 import com.keykomi.jack.processing.domain.MediaConversionRequest;
 import com.keykomi.jack.processing.domain.OfficeConversionRequest;
@@ -33,6 +34,7 @@ public class ProcessingJobService {
 	private final MediaPreviewService mediaPreviewService;
 	private final MediaConversionService mediaConversionService;
 	private final ImageProcessingService imageProcessingService;
+	private final CompressionService compressionService;
 	private final OfficeConversionService officeConversionService;
 	private final DocumentPreviewService documentPreviewService;
 	private final MetadataProcessingService metadataProcessingService;
@@ -47,6 +49,7 @@ public class ProcessingJobService {
 		MediaPreviewService mediaPreviewService,
 		MediaConversionService mediaConversionService,
 		ImageProcessingService imageProcessingService,
+		CompressionService compressionService,
 		OfficeConversionService officeConversionService,
 		DocumentPreviewService documentPreviewService,
 		MetadataProcessingService metadataProcessingService,
@@ -58,6 +61,7 @@ public class ProcessingJobService {
 		this.mediaPreviewService = mediaPreviewService;
 		this.mediaConversionService = mediaConversionService;
 		this.imageProcessingService = imageProcessingService;
+		this.compressionService = compressionService;
 		this.officeConversionService = officeConversionService;
 		this.documentPreviewService = documentPreviewService;
 		this.metadataProcessingService = metadataProcessingService;
@@ -125,6 +129,7 @@ public class ProcessingJobService {
 				case MEDIA_PREVIEW -> processMediaPreview(job.id(), upload);
 				case MEDIA_CONVERT -> processMediaConvert(job.id(), upload, parseMediaJobRequest(job.parameters()));
 				case IMAGE_CONVERT -> processImageConvert(job.id(), upload, parseImageJobRequest(job.parameters()));
+				case FILE_COMPRESS -> processFileCompress(job.id(), upload, parseCompressionJobRequest(job.parameters()));
 				case OFFICE_CONVERT -> processOfficeConvert(job.id(), upload, parseOfficeJobRequest(job.parameters()));
 				case DOCUMENT_PREVIEW -> processDocumentPreview(job.id(), upload);
 				case METADATA_EXPORT -> processMetadataExport(job.id(), upload, parseMetadataJobRequest(job.parameters()));
@@ -200,6 +205,28 @@ public class ProcessingJobService {
 		);
 		return new JobProcessingResult(
 			"Image processing готов через backend %s.".formatted(result.runtimeLabel()),
+			result.artifacts()
+		);
+	}
+
+	private JobProcessingResult processFileCompress(
+		UUID jobId,
+		StoredUpload upload,
+		CompressionRequest request
+	) {
+		updateJob(jobId, currentJob -> currentJob.updateProgress(18, "Готовлю compression orchestration поверх image/media pipelines."));
+		var result = this.compressionService.process(
+			jobId,
+			upload,
+			request,
+			(progressPercent, message) -> updateJob(jobId, currentJob -> currentJob.updateProgress(progressPercent, message))
+		);
+		updateJob(
+			jobId,
+			currentJob -> currentJob.updateProgress(88, "Compression artifacts собраны, сохраняю manifest и финальный delivery result.")
+		);
+		return new JobProcessingResult(
+			"Compression готов через backend %s.".formatted(result.runtimeLabel()),
 			result.artifacts()
 		);
 	}
@@ -296,6 +323,7 @@ public class ProcessingJobService {
 			jobType != ProcessingJobType.MEDIA_PREVIEW &&
 			jobType != ProcessingJobType.MEDIA_CONVERT &&
 			jobType != ProcessingJobType.IMAGE_CONVERT &&
+			jobType != ProcessingJobType.FILE_COMPRESS &&
 			jobType != ProcessingJobType.OFFICE_CONVERT &&
 			jobType != ProcessingJobType.DOCUMENT_PREVIEW &&
 			jobType != ProcessingJobType.METADATA_EXPORT &&
@@ -330,6 +358,16 @@ public class ProcessingJobService {
 				throw new ResponseStatusException(
 					HttpStatus.SERVICE_UNAVAILABLE,
 					"IMAGE_CONVERT job требует доступных convert/ffmpeg/potrace/raw-preview binaries в backend окружении."
+				);
+			}
+		}
+
+		if (jobType == ProcessingJobType.FILE_COMPRESS) {
+			parseCompressionJobRequest(parameters);
+			if (!this.compressionService.isAvailableFor(upload)) {
+				throw new ResponseStatusException(
+					HttpStatus.SERVICE_UNAVAILABLE,
+					"FILE_COMPRESS job недоступен для этого upload в текущем backend окружении."
 				);
 			}
 		}
@@ -423,6 +461,7 @@ public class ProcessingJobService {
 			case MEDIA_PREVIEW -> "Запускаю backend media preview pipeline через ffprobe/ffmpeg.";
 			case MEDIA_CONVERT -> "Запускаю backend media conversion pipeline через ffprobe/ffmpeg.";
 			case IMAGE_CONVERT -> "Запускаю backend imaging pipeline через convert/ffmpeg/potrace.";
+			case FILE_COMPRESS -> "Запускаю backend compression orchestration поверх image/media processing services.";
 			case OFFICE_CONVERT -> "Запускаю backend office/pdf conversion pipeline.";
 			case DOCUMENT_PREVIEW -> "Запускаю backend document intelligence pipeline.";
 			case METADATA_EXPORT -> "Запускаю backend metadata inspect/export pipeline.";
@@ -462,6 +501,41 @@ public class ProcessingJobService {
 			readOptionalString(parameters, "audioCodec"),
 			readOptionalInteger(parameters, "maxWidth"),
 			readOptionalInteger(parameters, "maxHeight"),
+			readOptionalInteger(parameters, "targetFps"),
+			readOptionalInteger(parameters, "videoBitrateKbps"),
+			readOptionalInteger(parameters, "audioBitrateKbps"),
+			readOptionalString(parameters, "presetLabel")
+		);
+	}
+
+	private CompressionRequest parseCompressionJobRequest(Map<String, Object> parameters) {
+		var rawMode = readRequiredString(parameters, "mode").trim().toLowerCase();
+		var mode = switch (rawMode) {
+			case "maximum", "max-reduction", "max_reduction", "maxreduction" -> CompressionRequest.Mode.MAX_REDUCTION;
+			case "target-size", "target_size", "targetsize" -> CompressionRequest.Mode.TARGET_SIZE;
+			case "custom" -> CompressionRequest.Mode.CUSTOM;
+			default -> throw new ResponseStatusException(
+				HttpStatus.BAD_REQUEST,
+				"FILE_COMPRESS принимает mode только maximum, target-size или custom."
+			);
+		};
+
+		var targetSizeBytes = readOptionalLong(parameters, "targetSizeBytes");
+		if (mode == CompressionRequest.Mode.TARGET_SIZE && (targetSizeBytes == null || targetSizeBytes <= 0L)) {
+			throw new ResponseStatusException(
+				HttpStatus.BAD_REQUEST,
+				"FILE_COMPRESS target-size mode требует положительный targetSizeBytes."
+			);
+		}
+
+		return new CompressionRequest(
+			mode,
+			targetSizeBytes,
+			readOptionalString(parameters, "targetExtension"),
+			readOptionalInteger(parameters, "maxWidth"),
+			readOptionalInteger(parameters, "maxHeight"),
+			readOptionalDouble(parameters, "quality"),
+			readOptionalString(parameters, "backgroundColor"),
 			readOptionalInteger(parameters, "targetFps"),
 			readOptionalInteger(parameters, "videoBitrateKbps"),
 			readOptionalInteger(parameters, "audioBitrateKbps"),
@@ -571,6 +645,22 @@ public class ProcessingJobService {
 		}
 		catch (NumberFormatException exception) {
 			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Параметр %s должен быть numeric.".formatted(key), exception);
+		}
+	}
+
+	private Long readOptionalLong(Map<String, Object> parameters, String key) {
+		var value = parameters.get(key);
+		if (value == null) {
+			return null;
+		}
+		if (value instanceof Number number) {
+			return number.longValue();
+		}
+		try {
+			return Long.valueOf(String.valueOf(value));
+		}
+		catch (NumberFormatException exception) {
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Параметр %s должен быть long.".formatted(key), exception);
 		}
 	}
 
