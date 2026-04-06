@@ -26,9 +26,9 @@ Jack задуман как практичный рабочий набор инс
 - backend и frontend разнесены по отдельным каталогам
 - backend теперь уже не только health-check bootstrap: есть первый processing foundation с upload/job/artifact/capability API
 - есть новый UI foundation с neumorphic home-dashboard и крупной навигационной сеткой модулей
-- home уже ведёт в четыре живых маршрута: `viewer`, `converter`, `compression` и `pdf-toolkit`
+- home уже ведёт в пять живых маршрутов: `viewer`, `converter`, `compression`, `pdf-toolkit` и `editor`
 - есть server-assisted processing layer: backend уже закрывает legacy media preview, heavy image-processing jobs, document intelligence preview и metadata operations
-- есть reusable processing-platform: backend отдаёт viewer/converter/compression/pdf-toolkit capability matrix и `platform`-matrix для следующих queued-модулей
+- есть reusable processing-platform: backend отдаёт viewer/converter/compression/pdf-toolkit/editor capability matrix и `platform`-matrix для следующих queued-модулей
 - подготовлены логотип и favicon для дальнейшего использования
 - есть `docker compose`-окружение для локального старта
 - задокументированы workflow-правила, финальная platform-архитектура и roadmap для будущих итераций
@@ -100,9 +100,10 @@ docker compose down -v
 - `GET /api/capabilities/converter`
 - `GET /api/capabilities/compression`
 - `GET /api/capabilities/pdf-toolkit`
+- `GET /api/capabilities/editor`
 - `GET /api/capabilities/platform`
 
-В текущем срезе реально реализованы десять job type:
+В текущем срезе реально реализованы одиннадцать job type:
 
 - `UPLOAD_INTAKE_ANALYSIS` — подтверждает upload/storage/job flow и собирает manifest artifact
 - `MEDIA_PREVIEW` — через `ffprobe` и `ffmpeg` собирает browser-friendly preview для legacy video/audio контейнеров и кладёт в artifacts и binary preview, и manifest
@@ -114,12 +115,14 @@ docker compose down -v
 - `DOCUMENT_PREVIEW` — через backend document intelligence service собирает `summary`, `warnings`, `searchableText`, `layout payload` и при необходимости PDF preview artifact
 - `METADATA_EXPORT` — через backend metadata service читает image/audio metadata и собирает validated export artifact: embedded JPEG EXIF там, где это безопасно, и sidecar JSON для остальных контейнеров
 - `VIEWER_RESOLVE` — собирает unified viewer manifest/artifact contract для server-assisted image/document/video/audio preview поверх уже существующих processing services
+- `EDITOR_PROCESS` — собирает diagnostics, outline и ready/plain-text export artifacts для markdown/html/css/javascript/json/yaml/txt editor flows
 
 Контейнерный backend теперь сам ставит `ffmpeg`, `ffprobe`, `ImageMagick`, `Ghostscript`, `potrace`, `libraw`, `qpdf` и `tesseract`, поэтому `MEDIA_PREVIEW`, `MEDIA_CONVERT`, `IMAGE_CONVERT`, `FILE_COMPRESS`, `OFFICE_CONVERT` и `PDF_TOOLKIT` работают внутри `docker compose` без внешней подготовки образа.
 Frontend viewer уже использует unified backend route для `avi`, `mkv`, `wmv`, `flv`, `aac`, `flac`, `aiff`, `heic`, `tiff`, `raw` family и всего document stack (`pdf`, `txt`, `csv`, `html`, `rtf`, `doc`, `docx`, `odt`, `xls`, `xlsx`, `pptx`, `epub`, `db`, `sqlite`), metadata read/export остаётся за `METADATA_EXPORT`, а converter теперь гонит через backend и heavy image scenarios, и office/pdf conversions, и video/audio delivery-сценарии, поэтому для локальной разработки backend также должен разрешать origin из `JACK_WEB_ALLOWED_ORIGINS`.
 Compression теперь работает как отдельный backend-first route: image/video/audio файл отправляется в `FILE_COMPRESS`, а backend сам подбирает maximum-reduction, target-size или custom candidate ladder и возвращает итоговый artifact вместе с attempt history и preview.
 PDF toolkit теперь тоже работает как отдельный backend-first route: прямой `PDF` intake reuse'ит `VIEWER_RESOLVE`, а совместимые image/office sources сначала проходят backend conversion в `PDF`, после чего тот же workspace закрывает merge/split/rotate, visible signature stamps, term redaction, OCR searchable export и password flows через `PDF_TOOLKIT`.
-Отдельный `platform` capability scope теперь показывает, как следующие модули (`Multi-Format Editor`, `Batch Conversion`, `OCR`, `Office/PDF Conversion`) должны reuse'ить уже существующий processing stack, а не заводить новый browser-heavy runtime.
+Editor теперь тоже работает как отдельный backend-first route: browser держит templates, snippets, formatting и live preview, а `EDITOR_PROCESS` возвращает diagnostics, outline и ready/plain-text artifacts для markdown/html/css/javascript/json/yaml/txt drafts.
+Отдельный `platform` capability scope теперь показывает, как следующие модули (`Batch Conversion`, `OCR`, `Office/PDF Conversion`) должны reuse'ить уже существующий processing stack, а не заводить новый browser-heavy runtime.
 
 ## Локальный Запуск Без Docker
 
@@ -422,13 +425,25 @@ certificate-based digital signature; redaction пересобирает стра
 
 ### 6. Multi-Format Editor
 
-- [ ] Полноценный редактор для нескольких текстовых форматов
-- [ ] Знакомые шорткаты и их UI-аналог
-- [ ] Форматно-специфичные помощники для Markdown, HTML, CSS, JS и других форматов
-- [ ] Подсветка синтаксиса и live preview
-- [ ] Безопасная валидация против вредоносных payload и очевидных уязвимостей
-- [ ] Экспорт в plain text или готовые файлы
-- [ ] Встроенное форматирование по аналогии с IDE
+- [x] Полноценный редактор для нескольких текстовых форматов
+- [x] Новый документ, открытие поддержанных файлов и локальный autosave draft
+- [x] Знакомые шорткаты и их UI-аналог
+- [x] Форматно-специфичные помощники для Markdown, HTML, CSS, JS и других форматов
+- [x] Подсветка синтаксиса и live preview
+- [x] Панель структуры, diagnostics и status свежести backend validate
+- [x] Безопасная валидация против вредоносных payload и очевидных уязвимостей
+- [x] Экспорт в plain text или готовые файлы
+- [x] Встроенное форматирование по аналогии с IDE
+- [x] Поддержка: `md`, `markdown`, `html`, `htm`, `css`, `js`, `mjs`, `cjs`, `json`, `yaml`, `yml`, `txt`, `text`
+
+Editor в итерации 6 теперь закрыт как отдельный backend-first route.
+Архитектура здесь разделена осознанно: frontend держит split-view workspace, template/snippet flow,
+keyboard shortcuts, local draft persistence, syntax mirror и live preview, а backend `EDITOR_PROCESS`
+получает текущий draft как upload, прогоняет format-aware diagnostics, reuse'ит `DOCUMENT_PREVIEW`
+там, где уже есть готовый text/html contract, и возвращает manifest вместе с download-ready artifact
+в исходном формате и отдельным plain-text export.
+В текущем production slice реально поддержаны `Markdown`, `HTML`, `CSS`, `JavaScript`, `JSON`,
+`YAML` и `Plain Text`.
 
 ### 7. Dev Tools And Utils
 
