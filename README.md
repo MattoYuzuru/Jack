@@ -97,18 +97,19 @@ docker compose down -v
 - `GET /api/capabilities/converter`
 - `GET /api/capabilities/platform`
 
-В текущем срезе реально реализованы семь job type:
+В текущем срезе реально реализованы восемь job type:
 
 - `UPLOAD_INTAKE_ANALYSIS` — подтверждает upload/storage/job flow и собирает manifest artifact
 - `MEDIA_PREVIEW` — через `ffprobe` и `ffmpeg` собирает browser-friendly preview для legacy video/audio контейнеров и кладёт в artifacts и binary preview, и manifest
+- `MEDIA_CONVERT` — через `ffprobe` и `ffmpeg` собирает preview/result artifacts для video/audio conversion, delivery export и container/codec transcode сценариев
 - `IMAGE_CONVERT` — через server imaging toolchain собирает preview/result artifacts для heavy image preview и conversion scenarios
 - `OFFICE_CONVERT` — через backend document/presentation/spreadsheet adapters собирает office/pdf conversion artifacts, manifest и preview для narrative, table и slide сценариев
 - `DOCUMENT_PREVIEW` — через backend document intelligence service собирает `summary`, `warnings`, `searchableText`, `layout payload` и при необходимости PDF preview artifact
 - `METADATA_EXPORT` — через backend metadata service читает image/audio metadata и собирает validated export artifact: embedded JPEG EXIF там, где это безопасно, и sidecar JSON для остальных контейнеров
 - `VIEWER_RESOLVE` — собирает unified viewer manifest/artifact contract для server-assisted image/document/video/audio preview поверх уже существующих processing services
 
-Контейнерный backend теперь сам ставит `ffmpeg`, `ffprobe`, `ImageMagick`, `Ghostscript`, `potrace` и `libraw`, поэтому `MEDIA_PREVIEW`, `IMAGE_CONVERT` и `OFFICE_CONVERT` работают внутри `docker compose` без внешней подготовки образа.
-Frontend viewer уже использует unified backend route для `avi`, `mkv`, `wmv`, `flv`, `aac`, `flac`, `aiff`, `heic`, `tiff`, `raw` family и всего document stack (`pdf`, `txt`, `csv`, `html`, `rtf`, `doc`, `docx`, `odt`, `xls`, `xlsx`, `pptx`, `epub`, `db`, `sqlite`), metadata read/export остаётся за `METADATA_EXPORT`, а converter теперь гонит через backend и heavy image scenarios, и office/pdf conversions, поэтому для локальной разработки backend также должен разрешать origin из `JACK_WEB_ALLOWED_ORIGINS`.
+Контейнерный backend теперь сам ставит `ffmpeg`, `ffprobe`, `ImageMagick`, `Ghostscript`, `potrace` и `libraw`, поэтому `MEDIA_PREVIEW`, `MEDIA_CONVERT`, `IMAGE_CONVERT` и `OFFICE_CONVERT` работают внутри `docker compose` без внешней подготовки образа.
+Frontend viewer уже использует unified backend route для `avi`, `mkv`, `wmv`, `flv`, `aac`, `flac`, `aiff`, `heic`, `tiff`, `raw` family и всего document stack (`pdf`, `txt`, `csv`, `html`, `rtf`, `doc`, `docx`, `odt`, `xls`, `xlsx`, `pptx`, `epub`, `db`, `sqlite`), metadata read/export остаётся за `METADATA_EXPORT`, а converter теперь гонит через backend и heavy image scenarios, и office/pdf conversions, и video/audio delivery-сценарии, поэтому для локальной разработки backend также должен разрешать origin из `JACK_WEB_ALLOWED_ORIGINS`.
 Отдельный `platform` capability scope теперь показывает, как следующие модули (`Compression`, `PDF Toolkit`, `Multi-Format Editor`, `Batch Conversion`, `OCR`, `Office/PDF Conversion`) должны reuse'ить уже существующий processing stack, а не заводить новый browser-heavy runtime.
 
 ## Локальный Запуск Без Docker
@@ -236,23 +237,23 @@ groups, timeline/volume/rate controls, loop и keyboard flow для быстры
 
 ### 3. Конвертация Файлов
 
-- [ ] Широкое покрытие конвертаций с фокусом на реальные пользовательские сценарии
-- [ ] Конвертация изображений, документов, таблиц, презентаций, видео и аудио
-- [ ] Трансформации контейнеров, кодеков, размеров и параметров качества
+- [x] Широкое покрытие конвертаций с фокусом на реальные пользовательские сценарии
+- [x] Конвертация изображений, документов, таблиц, презентаций, видео и аудио
+- [x] Трансформации контейнеров, кодеков, размеров и параметров качества
 
 Конвертер теперь работает как backend-first processing route. Архитектура всё ещё построена через
 `scenario registry -> source strategy -> target strategy`, но сам route больше не выбирает
 между "простыми локальными" и "тяжёлыми серверными" ветками: любой поддержанный сценарий
-уходит в backend `IMAGE_CONVERT` или `OFFICE_CONVERT`, а браузер держит orchestration, progress UI,
-retry/cancel, artifact reuse и preview уже готового результата.
+уходит в backend `IMAGE_CONVERT`, `OFFICE_CONVERT` или `MEDIA_CONVERT`, а браузер держит orchestration,
+progress UI, retry/cancel, artifact reuse и preview уже готового результата.
 Backend собирает preview/result artifacts и централизованно применяет resize/quality baseline,
 чтобы дальнейшие batch- и delivery-сценарии не размазывались по UI-настройкам.
 Дополнительно capability/source-target/preset matrix теперь тоже приходит с backend `GET /api/capabilities/converter`:
 frontend больше не держит локальный registry как единственный source of truth и только резолвит UI вокруг server-owned правил.
 `JPG`, `PNG`, `WebP`, single-page `PDF`, single-frame `TIFF`, `AVIF`, `ICO`, traced `SVG`,
 `PSD` composite decode, `AI/EPS` raster intake, `HEIC`, `TIFF`, `RAW`, narrative office formats,
-spreadsheets, `PDF` table/text exports и `PPTX`-based document/media outputs теперь закрываются через
-единый server-owned job lifecycle без browser-heavy decode/encode runtime.
+spreadsheets, `PDF` table/text exports, `PPTX`-based document/media outputs, а также media container/audio delivery
+теперь закрываются через единый server-owned job lifecycle без browser-heavy decode/encode runtime.
 
 #### 3.1 Частые Сценарии Для Изображений
 
@@ -326,28 +327,42 @@ roundtrip стилей, embedded media, formulas и animations.
 
 #### 3.3 Частые Сценарии Для Видео И Аудио
 
-- [ ] `MOV -> MP4`
-- [ ] `MKV -> MP4`
-- [ ] `AVI -> MP4`
-- [ ] `WebM -> MP4`
-- [ ] `MP4 -> WebM`
-- [ ] `video -> GIF`
-- [ ] `video -> MP3/WAV/AAC`
-- [ ] `4K -> 1080p/720p`
-- [ ] `H.265 -> H.264`
-- [ ] `H.264 -> AV1`
-- [ ] `WAV -> MP3`
-- [ ] `FLAC -> MP3`
-- [ ] `MP4 -> MP3`
-- [ ] `M4A <-> MP3`
-- [ ] `WAV <-> FLAC`
+- [x] `MOV -> MP4`
+- [x] `MKV -> MP4`
+- [x] `AVI -> MP4`
+- [x] `WebM -> MP4`
+- [x] `MP4 -> WebM`
+- [x] `video -> GIF`
+- [x] `video -> MP3/WAV/AAC`
+- [x] `4K -> 1080p/720p`
+- [x] `H.265 -> H.264`
+- [x] `H.264 -> AV1`
+- [x] `WAV -> MP3`
+- [x] `FLAC -> MP3`
+- [x] `MP4 -> MP3`
+- [x] `M4A <-> MP3`
+- [x] `WAV <-> FLAC`
+
+Media delivery-блок теперь закрывается через отдельный backend `MEDIA_CONVERT` route.
+Сценарии `mov/mkv/avi/webm -> mp4`, `mp4 -> webm`, `mov/mkv/avi/webm/mp4 -> gif`,
+`mov/mkv/avi/webm/mp4 -> mp3/wav/aac`, `wav -> mp3/flac`, `flac -> mp3/wav`, `m4a -> mp3`
+и `mp3 -> m4a` идут через тот же upload/job/artifact lifecycle, что и остальные converter-семьи.
+Workspace отдельно показывает container-target, resolved audio codec, bitrate, resolution и FPS,
+а backend manifest возвращает source/result facts и предупреждения по потере аудио или смене delivery-профиля.
 
 #### 3.4 Известные Ограничения Конвертации
 
-- [ ] Учитывать потери верстки в `PDF -> Word`
-- [ ] Обрабатывать сценарии, где для сканированных PDF сначала нужен OCR
-- [ ] Ясно объяснять ограничения CSV
-- [ ] Разделять контейнер, кодек, битрейт, разрешение и FPS
+- [x] Учитывать потери верстки в `PDF -> Word`
+- [x] Обрабатывать сценарии, где для сканированных PDF сначала нужен OCR
+- [x] Ясно объяснять ограничения CSV
+- [x] Разделять контейнер, кодек, битрейт, разрешение и FPS
+
+Эти ограничения теперь подняты на уровень backend matrix и converter workspace:
+`PDF -> DOCX` заранее предупреждает про возможную потерю сложной вёрстки,
+`PDF -> DOCX/TXT/XLSX/CSV/PPTX` для сканов честно требует OCR как отдельный следующий шаг,
+`CSV` остаётся flattened single-sheet export без formulas/styles/comments,
+а media conversion больше не прячет всё в одном выборе формата и явно разводит контейнер,
+video/audio codec, bitrate, resolution и FPS как разные оси конфигурации.
 
 ### 4. Сжатие
 
