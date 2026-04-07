@@ -16,6 +16,7 @@ import com.keykomi.jack.processing.domain.StoredUpload;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -119,7 +120,7 @@ public class ProcessingJobService {
 
 	public StoredProcessingJob enqueue(UUID uploadId, ProcessingJobType jobType, Map<String, Object> parameters) {
 		var upload = this.uploadStorageService.getRequiredUpload(uploadId);
-		var normalizedParameters = parameters == null ? Map.<String, Object>of() : Map.copyOf(parameters);
+		var normalizedParameters = sanitizeParameters(parameters);
 		ensureJobTypeSupported(upload, jobType, normalizedParameters);
 
 		var job = StoredProcessingJob.queued(UUID.randomUUID(), upload.id(), jobType, normalizedParameters, Instant.now());
@@ -196,6 +197,23 @@ public class ProcessingJobService {
 		}
 
 		return deletedJobs;
+	}
+
+	private Map<String, Object> sanitizeParameters(Map<String, Object> parameters) {
+		if (parameters == null || parameters.isEmpty()) {
+			return Map.of();
+		}
+
+		var sanitized = new LinkedHashMap<String, Object>();
+		for (var entry : parameters.entrySet()) {
+			if (entry.getKey() == null || entry.getValue() == null) {
+				continue;
+			}
+
+			sanitized.put(entry.getKey(), entry.getValue());
+		}
+
+		return sanitized.isEmpty() ? Map.of() : Map.copyOf(sanitized);
 	}
 
 	private void process(UUID jobId) {

@@ -1,7 +1,10 @@
 package com.keykomi.jack.processing.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.keykomi.jack.processing.config.ProcessingProperties;
@@ -13,11 +16,13 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Future;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.mock.web.MockMultipartFile;
@@ -153,6 +158,58 @@ class ProcessingStorageCleanupTests {
 		assertThat(processingJobService.findJob(expiredJob.id())).isEmpty();
 		assertThat(processingJobService.findJob(recentJob.id())).isPresent();
 		assertThat(processingJobService.findJob(runningJob.id())).isPresent();
+	}
+
+	@Test
+	void processingJobServiceDropsNullParametersBeforeCreatingJob() {
+		var uploadStorageService = mock(UploadStorageService.class);
+		var executorService = mock(ExecutorService.class);
+		var compressionService = mock(CompressionService.class);
+		@SuppressWarnings("unchecked")
+		Future<Object> future = mock(Future.class);
+		var upload = new com.keykomi.jack.processing.domain.StoredUpload(
+			UUID.randomUUID(),
+			"sample.png",
+			"image/png",
+			"png",
+			128,
+			"abc",
+			Instant.now(),
+			this.tempDir.resolve("sample.png")
+		);
+
+		when(uploadStorageService.getRequiredUpload(upload.id())).thenReturn(upload);
+		when(compressionService.isAvailableFor(upload)).thenReturn(true);
+		doReturn(future).when(executorService).submit(any(Runnable.class));
+
+		var processingJobService = new ProcessingJobService(
+			uploadStorageService,
+			mock(ArtifactStorageService.class),
+			mock(MediaPreviewService.class),
+			mock(MediaConversionService.class),
+			mock(ImageProcessingService.class),
+			compressionService,
+			mock(PdfToolkitService.class),
+			mock(OfficeConversionService.class),
+			mock(DocumentPreviewService.class),
+			mock(MetadataProcessingService.class),
+			mock(ViewerResolveService.class),
+			mock(EditorProcessingService.class),
+			executorService,
+			new SimpleMeterRegistry()
+		);
+
+		var parameters = new LinkedHashMap<String, Object>();
+		parameters.put("mode", "maximum");
+		parameters.put("targetExtension", "webp");
+		parameters.put("targetSizeBytes", null);
+		parameters.put("quality", null);
+
+		var job = processingJobService.enqueue(upload.id(), ProcessingJobType.FILE_COMPRESS, parameters);
+
+		assertThat(job.parameters()).containsEntry("mode", "maximum");
+		assertThat(job.parameters()).containsEntry("targetExtension", "webp");
+		assertThat(job.parameters()).doesNotContainKeys("targetSizeBytes", "quality");
 	}
 
 	private ProcessingProperties properties(Path root) {
