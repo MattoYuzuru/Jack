@@ -93,7 +93,48 @@ npm run dev
 - **Backend:** Spring Boot, Spring Web MVC, Spring Data JPA, PostgreSQL
 - **Frontend:** Vue 3, Vue Router, Pinia, Vite, TypeScript
 - **Тесты и качество:** Vitest, ESLint, Prettier
-- **Инфраструктура:** Docker Compose
+- **Инфраструктура:** Docker Compose, GHCR, k3s
+
+## Deploy На VPS Через GHCR И k3s
+
+В репозитории теперь есть production-контур:
+
+- GitHub Actions pipeline: `.github/workflows/ci-cd.yml`
+- Kubernetes manifests: `k8s/jack/`
+- bootstrap-скрипт для кластера: `scripts/deploy/jack-bootstrap-k8s.sh`
+- production Dockerfiles: `backend/Dockerfile.prod` и `frontend/Dockerfile.prod`
+
+Схема рассчитана на single-domain ingress:
+
+- `https://jack.keykomi.com/` -> frontend
+- `https://jack.keykomi.com/api/*` -> backend API
+- `https://jack.keykomi.com/actuator/health` -> backend health endpoint
+
+После push в GitHub workflow:
+
+- прогоняет проверки;
+- публикует `backend` и `frontend` образы в `ghcr.io/mattoyuzuru/jack/...`;
+- для default branch обновляет тег `edge`.
+
+Для первого bootstrap или обычного rollout на VPS:
+
+```bash
+ssh -tt -i ~/sshKeysDir/id_ed25519_hse matto@158.160.66.87 '
+  set -euo pipefail
+  cd /opt/jack
+  sudo -v
+  sudo git fetch --all --prune
+  sudo git checkout main
+  sudo git pull --ff-only
+  sudo JACK_IMAGE_TAG=edge ./scripts/deploy/jack-bootstrap-k8s.sh
+  sudo k3s kubectl -n jack rollout restart deployment/backend deployment/frontend
+  sudo k3s kubectl -n jack rollout status deployment/backend --timeout=240s
+  sudo k3s kubectl -n jack rollout status deployment/frontend --timeout=180s
+  sudo k3s kubectl -n jack get ingress,svc,pods,pvc
+'
+```
+
+Если нужно выкатить не `main`, а конкретную feature-ветку до merge, workflow также публикует branch tag вида `branch-feat-k8s-edge-deploy`, и его можно передать через `JACK_IMAGE_TAG=...`.
 
 ## Roadmap и Выполненная Работа
 
