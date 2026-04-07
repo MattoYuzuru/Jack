@@ -1,0 +1,78 @@
+FROM ubuntu:24.04 AS builder
+
+ENV JAVA_HOME=/opt/java/openjdk
+ENV PATH="${JAVA_HOME}/bin:${PATH}"
+
+RUN set -eux; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends ca-certificates curl tar; \
+    mkdir -p /opt/java; \
+    curl -fsSL https://corretto.aws/downloads/latest/amazon-corretto-26-x64-linux-jdk.tar.gz -o /tmp/amazon-corretto.tar.gz; \
+    tar -xzf /tmp/amazon-corretto.tar.gz -C /opt/java; \
+    CORRETTO_DIR="$(find /opt/java -maxdepth 1 -type d -name 'amazon-corretto-*' | head -n 1)"; \
+    mv "$CORRETTO_DIR" "${JAVA_HOME}"; \
+    rm -f /tmp/amazon-corretto.tar.gz; \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /workspace
+
+COPY gradlew gradlew
+COPY gradle gradle
+COPY build.gradle.kts settings.gradle.kts gradle.properties ./
+
+RUN chmod +x ./gradlew
+
+COPY src src
+
+RUN ./gradlew --no-daemon bootJar
+
+FROM ubuntu:24.04
+
+ENV JAVA_HOME=/opt/java/openjdk
+ENV PATH="${JAVA_HOME}/bin:${PATH}"
+ENV JAVA_TOOL_OPTIONS="-Djava.awt.headless=true"
+ENV TESSDATA_PREFIX=/usr/share/tesseract-ocr/5/tessdata
+
+RUN set -eux; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends \
+      ca-certificates \
+      curl \
+      ffmpeg \
+      fontconfig \
+      ghostscript \
+      imagemagick \
+      libraw-bin \
+      potrace \
+      qpdf \
+      librsvg2-bin \
+      tesseract-ocr \
+      tesseract-ocr-rus \
+      tar; \
+    mkdir -p /opt/java /app; \
+    curl -fsSL https://corretto.aws/downloads/latest/amazon-corretto-26-x64-linux-jdk.tar.gz -o /tmp/amazon-corretto.tar.gz; \
+    tar -xzf /tmp/amazon-corretto.tar.gz -C /opt/java; \
+    CORRETTO_DIR="$(find /opt/java -maxdepth 1 -type d -name 'amazon-corretto-*' | head -n 1)"; \
+    mv "$CORRETTO_DIR" "${JAVA_HOME}"; \
+    rm -f /tmp/amazon-corretto.tar.gz; \
+    rm -rf /var/lib/apt/lists/*; \
+    # Разрешаем PDF/PS family в policy, иначе ImageMagick в контейнере режет Phase 2 targets.
+    for policy in /etc/ImageMagick-6/policy.xml /etc/ImageMagick-7/policy.xml; do \
+      if [ -f "$policy" ]; then \
+        sed -i 's/rights="none" pattern="PDF"/rights="read|write" pattern="PDF"/g' "$policy"; \
+        sed -i 's/rights="none" pattern="PS"/rights="read|write" pattern="PS"/g' "$policy"; \
+        sed -i 's/rights="none" pattern="PS2"/rights="read|write" pattern="PS2"/g' "$policy"; \
+        sed -i 's/rights="none" pattern="PS3"/rights="read|write" pattern="PS3"/g' "$policy"; \
+        sed -i 's/rights="none" pattern="EPS"/rights="read|write" pattern="EPS"/g' "$policy"; \
+        sed -i 's/rights="none" pattern="XPS"/rights="read|write" pattern="XPS"/g' "$policy"; \
+      fi; \
+    done; \
+    java -version
+
+WORKDIR /workspace
+
+COPY --from=builder /workspace/build/libs/*.jar /app/jack.jar
+
+EXPOSE 8080
+
+CMD ["java", "-jar", "/app/jack.jar"]
