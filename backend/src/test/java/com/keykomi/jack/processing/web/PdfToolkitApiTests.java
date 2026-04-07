@@ -49,6 +49,15 @@ class PdfToolkitApiTests {
 		#!/bin/bash
 		set -euo pipefail
 
+		if [[ "${1:-}" == "--list-langs" ]]; then
+		  cat <<'EOF'
+		List of available languages in "/fake/tessdata" (2):
+		eng
+		osd
+		EOF
+		  exit 0
+		fi
+
 		input="$1"
 		output="$2"
 		printf 'OCR text for %%s\\n' "$(basename "$input")" > "${output}.txt"
@@ -186,6 +195,23 @@ class PdfToolkitApiTests {
 		try (var ocrDocument = Loader.loadPDF(downloadArtifactBytes(artifacts.get("pdf-toolkit-binary")))) {
 			assertThat(ocrDocument.getNumberOfPages()).isEqualTo(2);
 		}
+	}
+
+	@Test
+	void ocrOperationFailsWithHelpfulMessageForUnsupportedLanguage() throws Exception {
+		var uploadId = upload("scan.pdf", "application/pdf", createPdfBytes("Scanned visual page", "Second scanned page"));
+		var failedJob = awaitJobCompletion(createPdfToolkitJob(uploadId, """
+			{
+			  "operation": "ocr",
+			  "ocrLanguage": "rus"
+			}
+			"""));
+
+		assertThat(failedJob.path("status").asText()).isEqualTo("FAILED");
+		assertThat(failedJob.path("errorMessage").asText())
+			.contains("OCR язык rus не установлен")
+			.contains("eng")
+			.contains("osd");
 	}
 
 	@Test
