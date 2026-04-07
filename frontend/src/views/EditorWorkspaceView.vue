@@ -25,13 +25,7 @@ const summaryFacts = computed(() => {
   ]
 })
 
-const shortcutPills = computed(() => [
-  'Mod+S скачать файл',
-  'Mod+Shift+S скачать текст',
-  'Mod+Enter проверить',
-  'Alt+Shift+F форматировать',
-  'Tab / Shift+Tab отступ',
-])
+const shortcutPills = computed(() => ['Markdown', 'HTML', 'JSON', 'YAML', 'TXT'])
 
 function formatTabLabel(tab: EditorPanelTab): string {
   switch (tab) {
@@ -123,14 +117,11 @@ onMounted(() => {
 
     <section class="editor-hero">
       <article class="panel-surface editor-hero__copy">
-        <p class="eyebrow">Писать, проверять и сразу сохранять результат</p>
-        <h1>
-          Редактор помогает быстро привести в порядок Markdown, HTML, CSS, JavaScript, JSON, YAML и
-          обычный текст в одном рабочем окне.
-        </h1>
+        <p class="eyebrow">Editor</p>
+        <h1>Открой черновик и правь его в одном рабочем окне.</h1>
         <p class="lead">
-          Здесь удобно подготовить заметку, конфиг, сниппет или небольшой документ: отформатировать,
-          проверить структуру, посмотреть превью и скачать итоговый файл без лишних шагов.
+          Markdown, HTML, CSS, JavaScript, JSON, YAML и обычный текст редактируются, проверяются и
+          экспортируются без лишних экранов.
         </p>
 
         <div class="signal-row">
@@ -206,16 +197,14 @@ onMounted(() => {
           </div>
 
           <div class="editor-toolbar__cluster editor-toolbar__cluster--actions">
-            <button class="action-button" type="button" @click="triggerFileOpen">
-              Открыть файл
-            </button>
+            <button class="action-button" type="button" @click="triggerFileOpen">Открыть</button>
             <button
               class="action-button"
               type="button"
               :disabled="!workspace.canFormat.value"
               @click="workspace.formatDocument"
             >
-              Форматировать
+              Формат
             </button>
             <button
               class="action-button action-button--accent"
@@ -231,7 +220,7 @@ onMounted(() => {
               :disabled="workspace.isValidating.value"
               @click="workspace.downloadReadyFile"
             >
-              Скачать файл
+              Файл
             </button>
             <button
               class="action-button"
@@ -239,7 +228,7 @@ onMounted(() => {
               :disabled="workspace.isValidating.value"
               @click="workspace.downloadPlainTextFile"
             >
-              Скачать текст
+              Текст
             </button>
             <button
               v-if="workspace.activeJobId.value"
@@ -248,10 +237,10 @@ onMounted(() => {
               :disabled="workspace.isCancelling.value"
               @click="workspace.cancelValidation"
             >
-              Отменить
+              Стоп
             </button>
             <button class="action-button" type="button" @click="workspace.clearPersistedDraft">
-              Очистить черновик
+              Очистить
             </button>
             <input
               ref="fileInput"
@@ -546,6 +535,11 @@ onMounted(() => {
   align-items: flex-end;
 }
 
+.editor-toolbar__cluster--actions .action-button {
+  min-width: 0;
+  padding-inline: 14px;
+}
+
 .editor-field {
   display: grid;
   gap: 8px;
@@ -593,7 +587,7 @@ onMounted(() => {
 .editor-helper {
   display: grid;
   gap: 2px;
-  min-width: 112px;
+  min-width: 92px;
   padding-block: 11px;
 }
 
@@ -750,6 +744,30 @@ onMounted(() => {
   border-radius: 18px;
   background: rgba(16, 36, 38, 0.94);
   color: rgba(255, 250, 242, 0.9);
+}
+
+.editor-rendered-preview :deep(ul),
+.editor-rendered-preview :deep(ol) {
+  padding-left: 20px;
+}
+
+.editor-rendered-preview :deep(.task-list) {
+  padding-left: 0;
+  list-style: none;
+}
+
+.editor-rendered-preview :deep(.task-list__item) {
+  margin: 0 0 10px;
+}
+
+.editor-rendered-preview :deep(.task-list__item label) {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.editor-rendered-preview :deep(.task-list__item input) {
+  pointer-events: none;
 }
 
 .editor-syntax-preview {

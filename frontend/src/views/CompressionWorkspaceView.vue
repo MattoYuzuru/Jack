@@ -106,26 +106,13 @@ function formatModeLabel(modeId: string): string {
 function formatModeDetail(modeId: string): string {
   switch (modeId) {
     case 'maximum':
-      return 'Jack подберёт самый лёгкий практический вариант без ручного перебора настроек.'
+      return 'Минимальный вес'
     case 'target-size':
-      return 'Сервис будет искать лучший результат, который помещается в заданный лимит.'
+      return 'Под лимит'
     case 'custom':
-      return 'Можно вручную выбрать формат результата, качество, битрейт, размер кадра и FPS.'
+      return 'Ручные настройки'
     default:
-      return ''
-  }
-}
-
-function formatModeAccents(modeId: string): string[] {
-  switch (modeId) {
-    case 'maximum':
-      return ['Минимальный вес', 'Автовыбор']
-    case 'target-size':
-      return ['Лимит', 'Best effort']
-    case 'custom':
-      return ['Вручную', 'Качество']
-    default:
-      return []
+      return modeId
   }
 }
 
@@ -274,14 +261,11 @@ function onDrop(event: DragEvent) {
 
     <section class="compression-hero-grid">
       <article class="panel-surface compression-hero-copy">
-        <p class="eyebrow">Когда важен итоговый вес файла</p>
-        <h1>
-          Сожми изображение, видео или аудио под лимит загрузки либо до практического минимума.
-        </h1>
+        <p class="eyebrow">Compression</p>
+        <h1>Уменьши файл под лимит или до лёгкого рабочего размера.</h1>
         <p class="lead">
-          Этот модуль нужен для реальных ограничений: вложения в письме, лимит CMS, мессенджеры,
-          отчёты и выгрузки. Вместо ручного перебора настроек можно сразу выбрать цель и сравнить,
-          как менялся вес файла на каждом шаге.
+          Выбери файл, задай цель и сравни результат с исходником. Jack сам подберёт подходящее
+          сжатие или оставит ручные настройки там, где они действительно нужны.
         </p>
 
         <div class="compression-signal-row">
@@ -289,31 +273,49 @@ function onDrop(event: DragEvent) {
           <span class="chip-pill">Видео</span>
           <span class="chip-pill">Аудио</span>
           <span class="chip-pill">Лимит размера</span>
-          <span class="chip-pill">Максимальное уменьшение</span>
-          <span class="chip-pill">История попыток</span>
+          <span class="chip-pill">Автоподбор</span>
+          <span class="chip-pill">История</span>
         </div>
       </article>
 
       <article class="panel-surface compression-system-card">
-        <p class="eyebrow">Режимы работы</p>
-        <h2>Сначала цель по весу, затем подходящая стратегия для выбранного типа файла.</h2>
+        <p class="eyebrow">Порядок работы</p>
+        <h2>Загрузить, выбрать режим, скачать результат.</h2>
 
         <div class="mode-list">
-          <article v-for="mode in availableModes" :key="mode.id" class="mode-item">
+          <article class="mode-item">
+            <strong>1</strong>
             <div>
-              <h3>{{ formatModeLabel(mode.id) }}</h3>
-              <p>{{ formatModeDetail(mode.id) }}</p>
-            </div>
-            <div class="mode-item__accents">
-              <span
-                v-for="accent in formatModeAccents(mode.id)"
-                :key="accent"
-                class="chip-pill chip-pill--compact"
-              >
-                {{ accent }}
-              </span>
+              <h3>Файл</h3>
+              <p>Перетащи изображение, видео или аудио.</p>
             </div>
           </article>
+
+          <article class="mode-item">
+            <strong>2</strong>
+            <div>
+              <h3>Режим</h3>
+              <p>Максимум, лимит размера или ручная настройка.</p>
+            </div>
+          </article>
+
+          <article class="mode-item">
+            <strong>3</strong>
+            <div>
+              <h3>Скачать</h3>
+              <p>Сравни итоговый вес и при необходимости вернись к истории.</p>
+            </div>
+          </article>
+        </div>
+
+        <div class="target-badges">
+          <span
+            v-for="mode in availableModes"
+            :key="mode.id"
+            class="chip-pill chip-pill--compact chip-pill--accent"
+          >
+            {{ formatModeLabel(mode.id) }}
+          </span>
         </div>
       </article>
     </section>
@@ -323,7 +325,7 @@ function onDrop(event: DragEvent) {
         <div class="panel-header">
           <div>
             <p class="eyebrow">Исходный файл</p>
-            <h2>Выбери, что нужно уменьшить.</h2>
+            <h2>Загрузи файл</h2>
           </div>
           <button type="button" class="action-button" @click="openFilePicker">Выбрать файл</button>
         </div>
@@ -345,14 +347,12 @@ function onDrop(event: DragEvent) {
           @drop="onDrop"
         >
           <span class="compression-dropzone__badge">Перетащить или выбрать</span>
-          <strong>{{
-            prepared ? prepared.file.name : 'Перетащи изображение, видео или аудиофайл'
-          }}</strong>
+          <strong>{{ prepared ? prepared.file.name : 'Перетащи файл в окно' }}</strong>
           <span>
             {{
               prepared
                 ? formatSourceDescription(prepared.source)
-                : 'После выбора файла Jack подскажет подходящие форматы и режимы сжатия для этого типа данных.'
+                : 'После выбора появятся режимы сжатия, настройки и сравнение результата.'
             }}
           </span>
         </div>
@@ -786,10 +786,24 @@ function onDrop(event: DragEvent) {
 }
 
 .mode-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
   padding: 18px;
   border-radius: 24px;
   background: var(--surface-muted);
   box-shadow: var(--shadow-pressed);
+}
+
+.mode-item strong {
+  display: grid;
+  place-items: center;
+  min-width: 38px;
+  min-height: 38px;
+  border-radius: 999px;
+  background: rgba(29, 92, 85, 0.1);
+  color: var(--accent-cool-strong);
+  font-size: 1rem;
 }
 
 .mode-item h3,
@@ -799,10 +813,8 @@ function onDrop(event: DragEvent) {
   font-size: 1rem;
 }
 
-.mode-item__accents {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
+.mode-item p {
+  margin-top: 8px;
 }
 
 .file-input {

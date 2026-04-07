@@ -26,7 +26,6 @@ import {
   exportViewerMetadata,
 } from '../features/viewer/application/viewer-metadata-writer'
 import { stashEditorIncomingDraft } from '../features/editor/application/editor-handoff'
-import type { ViewerFormatDefinition } from '../features/viewer/domain/viewer-registry'
 
 const fileInput = ref<HTMLInputElement | null>(null)
 const subtitleInput = ref<HTMLInputElement | null>(null)
@@ -55,156 +54,6 @@ const router = useRouter()
 const videoPlaybackRates = [0.5, 0.75, 1, 1.25, 1.5, 2]
 const audioPlaybackRates = [0.75, 1, 1.25, 1.5, 2]
 const videoFrameRateOptions = [23.976, 24, 25, 29.97, 30, 50, 59.94, 60]
-const videoShortcutHints = [
-  { keys: 'Space', description: 'Пауза / воспроизведение' },
-  { keys: '← / →', description: 'Шаг -5с / +5с' },
-  { keys: 'Shift + ← / →', description: 'Один кадр назад / вперёд' },
-  { keys: 'M', description: 'Вкл / выкл звук' },
-  { keys: 'L', description: 'Вкл / выкл повтор' },
-  { keys: 'P', description: 'Картинка в картинке' },
-  { keys: 'C', description: 'Скопировать текущее время' },
-]
-const audioShortcutHints = [
-  { keys: 'Space', description: 'Пауза / воспроизведение' },
-  { keys: '← / →', description: 'Шаг -10с / +10с' },
-  { keys: 'M', description: 'Вкл / выкл звук' },
-  { keys: 'L', description: 'Вкл / выкл повтор' },
-  { keys: 'C', description: 'Скопировать текущее время' },
-]
-
-const browserNativeFormats = computed(() =>
-  imageFormats.value.filter((definition) => definition.previewPipeline === 'browser-native'),
-)
-
-const serverImageFormats = computed(() =>
-  imageFormats.value.filter((definition) => definition.previewPipeline === 'server-assisted'),
-)
-
-const activeDocumentFormats = computed(() =>
-  documentFormats.value.filter((definition) => definition.previewPipeline !== 'planned'),
-)
-
-const plannedDocumentFormats = computed(() =>
-  documentFormats.value.filter((definition) => definition.previewPipeline === 'planned'),
-)
-
-const activeMediaFormats = computed(() =>
-  mediaFormats.value.filter((definition) => definition.previewPipeline !== 'planned'),
-)
-
-const plannedMediaFormats = computed(() =>
-  mediaFormats.value.filter((definition) => definition.previewPipeline === 'planned'),
-)
-
-const activeAudioFormats = computed(() =>
-  audioFormats.value.filter((definition) => definition.previewPipeline !== 'planned'),
-)
-
-const plannedAudioFormats = computed(() =>
-  audioFormats.value.filter((definition) => definition.previewPipeline === 'planned'),
-)
-
-function formatViewerFormatStatus(format: ViewerFormatDefinition): string {
-  if (!format.available) {
-    return 'Временно недоступно'
-  }
-
-  if (format.previewPipeline === 'planned') {
-    return 'Скоро в Viewer'
-  }
-
-  if (format.previewPipeline === 'browser-native') {
-    return 'Открывается сразу'
-  }
-
-  return format.family === 'document' ? 'Расширенный просмотр' : 'Подготовленный просмотр'
-}
-
-function formatViewerFormatNote(format: ViewerFormatDefinition): string {
-  switch (format.extension) {
-    case 'jpg':
-    case 'jpeg':
-      return 'Подходит для фотографий и быстро открывается вместе с основными метаданными.'
-    case 'png':
-      return 'Удобен для макетов, скриншотов и изображений с прозрачностью.'
-    case 'webp':
-      return 'Хорошо подходит для веб-графики и открывается без дополнительной подготовки.'
-    case 'avif':
-      return 'Современный компактный формат для изображений с высоким качеством.'
-    case 'gif':
-      return 'Сохраняет анимацию и запускается сразу после загрузки.'
-    case 'bmp':
-      return 'Полезен для технических исходников и файлов без сжатия.'
-    case 'svg':
-      return 'Вектор открывается чисто и без потери резкости при масштабировании.'
-    case 'ico':
-      return 'Можно быстро проверить набор иконок и их визуальное качество.'
-    case 'heic':
-      return 'Подходит для фото с iPhone и новых камер: Jack готовит просмотр и метаданные.'
-    case 'tiff':
-      return 'Удобен для сканов и печатных материалов: Jack собирает просмотр и основные сведения.'
-    case 'raw':
-      return 'Подходит для исходников с камеры: Jack извлекает превью и параметры съёмки.'
-    case 'pdf':
-      return 'Открывается постранично, с поиском по тексту и быстрым переходом по документу.'
-    case 'txt':
-      return 'Показывает текст без лишнего оформления и позволяет быстро искать нужные фрагменты.'
-    case 'md':
-      return 'Показывает структуру документа, заголовки и удобный текст для чтения.'
-    case 'json':
-      return 'Помогает быстро проверить структуру данных и рабочую копию для правок.'
-    case 'yaml':
-      return 'Подходит для конфигов: видно секции, структуру и удобную рабочую копию.'
-    case 'xml':
-      return 'Открывает XML как читаемый документ с сохранением структуры.'
-    case 'env':
-      return 'Показывает переменные среды в удобном виде и помогает быстро поправить значения.'
-    case 'csv':
-    case 'tsv':
-      return 'Открывает табличные данные по строкам и колонкам без лишней подготовки.'
-    case 'html':
-      return 'Показывает очищенный HTML с удобным просмотром структуры и текста.'
-    case 'log':
-      return 'Подходит для длинных логов с поиском по содержимому.'
-    case 'sql':
-      return 'Удобно для чтения SQL-скриптов, поиска и быстрой рабочей копии.'
-    case 'rtf':
-    case 'doc':
-    case 'docx':
-    case 'odt':
-      return 'Показывает текст документа, структуру и удобный режим чтения.'
-    case 'xls':
-    case 'xlsx':
-      return 'Открывает листы и помогает быстро проверить таблицы и значения.'
-    case 'pptx':
-      return 'Показывает слайды и текстовую структуру презентации.'
-    case 'epub':
-      return 'Подходит для чтения книги по главам и поиска по содержимому.'
-    case 'db':
-    case 'sqlite':
-      return 'Показывает таблицы, поля и примеры строк без отдельного клиента базы данных.'
-    case 'mp4':
-    case 'mov':
-    case 'webm':
-      return 'Видео запускается сразу с навигацией по времени, кадрам и субтитрам.'
-    case 'avi':
-    case 'mkv':
-    case 'wmv':
-    case 'flv':
-      return 'Jack подготавливает стабильное воспроизведение даже для тяжёлых контейнеров.'
-    case 'mp3':
-    case 'wav':
-    case 'ogg':
-    case 'opus':
-      return 'Сразу доступны воспроизведение, длительность, волна и основные теги.'
-    case 'aac':
-    case 'flac':
-    case 'aiff':
-      return 'Jack готовит волну, обложку и теги для компактных и lossless-дорожек.'
-    default:
-      return format.notes
-  }
-}
 
 const {
   selection,
@@ -212,10 +61,6 @@ const {
   errorMessage,
   loadingMessage,
   viewerAcceptAttribute,
-  imageFormats,
-  documentFormats,
-  mediaFormats,
-  audioFormats,
   zoom,
   rotation,
   viewportTransform,
@@ -881,6 +726,12 @@ function openFilePicker() {
   fileInput.value?.click()
 }
 
+function handleStageClick() {
+  if (!selection.value) {
+    openFilePicker()
+  }
+}
+
 function openSubtitlePicker() {
   subtitleInput.value?.click()
 }
@@ -1163,82 +1014,58 @@ onBeforeUnmount(() => {
 
     <section class="viewer-hero-grid">
       <article class="panel-surface viewer-intro">
-        <p class="eyebrow">Открыть, просмотреть, найти нужное</p>
-        <h1>
-          Viewer помогает быстро разобраться с файлом: открыть документ, прослушать трек, посмотреть
-          видео или изучить изображение без прыжков между разными инструментами.
-        </h1>
+        <p class="eyebrow">Viewer</p>
+        <h1>Открой файл и сразу смотри содержимое.</h1>
         <p class="lead">
-          Один экран закрывает основные сценарии просмотра: документы с поиском и структурой, видео
-          с точной навигацией, аудио с волной и тегами, изображения с цветовым и метаданным
-          разбором. Для сложных форматов Jack сам подготавливает удобное представление.
+          Документы, таблицы, изображения, видео и аудио открываются в одном окне. Поиск, быстрые
+          действия и переход в Editor появляются по типу файла.
         </p>
 
-        <div
-          class="viewer-dropzone"
-          :class="{ 'viewer-dropzone--active': isDragActive }"
-          @dragover="onDragOver"
-          @dragleave="onDragLeave"
-          @drop="onDrop"
-        >
-          <input
-            ref="fileInput"
-            class="visually-hidden"
-            type="file"
-            :accept="viewerAcceptAttribute"
-            @change="onFileChange"
-          />
-          <input
-            ref="subtitleInput"
-            class="visually-hidden"
-            type="file"
-            :accept="viewerVideoSubtitleAcceptAttribute"
-            multiple
-            @change="onSubtitleChange"
-          />
+        <input
+          ref="fileInput"
+          class="visually-hidden"
+          type="file"
+          :accept="viewerAcceptAttribute"
+          @change="onFileChange"
+        />
+        <input
+          ref="subtitleInput"
+          class="visually-hidden"
+          type="file"
+          :accept="viewerVideoSubtitleAcceptAttribute"
+          multiple
+          @change="onSubtitleChange"
+        />
 
-          <div class="viewer-dropzone__copy">
-            <strong>Открой файл для просмотра</strong>
-            <span>
-              Поддерживаются изображения, документы, таблицы, презентации, PDF, видео и аудио. После
-              загрузки Jack сразу покажет подходящий режим просмотра, быстрые действия и полезные
-              детали именно для этого типа файла.
-            </span>
-          </div>
-
-          <div class="viewer-dropzone__actions">
-            <button
-              class="action-button action-button--accent"
-              type="button"
-              @click="openFilePicker"
-            >
-              Выбрать файл
-            </button>
-            <button
-              class="action-button"
-              type="button"
-              :disabled="!selection"
-              @click="clearSelection"
-            >
-              Очистить
-            </button>
-          </div>
+        <div class="viewer-quick-actions">
+          <button class="action-button action-button--accent" type="button" @click="openFilePicker">
+            Выбрать файл
+          </button>
+          <button
+            class="action-button"
+            type="button"
+            :disabled="!selection"
+            @click="clearSelection"
+          >
+            Очистить
+          </button>
         </div>
 
         <div class="signal-row">
-          <span class="chip-pill">Изображения и метаданные</span>
-          <span class="chip-pill">Документы с поиском</span>
-          <span class="chip-pill">Видео с точной навигацией</span>
-          <span class="chip-pill">Аудио с волной и тегами</span>
-          <span class="chip-pill">Быстрый переход в editor</span>
+          <span class="chip-pill">Документы</span>
+          <span class="chip-pill">Таблицы</span>
+          <span class="chip-pill">Изображения</span>
+          <span class="chip-pill">Видео</span>
+          <span class="chip-pill">Аудио</span>
+          <span class="chip-pill">Поиск и рабочая копия</span>
         </div>
       </article>
 
       <article class="panel-surface viewer-stage-card">
         <div class="viewer-stage-card__header">
           <div>
-            <p class="eyebrow">Экран просмотра</p>
-            <h2>{{ selection?.file.name ?? 'Выбери файл для просмотра' }}</h2>
+            <p class="eyebrow">Просмотр</p>
+            <h2>{{ selection?.file.name ?? 'Перетащи файл в окно' }}</h2>
           </div>
 
           <div class="viewer-toolbar">
@@ -1264,7 +1091,7 @@ onBeforeUnmount(() => {
               :disabled="selection?.kind !== 'image'"
               @click="rotateLeft"
             >
-              Влево
+              -90°
             </button>
             <button
               class="icon-button"
@@ -1272,7 +1099,7 @@ onBeforeUnmount(() => {
               :disabled="selection?.kind !== 'image'"
               @click="rotateRight"
             >
-              Вправо
+              +90°
             </button>
             <button
               class="icon-button"
@@ -1288,7 +1115,7 @@ onBeforeUnmount(() => {
               :disabled="!selection"
               @click="toggleFullscreen"
             >
-              {{ isFullscreen ? 'Выйти из полного экрана' : 'Полный экран' }}
+              {{ isFullscreen ? 'Окно' : 'Экран' }}
             </button>
             <button
               class="icon-button"
@@ -1296,7 +1123,7 @@ onBeforeUnmount(() => {
               :disabled="selection?.kind !== 'image'"
               @click="toggleTransparencyGrid"
             >
-              {{ isTransparencyGridVisible ? 'Скрыть сетку' : 'Показать сетку' }}
+              {{ isTransparencyGridVisible ? 'Без сетки' : 'Сетка' }}
             </button>
           </div>
         </div>
@@ -1305,8 +1132,14 @@ onBeforeUnmount(() => {
           ref="previewStage"
           class="viewer-stage"
           :class="{
+            'viewer-stage--active': isDragActive,
             'viewer-stage--checker': selection?.kind === 'image' && isTransparencyGridVisible,
+            'viewer-stage--interactive': !selection,
           }"
+          @click="handleStageClick"
+          @dragover="onDragOver"
+          @dragleave="onDragLeave"
+          @drop="onDrop"
         >
           <div v-if="isLoading" class="viewer-empty-state">
             <strong>Подготавливаю просмотр...</strong>
@@ -1541,10 +1374,7 @@ onBeforeUnmount(() => {
                 <div class="audio-stage-copy">
                   <p class="eyebrow">Аудио</p>
                   <h3>{{ selection.file.name }}</h3>
-                  <p>
-                    Здесь можно быстро прослушать дорожку, проверить длительность, теги, обложку и
-                    визуально оценить форму сигнала без отдельного плеера.
-                  </p>
+                  <p>Прослушивание, волна, теги и обложка собраны в одном окне.</p>
                 </div>
               </div>
 
@@ -1880,11 +1710,10 @@ onBeforeUnmount(() => {
           </div>
 
           <div v-else class="viewer-empty-state">
-            <strong>Экран готов к работе</strong>
-            <span>
-              Перетащи файл или открой его через кнопку выше, чтобы сразу увидеть подходящий режим
-              просмотра, поиск, метаданные и быстрые действия.
-            </span>
+            <strong>{{
+              isDragActive ? 'Отпусти файл, чтобы открыть его' : 'Перетащи файл сюда'
+            }}</strong>
+            <span>Или нажми на окно, чтобы выбрать документ, изображение, видео или аудио.</span>
           </div>
         </div>
 
@@ -1913,7 +1742,7 @@ onBeforeUnmount(() => {
     <section v-if="selection?.kind === 'image'" class="viewer-detail-grid">
       <article class="panel-surface viewer-panel">
         <p class="eyebrow">Color Lab</p>
-        <h2>Color picker, loupe и palette capture</h2>
+        <h2>Цвет, пипетка и палитра</h2>
 
         <div v-if="activeSample" class="color-lab">
           <div class="color-lab__hero">
@@ -2015,7 +1844,7 @@ onBeforeUnmount(() => {
 
       <article class="panel-surface viewer-panel">
         <p class="eyebrow">Сведения</p>
-        <h2>Основная информация о файле</h2>
+        <h2>Основные параметры</h2>
         <dl class="facts-grid">
           <template v-for="fact in selectionFacts" :key="fact.label">
             <dt>{{ fact.label }}</dt>
@@ -2035,7 +1864,7 @@ onBeforeUnmount(() => {
 
       <article class="panel-surface viewer-panel">
         <p class="eyebrow">Инспектор</p>
-        <h2>EXIF, ICC и другие группы метаданных</h2>
+        <h2>EXIF, ICC и служебные поля</h2>
 
         <label class="metadata-search">
           <span>Фильтр по тегам</span>
@@ -2068,7 +1897,7 @@ onBeforeUnmount(() => {
 
       <article class="panel-surface viewer-panel">
         <p class="eyebrow">Редактор метаданных</p>
-        <h2>Подправь описание, автора и дату съёмки</h2>
+        <h2>Описание, автор и дата</h2>
 
         <form class="metadata-editor" @submit.prevent="saveMetadataDraft">
           <label>
@@ -2121,54 +1950,12 @@ onBeforeUnmount(() => {
           {{ metadataSaveMessage }}
         </p>
       </article>
-
-      <article class="panel-surface viewer-panel viewer-panel--wide">
-        <p class="eyebrow">Поддержка форматов</p>
-        <h2>Что можно открыть в режиме просмотра изображений</h2>
-        <div class="capability-columns">
-          <div class="format-grid">
-            <article
-              v-for="format in browserNativeFormats"
-              :key="format.extension"
-              class="format-card format-card--native"
-            >
-              <div class="format-card__meta">
-                <strong>{{ format.label }}</strong>
-                <span class="chip-pill chip-pill--compact">{{
-                  formatViewerFormatStatus(format)
-                }}</span>
-              </div>
-              <p>{{ formatViewerFormatNote(format) }}</p>
-            </article>
-          </div>
-
-          <div class="format-grid">
-            <article
-              v-for="format in serverImageFormats"
-              :key="format.extension"
-              class="format-card format-card--pipeline"
-            >
-              <div class="format-card__meta">
-                <strong>{{ format.label }}</strong>
-                <span class="chip-pill chip-pill--compact chip-pill--accent">
-                  {{ formatViewerFormatStatus(format) }}
-                </span>
-              </div>
-              <p>{{ formatViewerFormatNote(format) }}</p>
-            </article>
-          </div>
-        </div>
-        <p v-if="!plannedMediaFormats.length" class="viewer-panel__empty">
-          Все заявленные графические форматы уже открываются в этом экране без отдельных обходных
-          сценариев.
-        </p>
-      </article>
     </section>
 
     <section v-else-if="selection?.kind === 'video'" class="viewer-detail-grid">
       <article class="panel-surface viewer-panel">
         <p class="eyebrow">Видео</p>
-        <h2>Основные параметры и предупреждения</h2>
+        <h2>Основные параметры</h2>
         <div class="document-summary-row">
           <span class="chip-pill chip-pill--compact chip-pill--accent">{{
             selection.format.label
@@ -2196,7 +1983,7 @@ onBeforeUnmount(() => {
 
       <article class="panel-surface viewer-panel">
         <p class="eyebrow">Точная навигация</p>
-        <h2>Кадры, скорость и быстрые ориентиры</h2>
+        <h2>Кадры, скорость и ориентиры</h2>
         <div class="outline-stack">
           <article v-for="card in videoMetadataCards" :key="card.label" class="outline-card">
             <strong>{{ card.label }}</strong>
@@ -2207,7 +1994,7 @@ onBeforeUnmount(() => {
 
       <article class="panel-surface viewer-panel">
         <p class="eyebrow">Субтитры</p>
-        <h2>Подключай дорожки и быстро переключайся между ними</h2>
+        <h2>Подключай и переключай дорожки</h2>
         <div class="viewer-dropzone__actions">
           <button
             class="action-button action-button--accent"
@@ -2268,7 +2055,7 @@ onBeforeUnmount(() => {
 
       <article class="panel-surface viewer-panel viewer-panel--wide">
         <p class="eyebrow">Сохранённые кадры</p>
-        <h2>Выбирай удачные моменты и сохраняй их как отдельные изображения</h2>
+        <h2>Сохраняй удачные кадры</h2>
         <div class="viewer-dropzone__actions">
           <button class="action-button action-button--accent" type="button" @click="capturePoster">
             Сохранить текущий кадр
@@ -2306,61 +2093,12 @@ onBeforeUnmount(() => {
           промежуточный референс.
         </p>
       </article>
-
-      <article class="panel-surface viewer-panel">
-        <p class="eyebrow">Горячие клавиши</p>
-        <h2>Быстрая навигация по видео с клавиатуры</h2>
-        <div class="outline-stack">
-          <article v-for="shortcut in videoShortcutHints" :key="shortcut.keys" class="outline-card">
-            <strong>{{ shortcut.keys }}</strong>
-            <span>{{ shortcut.description }}</span>
-          </article>
-        </div>
-      </article>
-
-      <article class="panel-surface viewer-panel viewer-panel--wide">
-        <p class="eyebrow">Поддержка форматов</p>
-        <h2>Какие видео открываются в этом режиме</h2>
-        <div class="capability-columns">
-          <div class="format-grid">
-            <article
-              v-for="format in activeMediaFormats"
-              :key="format.extension"
-              class="format-card format-card--pipeline"
-            >
-              <div class="format-card__meta">
-                <strong>{{ format.label }}</strong>
-                <span class="chip-pill chip-pill--compact chip-pill--accent">
-                  {{ formatViewerFormatStatus(format) }}
-                </span>
-              </div>
-              <p>{{ formatViewerFormatNote(format) }}</p>
-            </article>
-          </div>
-
-          <div class="format-grid">
-            <article
-              v-for="format in plannedMediaFormats"
-              :key="format.extension"
-              class="format-card format-card--planned"
-            >
-              <div class="format-card__meta">
-                <strong>{{ format.label }}</strong>
-                <span class="chip-pill chip-pill--compact">{{
-                  formatViewerFormatStatus(format)
-                }}</span>
-              </div>
-              <p>{{ formatViewerFormatNote(format) }}</p>
-            </article>
-          </div>
-        </div>
-      </article>
     </section>
 
     <section v-else-if="selection?.kind === 'audio'" class="viewer-detail-grid">
       <article class="panel-surface viewer-panel">
         <p class="eyebrow">Аудио</p>
-        <h2>Параметры дорожки и важные замечания</h2>
+        <h2>Параметры дорожки</h2>
         <div class="document-summary-row">
           <span class="chip-pill chip-pill--compact chip-pill--accent">{{
             selection.format.label
@@ -2388,7 +2126,7 @@ onBeforeUnmount(() => {
 
       <article class="panel-surface viewer-panel">
         <p class="eyebrow">Воспроизведение</p>
-        <h2>Волна сигнала, скорость и параметры звучания</h2>
+        <h2>Волна, скорость и звучание</h2>
         <div class="outline-stack">
           <article v-for="card in audioMetadataCards" :key="card.label" class="outline-card">
             <strong>{{ card.label }}</strong>
@@ -2399,7 +2137,7 @@ onBeforeUnmount(() => {
 
       <article class="panel-surface viewer-panel">
         <p class="eyebrow">Теги и обложка</p>
-        <h2>Быстро найди нужные поля и проверь карточку трека</h2>
+        <h2>Теги и карточка трека</h2>
 
         <div class="audio-metadata-hero">
           <div v-if="selection.artworkDataUrl" class="audio-metadata-hero__artwork">
@@ -2450,65 +2188,12 @@ onBeforeUnmount(() => {
           По этому фильтру ничего не найдено.
         </p>
       </article>
-
-      <article class="panel-surface viewer-panel">
-        <p class="eyebrow">Горячие клавиши</p>
-        <h2>Управление воспроизведением с клавиатуры</h2>
-        <div class="outline-stack">
-          <article v-for="shortcut in audioShortcutHints" :key="shortcut.keys" class="outline-card">
-            <strong>{{ shortcut.keys }}</strong>
-            <span>{{ shortcut.description }}</span>
-          </article>
-        </div>
-      </article>
-
-      <article class="panel-surface viewer-panel viewer-panel--wide">
-        <p class="eyebrow">Поддержка форматов</p>
-        <h2>Какие аудиофайлы открываются в этом режиме</h2>
-        <div class="capability-columns">
-          <div class="format-grid">
-            <article
-              v-for="format in activeAudioFormats"
-              :key="format.extension"
-              class="format-card format-card--pipeline"
-            >
-              <div class="format-card__meta">
-                <strong>{{ format.label }}</strong>
-                <span class="chip-pill chip-pill--compact chip-pill--accent">
-                  {{ formatViewerFormatStatus(format) }}
-                </span>
-              </div>
-              <p>{{ formatViewerFormatNote(format) }}</p>
-            </article>
-          </div>
-
-          <div class="format-grid">
-            <article
-              v-for="format in plannedAudioFormats"
-              :key="format.extension"
-              class="format-card format-card--planned"
-            >
-              <div class="format-card__meta">
-                <strong>{{ format.label }}</strong>
-                <span class="chip-pill chip-pill--compact">{{
-                  formatViewerFormatStatus(format)
-                }}</span>
-              </div>
-              <p>{{ formatViewerFormatNote(format) }}</p>
-            </article>
-          </div>
-        </div>
-        <p v-if="!plannedAudioFormats.length" class="viewer-panel__empty">
-          Все заявленные аудиоформаты уже открываются в этом экране без отдельного обходного
-          сценария.
-        </p>
-      </article>
     </section>
 
     <section v-else-if="selection?.kind === 'document'" class="viewer-detail-grid">
       <article class="panel-surface viewer-panel">
         <p class="eyebrow">Документ</p>
-        <h2>Ключевые параметры и замечания</h2>
+        <h2>Ключевые параметры</h2>
         <div class="document-summary-row">
           <span class="chip-pill chip-pill--compact chip-pill--accent">{{
             selection.format.label
@@ -2531,7 +2216,7 @@ onBeforeUnmount(() => {
 
       <article class="panel-surface viewer-panel">
         <p class="eyebrow">Быстрый поиск</p>
-        <h2>Найди нужный фрагмент по всему доступному тексту документа</h2>
+        <h2>Найди нужный фрагмент</h2>
         <label class="metadata-search">
           <span>Поиск</span>
           <input v-model="documentQuery" type="text" :placeholder="documentSearchPlaceholder" />
@@ -2568,11 +2253,9 @@ onBeforeUnmount(() => {
 
       <article v-if="canQuickEditDocument" class="panel-surface viewer-panel">
         <p class="eyebrow">Рабочая копия</p>
-        <h2>Рабочая копия для правок, заметок и передачи в editor</h2>
+        <h2>Текст для правок и передачи в Editor</h2>
         <p class="viewer-panel__copy">
-          Здесь редактируется безопасная копия содержимого. Исходный файл не меняется, поэтому можно
-          быстро подчистить текст, собрать выдержку или отправить материал в editor для
-          форматирования и экспорта.
+          Здесь редактируется безопасная копия содержимого. Исходный файл не меняется.
         </p>
 
         <div class="fact-grid">
@@ -2619,7 +2302,7 @@ onBeforeUnmount(() => {
 
       <article class="panel-surface viewer-panel">
         <p class="eyebrow">Структура</p>
-        <h2>Заголовки, листы, таблицы и другие части документа</h2>
+        <h2>Заголовки, листы и части документа</h2>
 
         <div v-if="documentOutline.length" class="outline-stack">
           <article
@@ -2695,93 +2378,6 @@ onBeforeUnmount(() => {
           Для этого типа документа доступны только основные сведения и поиск по тексту.
         </p>
       </article>
-
-      <article class="panel-surface viewer-panel viewer-panel--wide">
-        <p class="eyebrow">Поддержка форматов</p>
-        <h2>Какие документы уже открываются в этом режиме</h2>
-        <div class="capability-columns">
-          <div class="format-grid">
-            <article
-              v-for="format in activeDocumentFormats"
-              :key="format.extension"
-              class="format-card format-card--pipeline"
-            >
-              <div class="format-card__meta">
-                <strong>{{ format.label }}</strong>
-                <span class="chip-pill chip-pill--compact chip-pill--accent">
-                  {{ formatViewerFormatStatus(format) }}
-                </span>
-              </div>
-              <p>{{ formatViewerFormatNote(format) }}</p>
-            </article>
-          </div>
-
-          <div class="format-grid">
-            <article
-              v-for="format in plannedDocumentFormats"
-              :key="format.extension"
-              class="format-card format-card--planned"
-            >
-              <div class="format-card__meta">
-                <strong>{{ format.label }}</strong>
-                <span class="chip-pill chip-pill--compact">{{
-                  formatViewerFormatStatus(format)
-                }}</span>
-              </div>
-              <p>{{ formatViewerFormatNote(format) }}</p>
-            </article>
-          </div>
-        </div>
-        <p v-if="!plannedDocumentFormats.length" class="viewer-panel__empty">
-          Все заявленные документные форматы уже открываются в этом экране без отдельного обходного
-          сценария.
-        </p>
-      </article>
-
-      <article class="panel-surface viewer-panel viewer-panel--wide">
-        <p class="eyebrow">Почему это удобно</p>
-        <h2>
-          Один и тот же экран подстраивается под разные типы документов, а не заставляет
-          переключаться между разными страницами.
-        </h2>
-        <div class="architecture-grid">
-          <article class="architecture-card">
-            <strong>Единый вход</strong>
-            <p>PDF, таблицы, презентации, EPUB и базы данных открываются из одного места.</p>
-          </article>
-          <article class="architecture-card">
-            <strong>Подходящий режим</strong>
-            <p>
-              Jack сам выбирает, показать ли текст, таблицу, HTML, листы, слайды или структуру базы.
-            </p>
-          </article>
-          <article class="architecture-card">
-            <strong>Поиск по содержимому</strong>
-            <p>Можно быстро найти нужный фрагмент, не думая о внутреннем формате документа.</p>
-          </article>
-          <article class="architecture-card">
-            <strong>Быстрая редактура</strong>
-            <p>
-              Для текстовых форматов доступна рабочая копия, которую можно поправить и сразу открыть
-              в editor.
-            </p>
-          </article>
-          <article class="architecture-card">
-            <strong>Честное отображение</strong>
-            <p>
-              Если формат нельзя показать идеально, Jack всё равно даёт полезное и понятное
-              представление вместо пустого экрана.
-            </p>
-          </article>
-          <article class="architecture-card">
-            <strong>Один сценарий</strong>
-            <p>
-              Загрузка, полноэкранный режим, поиск и сводка работают одинаково для разных семейств
-              файлов.
-            </p>
-          </article>
-        </div>
-      </article>
     </section>
   </main>
 </template>
@@ -2794,7 +2390,7 @@ onBeforeUnmount(() => {
 
 .viewer-hero-grid {
   display: grid;
-  grid-template-columns: minmax(320px, 0.9fr) minmax(0, 1.25fr);
+  grid-template-columns: minmax(300px, 0.74fr) minmax(0, 1.26fr);
   gap: 22px;
 }
 
@@ -2824,50 +2420,12 @@ h2 {
 }
 
 .lead {
-  margin: 22px 0 0;
+  margin: 18px 0 0;
   color: var(--text-soft);
-  font-size: 1.04rem;
+  font-size: 1rem;
 }
 
-.viewer-dropzone {
-  display: grid;
-  gap: 18px;
-  margin-top: 28px;
-  padding: 22px;
-  border: 1px dashed rgba(29, 92, 85, 0.28);
-  border-radius: var(--radius-xl);
-  background: linear-gradient(145deg, rgba(255, 249, 241, 0.7), rgba(228, 219, 205, 0.58));
-  box-shadow: var(--shadow-pressed);
-  transition:
-    transform 180ms ease,
-    border-color 180ms ease,
-    box-shadow 180ms ease;
-}
-
-.viewer-dropzone--active {
-  transform: translateY(-2px);
-  border-color: rgba(29, 92, 85, 0.54);
-  box-shadow: var(--shadow-floating);
-}
-
-.viewer-dropzone__copy {
-  display: grid;
-  gap: 8px;
-}
-
-.viewer-dropzone__copy strong {
-  color: var(--text-strong);
-  font-size: 1.1rem;
-}
-
-.viewer-dropzone__copy span,
-.viewer-panel__empty,
-.format-card p,
-.architecture-card p,
-.metadata-editor__mode {
-  color: var(--text-soft);
-}
-
+.viewer-quick-actions,
 .viewer-dropzone__actions,
 .signal-row,
 .viewer-toolbar,
@@ -2877,6 +2435,21 @@ h2 {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
+}
+
+.viewer-quick-actions {
+  margin-top: 22px;
+}
+
+.signal-row {
+  margin-top: 18px;
+}
+
+.viewer-panel__empty,
+.format-card p,
+.architecture-card p,
+.metadata-editor__mode {
+  color: var(--text-soft);
 }
 
 .viewer-stage-card {
@@ -2901,16 +2474,38 @@ h2 {
   max-width: 16ch;
 }
 
+.viewer-toolbar .icon-button {
+  min-width: 0;
+  padding-inline: 12px;
+}
+
 .viewer-stage {
   display: grid;
   min-height: 520px;
   place-items: center;
   padding: 20px;
   border-radius: calc(var(--radius-2xl) - 8px);
+  border: 1px solid transparent;
   background:
     radial-gradient(circle at top right, rgba(255, 196, 129, 0.18), transparent 26%),
     linear-gradient(155deg, rgba(255, 251, 245, 0.8), rgba(227, 216, 201, 0.86));
   box-shadow: var(--shadow-pressed);
+  transition:
+    transform 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.viewer-stage--interactive {
+  cursor: pointer;
+  border-color: rgba(29, 92, 85, 0.2);
+  border-style: dashed;
+}
+
+.viewer-stage--active {
+  transform: translateY(-2px);
+  border-color: rgba(29, 92, 85, 0.46);
+  box-shadow: var(--shadow-floating);
 }
 
 .viewer-stage--checker {

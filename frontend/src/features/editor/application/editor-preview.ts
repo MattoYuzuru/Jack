@@ -201,15 +201,35 @@ function renderMarkdown(content: string): string {
       '<a href="$2" target="_blank" rel="noreferrer noopener">$1</a>',
     )
 
-  prepared = prepared.replace(
-    /(?:^|\n)(?:-\s.+(?:\n|$))+?/g,
-    (block) =>
-      `<ul>${block
-        .trim()
-        .split('\n')
-        .map((line) => `<li>${line.replace(/^-\s+/u, '')}</li>`)
-        .join('')}</ul>`,
-  )
+  prepared = prepared.replace(/(?:^|\n)(?:-\s.+(?:\n|$))+?/g, (block) => {
+    const lines = block.trim().split('\n')
+
+    // Поддерживаем markdown task list без отдельной библиотеки, чтобы чек-листы
+    // в preview вели себя как ожидает пользователь и не разваливали обычные списки.
+    const items = lines.map((line) => {
+      const taskMatch = line.match(/^-\s+\[( |x|X)\]\s+(.*)$/u)
+
+      if (!taskMatch) {
+        return {
+          html: `<li>${line.replace(/^-\s+/u, '')}</li>`,
+          task: false,
+        }
+      }
+
+      const [, state = ' ', label = ''] = taskMatch
+      const checked = state.toLowerCase() === 'x'
+
+      return {
+        html: `<li class="task-list__item"><label><input type="checkbox" disabled${
+          checked ? ' checked' : ''
+        } /><span>${label}</span></label></li>`,
+        task: true,
+      }
+    })
+
+    const listClass = items.some((item) => item.task) ? ' class="task-list"' : ''
+    return `<ul${listClass}>${items.map((item) => item.html).join('')}</ul>`
+  })
 
   prepared = prepared.replace(
     /(?:^|\n)(?:\d+\.\s.+(?:\n|$))+?/g,
