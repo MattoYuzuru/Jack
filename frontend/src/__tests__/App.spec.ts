@@ -15,15 +15,13 @@ describe('App', () => {
       },
     })
 
-    expect(wrapper.text()).toContain(
-      'Jack собирает частые рабочие сценарии в один понятный интерфейс.',
-    )
+    expect(wrapper.text()).toContain('Выбери задачу и сразу открой нужный инструмент.')
     expect(wrapper.findAll('.tool-card')).toHaveLength(6)
-    expect(wrapper.text()).toContain('Открыть Viewer')
-    expect(wrapper.text()).toContain('Открыть Converter')
-    expect(wrapper.text()).toContain('Открыть Compressor')
-    expect(wrapper.text()).toContain('Открыть PDF Toolkit')
-    expect(wrapper.text()).toContain('Открыть Editor')
-    expect(wrapper.text()).toContain('Открыть Dev Utils')
+    expect(wrapper.text()).toContain('Viewer')
+    expect(wrapper.text()).toContain('Converter')
+    expect(wrapper.text()).toContain('Compressor')
+    expect(wrapper.text()).toContain('PDF Toolkit')
+    expect(wrapper.text()).toContain('Editor')
+    expect(wrapper.text()).toContain('Dev Utils')
   })
 })

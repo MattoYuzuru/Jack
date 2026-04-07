@@ -92,6 +92,8 @@ docker compose down -v
 - `JACK_PROCESSING_ARTIFACT_RETENTION_HOURS`
 - `JACK_PROCESSING_JOB_RETENTION_HOURS`
 
+Локальный backend Docker image уже включает OCR traineddata для `eng`, `osd` и `rus`, поэтому PDF OCR можно запускать сразу после `docker compose up -d --build` без ручной установки языковых пакетов.
+
 ## Backend Processing Platform
 
 Текущий backend-слой теперь уже поднимает общий processing workflow:

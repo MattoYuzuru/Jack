@@ -206,12 +206,17 @@ export async function createProcessingJob(input: {
   jobType: string
   parameters?: Record<string, unknown>
 }): Promise<ProcessingJobResponse> {
+  const sanitizedParameters = sanitizeProcessingParameters(input.parameters)
+
   return requestProcessingJson<ProcessingJobResponse>('/api/jobs', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify(input),
+    body: JSON.stringify({
+      ...input,
+      ...(sanitizedParameters ? { parameters: sanitizedParameters } : {}),
+    }),
   })
 }
 
@@ -384,4 +389,18 @@ function sleep(timeoutMs: number): Promise<void> {
   return new Promise((resolve) => {
     window.setTimeout(resolve, timeoutMs)
   })
+}
+
+function sanitizeProcessingParameters(
+  parameters: Record<string, unknown> | undefined,
+): Record<string, unknown> | undefined {
+  if (!parameters) {
+    return undefined
+  }
+
+  const sanitized = Object.fromEntries(
+    Object.entries(parameters).filter(([, value]) => value !== null && value !== undefined),
+  )
+
+  return Object.keys(sanitized).length ? sanitized : undefined
 }

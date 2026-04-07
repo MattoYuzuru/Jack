@@ -3,6 +3,7 @@ FROM ubuntu:24.04
 ENV JAVA_HOME=/opt/java/openjdk
 ENV PATH="${JAVA_HOME}/bin:${PATH}"
 ENV JAVA_TOOL_OPTIONS="-Djava.awt.headless=true"
+ENV TESSDATA_PREFIX=/usr/share/tesseract-ocr/5/tessdata
 
 RUN set -eux; \
     apt-get update; \
@@ -18,6 +19,7 @@ RUN set -eux; \
       qpdf \
       librsvg2-bin \
       tesseract-ocr \
+      tesseract-ocr-rus \
       tar; \
     mkdir -p /opt/java; \
     curl -fsSL https://corretto.aws/downloads/latest/amazon-corretto-26-x64-linux-jdk.tar.gz -o /tmp/amazon-corretto.tar.gz; \

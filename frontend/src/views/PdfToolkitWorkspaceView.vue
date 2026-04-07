@@ -113,43 +113,34 @@ function formatBytes(value: number): string {
     <section class="pdf-hero-grid">
       <article class="panel-surface pdf-hero-card">
         <RouterLink class="back-link" to="/">На главную</RouterLink>
-        <p class="eyebrow">PDF без лишних отдельных сервисов</p>
-        <h1>Открой документ, проверь страницы и выполни нужную операцию в одном рабочем окне.</h1>
+        <p class="eyebrow">PDF Toolkit</p>
+        <h1>Открой PDF и сразу запусти нужную операцию.</h1>
         <p class="lead">
-          Здесь собраны основные сценарии работы с PDF: объединение, разбиение, поворот, OCR,
-          защита, снятие защиты, подпись и редактирование чувствительных фрагментов. После каждой
-          операции можно сразу открыть результат и продолжить с ним работу.
+          Объединение, разбиение, OCR, подпись, защита и скрытие данных собраны в одном рабочем
+          окне.
         </p>
 
         <div class="hero-chip-row">
           <span class="chip-pill">Объединение</span>
           <span class="chip-pill">Разделение</span>
-          <span class="chip-pill">Текст после OCR</span>
-          <span class="chip-pill">Видимая подпись</span>
-          <span class="chip-pill">Скрытие данных</span>
-          <span class="chip-pill">Пароли и доступ</span>
+          <span class="chip-pill">OCR</span>
+          <span class="chip-pill">Подпись</span>
+          <span class="chip-pill">Защита</span>
+          <span class="chip-pill">Редактура</span>
         </div>
       </article>
 
       <article class="panel-surface intake-card">
         <p class="eyebrow">Загрузка</p>
-        <h2>Открой PDF напрямую или сначала приведи совместимый файл к PDF.</h2>
+        <h2>Выбери PDF или совместимый файл.</h2>
         <p class="intake-copy">
-          Если у тебя изображение или офисный документ, Jack сначала подготовит PDF-версию, а затем
-          сразу откроет её в этом экране.
+          Если исходник не в PDF, Jack сначала подготовит PDF-версию и сразу откроет её здесь.
         </p>
 
         <label class="upload-field">
           <span>Выбрать файл</span>
           <input :accept="entryAcceptAttribute" type="file" @change="handleSourceChange" />
         </label>
-
-        <div class="intake-pills">
-          <span class="chip-pill chip-pill--compact">PDF: {{ workspace.pdfAcceptAttribute }}</span>
-          <span class="chip-pill chip-pill--compact"
-            >Импорт: {{ workspace.importAcceptAttribute || 'нет' }}</span
-          >
-        </div>
 
         <p v-if="workspace.processingMessage" class="status-message">
           {{ workspace.processingMessage }}
@@ -243,11 +234,8 @@ function formatBytes(value: number): string {
 
         <article v-else class="empty-card">
           <p class="eyebrow">Документ ещё не открыт</p>
-          <h3>Сначала выбери PDF или совместимый файл.</h3>
-          <p>
-            После загрузки здесь появятся страницы документа, извлечённый текст и список доступных
-            операций.
-          </p>
+          <h3>Сначала загрузи документ.</h3>
+          <p>После выбора здесь появятся страницы, текст и доступные операции.</p>
         </article>
       </article>
 
@@ -272,7 +260,7 @@ function formatBytes(value: number): string {
             @click="workspace.selectedOperationId = operation.id"
           >
             <strong>{{ operation.label }}</strong>
-            <span>{{ operation.detail }}</span>
+            <span class="chip-pill chip-pill--compact">{{ operation.statusLabel }}</span>
           </button>
         </div>
 
@@ -546,9 +534,7 @@ function formatBytes(value: number): string {
             <div v-else class="empty-card empty-card--compact">
               <p class="eyebrow">Просмотр</p>
               <h3>{{ workspace.result.previewFileName }}</h3>
-              <p>
-                Предпросмотр доступен только для PDF. Для остальных файлов используй скачивание.
-              </p>
+              <p>Для этого результата доступно скачивание без встроенного preview.</p>
             </div>
           </div>
 
@@ -595,10 +581,7 @@ function formatBytes(value: number): string {
         <div v-else class="empty-card">
           <p class="eyebrow">Пока пусто</p>
           <h3>Результат появится здесь.</h3>
-          <p>
-            После выполнения операции сюда загрузится новый PDF, который можно сразу открыть и
-            использовать как текущий документ.
-          </p>
+          <p>После операции сюда загрузится новый PDF или связанный артефакт.</p>
         </div>
       </article>
     </section>
@@ -664,9 +647,9 @@ h1 {
 }
 
 .lead {
-  margin: 20px 0 0;
-  max-width: 64ch;
-  font-size: 1.04rem;
+  margin: 18px 0 0;
+  max-width: 58ch;
+  font-size: 1rem;
 }
 
 .hero-chip-row,
@@ -717,12 +700,6 @@ h1 {
 
 .upload-field--secondary input {
   padding: 12px 14px;
-}
-
-.intake-pills {
-  display: grid;
-  gap: 10px;
-  margin-top: 18px;
 }
 
 .status-message,
@@ -825,6 +802,7 @@ dd {
 
 .operation-selector {
   display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 12px;
   margin-top: 20px;
 }
@@ -849,9 +827,8 @@ dd {
   font-size: 1rem;
 }
 
-.operation-pill span {
-  color: var(--text-soft);
-  font-size: 0.9rem;
+.operation-pill .chip-pill {
+  width: fit-content;
 }
 
 .operation-pill:hover,

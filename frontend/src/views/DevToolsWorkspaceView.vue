@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { ref } from 'vue'
 import { RouterLink } from 'vue-router'
-import HomeToolIllustration from '../components/HomeToolIllustration.vue'
 import { useDevToolsWorkspace } from '../features/dev-tools/composables/useDevToolsWorkspace'
 import type { EncodingStrategyId } from '../features/dev-tools/application/encoding-tools'
 import type { ValidationFormatId } from '../features/dev-tools/application/validation-tools'
@@ -22,24 +21,6 @@ const validationFormats: Array<{ id: ValidationFormatId; label: string }> = [
   { id: 'yaml', label: 'YAML' },
   { id: 'xml', label: 'XML' },
   { id: 'env', label: '.env' },
-]
-
-const statusCards = computed(() => [
-  { value: '6', label: 'рабочих наборов' },
-  { value: '24', label: 'повседневных задач' },
-  { value: '0', label: 'лишних загрузок на сервер' },
-  { value: 'Локально', label: 'состояние хранится в браузере' },
-])
-
-const signalPills = [
-  'Быстрые повседневные утилиты',
-  'Мгновенный результат',
-  'Копирование и экспорт',
-  'JWT и подписи',
-  'Чистка ссылок',
-  'Проверка JSON, YAML, XML и .env',
-  'UUID и ULID',
-  'Преобразование времени',
 ]
 
 function triggerHashFilePicker(): void {
@@ -79,46 +60,21 @@ function formatQueryEntryStatus(status: 'kept' | 'removed'): string {
 
     <section class="devtools-hero">
       <article class="panel-surface devtools-hero__copy">
-        <p class="eyebrow">Небольшие задачи без лишних переключений</p>
-        <h1>
-          Этот набор собирает в одном месте всё, что нужно между основными задачами: кодировки,
-          токены, хэши, ссылки, валидаторы и быстрые сервисные мелочи.
-        </h1>
+        <p class="eyebrow">Dev Utils</p>
+        <h1>Маленькие инженерные задачи без лишних вкладок и внешних сервисов.</h1>
         <p class="lead">
-          Это набор утилит, которые должны открываться и отрабатывать мгновенно: без очередей,
-          лишних экранов и внешних сервисов. Можно быстро почистить ссылку, проверить токен,
-          посчитать подпись или привести конфиг в порядок и сразу вернуться к основной работе.
+          Выбери нужный инструмент, вставь данные и сразу копируй результат. Всё работает локально в
+          браузере и остаётся под рукой в той же сессии.
         </p>
 
         <div class="signal-row">
-          <span v-for="pill in signalPills" :key="pill" class="chip-pill chip-pill--compact">
-            {{ pill }}
-          </span>
+          <span class="chip-pill chip-pill--compact">Кодировки</span>
+          <span class="chip-pill chip-pill--compact">JWT</span>
+          <span class="chip-pill chip-pill--compact">Хэши</span>
+          <span class="chip-pill chip-pill--compact">Ссылки</span>
+          <span class="chip-pill chip-pill--compact">Валидаторы</span>
+          <span class="chip-pill chip-pill--compact">UUID и время</span>
         </div>
-      </article>
-
-      <article class="panel-surface devtools-hero__aside">
-        <div class="devtools-hero__art">
-          <HomeToolIllustration id="devtools" />
-        </div>
-
-        <div class="devtools-hero__notes">
-          <p class="eyebrow">Что здесь удобно</p>
-          <h2>
-            Всё рассчитано на быстрый ручной сценарий: открыл, проверил, скопировал, пошёл дальше.
-          </h2>
-          <p>
-            Состояние сохраняется локально, поэтому можно вернуться к последней ссылке, токену или
-            конфигу и продолжить с того же места.
-          </p>
-        </div>
-      </article>
-    </section>
-
-    <section class="devtools-status-grid" aria-label="Status overview">
-      <article v-for="card in statusCards" :key="card.label" class="panel-surface devtools-stat">
-        <strong>{{ card.value }}</strong>
-        <span>{{ card.label }}</span>
       </article>
     </section>
 
@@ -142,7 +98,6 @@ function formatQueryEntryStatus(status: 'kept' | 'removed'): string {
         <div class="devtools-tool-card__copy">
           <h2>{{ tool.title }}</h2>
           <p>{{ tool.description }}</p>
-          <span class="devtools-tool-card__detail">{{ tool.detail }}</span>
         </div>
       </button>
     </section>
@@ -974,15 +929,12 @@ function formatQueryEntryStatus(status: 'kept' | 'removed'): string {
 
 .devtools-hero {
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.82fr);
   gap: 22px;
   margin-top: 22px;
 }
 
 .devtools-hero__copy,
-.devtools-hero__aside,
-.devtools-panel,
-.devtools-stat {
+.devtools-panel {
   padding: 24px;
 }
 
@@ -1000,25 +952,6 @@ function formatQueryEntryStatus(status: 'kept' | 'removed'): string {
   margin-top: 22px;
 }
 
-.devtools-hero__aside {
-  display: grid;
-  gap: 18px;
-  align-content: start;
-  background:
-    radial-gradient(circle at top left, rgba(255, 207, 143, 0.32), transparent 30%),
-    var(--surface-panel);
-}
-
-.devtools-hero__art {
-  display: grid;
-  place-items: center;
-  min-height: 190px;
-  border-radius: calc(var(--radius-xl) - 6px);
-  background: linear-gradient(145deg, rgba(249, 242, 231, 0.95), rgba(230, 220, 206, 0.94));
-  box-shadow: var(--shadow-pressed);
-}
-
-.devtools-hero__notes h2,
 .devtools-panel__header h2,
 .devtools-tool-card__copy h2 {
   margin: 8px 0 0;
@@ -1027,35 +960,14 @@ function formatQueryEntryStatus(status: 'kept' | 'removed'): string {
   font-size: clamp(1.35rem, 2vw, 1.85rem);
 }
 
-.devtools-hero__notes p:not(.eyebrow) {
-  margin: 12px 0 0;
-  color: var(--text-soft);
-}
-
-.devtools-status-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 18px;
-  margin-top: 22px;
-}
-
-.devtools-stat {
-  display: grid;
-  gap: 8px;
-  min-height: 140px;
-}
-
-.devtools-stat strong,
 .devtools-fact strong {
   color: var(--text-strong);
   font-family: var(--font-display);
   font-size: clamp(1.4rem, 2vw, 2rem);
 }
 
-.devtools-stat span,
 .devtools-fact span,
 .devtools-tool-card__copy p,
-.devtools-tool-card__detail,
 .devtools-hash-row span,
 .devtools-message,
 .devtools-file-picker__detail {
@@ -1064,15 +976,15 @@ function formatQueryEntryStatus(status: 'kept' | 'removed'): string {
 
 .devtools-tool-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 18px;
   margin-top: 22px;
 }
 
 .devtools-tool-card {
   display: grid;
-  gap: 16px;
-  padding: 22px;
+  gap: 14px;
+  padding: 20px;
   border: 0;
   text-align: left;
   cursor: pointer;
@@ -1114,11 +1026,6 @@ function formatQueryEntryStatus(status: 'kept' | 'removed'): string {
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 8px;
-}
-
-.devtools-tool-card__detail {
-  margin-top: 10px;
-  display: block;
 }
 
 .devtools-main-grid {
@@ -1348,12 +1255,10 @@ function formatQueryEntryStatus(status: 'kept' | 'removed'): string {
 }
 
 @media (max-width: 1180px) {
-  .devtools-hero,
   .devtools-main-grid {
     grid-template-columns: 1fr;
   }
 
-  .devtools-status-grid,
   .devtools-tool-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -1374,7 +1279,6 @@ function formatQueryEntryStatus(status: 'kept' | 'removed'): string {
     display: grid;
   }
 
-  .devtools-status-grid,
   .devtools-tool-grid,
   .devtools-facts-grid,
   .devtools-quick-grid,

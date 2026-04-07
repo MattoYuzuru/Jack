@@ -43,9 +43,6 @@ const {
   videoBitrateOptions,
   audioBitrateOptions,
   converterAcceptAttribute,
-  imageScenarios,
-  documentScenarios,
-  mediaScenarios,
   activeJobId,
   activeJobStatus,
   activeJobProgressPercent,
@@ -136,10 +133,6 @@ const activeLimitations = computed(() => {
 
   return limitations
 })
-
-function formatScenarioStatusLabel(available: boolean): string {
-  return available ? 'Готово к запуску' : 'Временно недоступно'
-}
 
 function formatTargetStatusLabel(family: string, available: boolean): string {
   if (!available) {
@@ -237,7 +230,7 @@ function formatRuntimeLabel(value: string | null | undefined): string {
 }
 
 function formatScenarioDescription(
-  scenario: (typeof imageScenarios.value)[number] | null | undefined,
+  scenario: NonNullable<typeof currentScenario.value> | null | undefined,
 ): string {
   if (!scenario) {
     return ''
@@ -351,62 +344,50 @@ function onDrop(event: DragEvent) {
 
     <section class="converter-hero-grid">
       <article class="panel-surface converter-hero-copy">
-        <p class="eyebrow">Быстрая конвертация без ручных обходов</p>
-        <h1>Выбери файл, формат назначения и сразу получи готовый результат с предпросмотром.</h1>
+        <p class="eyebrow">Converter</p>
+        <h1>Загрузи файл, выбери формат и сразу забери готовый результат.</h1>
         <p class="lead">
-          Конвертер закрывает и привычные сценарии вроде `PNG -> JPG`, и более сложные задачи: `PDF
-          -> DOCX`, `PPTX -> MP4`, `RAW -> JPG`, `video -> audio` и другие. На экране сразу видно,
-          что доступно для выбранного файла, какие ограничения есть у формата и какой результат
-          получится на выходе.
+          Jack показывает только совместимые форматы назначения и открывает настройки лишь там, где
+          они действительно нужны.
         </p>
 
         <div class="converter-signal-row">
-          <span class="chip-pill">HEIC, TIFF, RAW</span>
-          <span class="chip-pill">DOC, DOCX, PDF, XLSX, PPTX</span>
-          <span class="chip-pill">MP4, WebM, GIF, MP3</span>
-          <span class="chip-pill">Готовые пресеты</span>
-          <span class="chip-pill">Предпросмотр результата</span>
-          <span class="chip-pill">Повторное скачивание</span>
+          <span class="chip-pill">Изображения</span>
+          <span class="chip-pill">Документы</span>
+          <span class="chip-pill">PDF</span>
+          <span class="chip-pill">Видео и аудио</span>
+          <span class="chip-pill">Пресеты</span>
+          <span class="chip-pill">Предпросмотр</span>
         </div>
       </article>
 
       <article class="panel-surface converter-system-card">
-        <p class="eyebrow">Подходящие направления</p>
-        <h2>Ниже показаны самые близкие сценарии для изображений, документов и медиа.</h2>
+        <p class="eyebrow">Как это работает</p>
+        <h2>Три шага: файл, формат, скачивание.</h2>
 
-        <div class="scenario-list" aria-label="Доступные сценарии конвертации">
-          <article v-for="scenario in imageScenarios" :key="scenario.id" class="scenario-item">
+        <div class="workflow-steps" aria-label="Порядок работы с конвертером">
+          <article class="workflow-step">
+            <strong>1</strong>
             <div>
-              <h3>{{ scenario.label }}</h3>
-              <p>{{ formatScenarioDescription(scenario) }}</p>
+              <h3>Загрузи файл</h3>
+              <p>Перетащи материал или выбери его вручную.</p>
             </div>
-            <span class="chip-pill chip-pill--compact chip-pill--accent">{{
-              formatScenarioStatusLabel(scenario.available)
-            }}</span>
           </article>
-        </div>
 
-        <div class="scenario-list scenario-list--secondary" aria-label="Документные сценарии">
-          <article v-for="scenario in documentScenarios" :key="scenario.id" class="scenario-item">
+          <article class="workflow-step">
+            <strong>2</strong>
             <div>
-              <h3>{{ scenario.label }}</h3>
-              <p>{{ formatScenarioDescription(scenario) }}</p>
+              <h3>Выбери результат</h3>
+              <p>Останутся только доступные форматы и пресеты.</p>
             </div>
-            <span class="chip-pill chip-pill--compact">{{
-              formatScenarioStatusLabel(scenario.available)
-            }}</span>
           </article>
-        </div>
 
-        <div class="scenario-list scenario-list--secondary" aria-label="Медиа-сценарии">
-          <article v-for="scenario in mediaScenarios" :key="scenario.id" class="scenario-item">
+          <article class="workflow-step">
+            <strong>3</strong>
             <div>
-              <h3>{{ scenario.label }}</h3>
-              <p>{{ formatScenarioDescription(scenario) }}</p>
+              <h3>Проверь и скачай</h3>
+              <p>Сравни результат в preview и забери файл.</p>
             </div>
-            <span class="chip-pill chip-pill--compact">{{
-              formatScenarioStatusLabel(scenario.available)
-            }}</span>
           </article>
         </div>
       </article>
@@ -417,7 +398,7 @@ function onDrop(event: DragEvent) {
         <div class="panel-header">
           <div>
             <p class="eyebrow">Исходный файл</p>
-            <h2>Загрузи материал и выбери, во что его превратить.</h2>
+            <h2>Загрузи файл</h2>
           </div>
 
           <button v-if="prepared" type="button" class="action-button" @click="clearSelection">
@@ -443,7 +424,7 @@ function onDrop(event: DragEvent) {
           @drop="onDrop"
         >
           <span class="converter-dropzone__badge">Перетащить или выбрать</span>
-          <strong>Перетащи изображение, документ, PDF, видео или аудио.</strong>
+          <strong>{{ prepared ? prepared.file.name : 'Перетащи файл в окно' }}</strong>
           <span>
             После выбора Jack покажет только совместимые форматы назначения, а ниже откроет
             настройки качества, размера и кодеков там, где это действительно нужно.
@@ -632,7 +613,7 @@ function onDrop(event: DragEvent) {
               :disabled="isConverting || !selectedTargetExtension"
               @click="convert"
             >
-              Convert to {{ activeTarget?.label ?? 'target' }}
+              Конвертировать в {{ activeTarget?.label ?? 'формат' }}
             </button>
             <button
               v-if="isConverting"
@@ -660,7 +641,7 @@ function onDrop(event: DragEvent) {
         <div class="panel-header">
           <div>
             <p class="eyebrow">Результат</p>
-            <h2>Предпросмотр итогового файла и быстрый download.</h2>
+            <h2>Предпросмотр и скачивание</h2>
           </div>
 
           <button
@@ -761,7 +742,7 @@ function onDrop(event: DragEvent) {
             <div class="panel-header panel-header--compact">
               <div>
                 <p class="eyebrow">История сессии</p>
-                <h3>Недавние результаты можно открыть повторно или скачать ещё раз.</h3>
+                <h3>Недавние результаты</h3>
               </div>
             </div>
 
@@ -797,11 +778,8 @@ function onDrop(event: DragEvent) {
 
         <div v-else class="result-placeholder">
           <p class="eyebrow">Результат появится здесь</p>
-          <h3>Сначала выбери файл и направление конвертации.</h3>
-          <p>
-            После успешной обработки здесь появятся предпросмотр, основные параметры результата и
-            история последних выгрузок.
-          </p>
+          <h3>Сначала выбери файл и формат результата.</h3>
+          <p>После запуска здесь появятся preview, параметры и история выгрузок.</p>
         </div>
       </article>
     </section>
@@ -877,6 +855,7 @@ h1 {
 }
 
 .converter-signal-row,
+.workflow-steps,
 .target-grid,
 .preset-grid,
 .result-facts,
@@ -890,7 +869,6 @@ h1 {
   margin-top: 24px;
 }
 
-.scenario-list,
 .converter-stack,
 .result-stack,
 .control-cluster,
@@ -899,15 +877,11 @@ h1 {
   gap: 16px;
 }
 
-.scenario-list {
+.workflow-steps {
   margin-top: 22px;
 }
 
-.scenario-list--secondary {
-  margin-top: 16px;
-}
-
-.scenario-item,
+.workflow-step,
 .scenario-callout,
 .converter-dropzone,
 .fact-card,
@@ -918,23 +892,33 @@ h1 {
   box-shadow: var(--shadow-pressed);
 }
 
-.scenario-item {
+.workflow-step {
   display: flex;
   align-items: flex-start;
-  justify-content: space-between;
   gap: 16px;
   padding: 18px;
 }
 
-.scenario-item h3 {
+.workflow-step strong {
+  display: grid;
+  place-items: center;
+  min-width: 38px;
+  min-height: 38px;
+  border-radius: 999px;
+  background: rgba(29, 92, 85, 0.1);
+  color: var(--accent-cool-strong);
+  font-size: 1rem;
+}
+
+.workflow-step h3 {
   margin: 0;
   color: var(--text-main);
   font-size: 1rem;
 }
 
-.scenario-item p {
+.workflow-step p {
   margin-top: 8px;
-  max-width: 44ch;
+  max-width: 30ch;
 }
 
 .panel-header {
@@ -1253,7 +1237,7 @@ h1 {
   }
 
   .panel-header,
-  .scenario-item,
+  .workflow-step,
   .history-item {
     flex-direction: column;
   }

@@ -376,9 +376,10 @@ public class PdfToolkitService {
 	) {
 		var tesseractExecutable = resolveExecutable(this.processingProperties.getTesseractExecutable())
 			.orElseThrow(() -> new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "OCR route требует доступного tesseract executable."));
-		var language = request.ocrLanguage() == null || request.ocrLanguage().isBlank()
+		var requestedLanguage = request.ocrLanguage() == null || request.ocrLanguage().isBlank()
 			? defaultOcrLanguage()
 			: request.ocrLanguage().trim();
+		var language = validateOcrLanguage(tesseractExecutable, requestedLanguage, workingDirectory);
 
 		try (var document = loadPdf(upload, request.currentPassword(), "ocr source")) {
 			var renderer = new PDFRenderer(document);
@@ -458,6 +459,105 @@ public class PdfToolkitService {
 		}
 		catch (IOException exception) {
 			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Не удалось выполнить OCR для PDF.", exception);
+		}
+	}
+
+	private String validateOcrLanguage(Path tesseractExecutable, String requestedLanguage, Path workingDirectory) {
+		var requestedCodes = new ArrayList<String>();
+		for (String part : requestedLanguage.split("\\+")) {
+			var normalizedCode = part.trim();
+			if (!normalizedCode.isBlank()) {
+				requestedCodes.add(normalizedCode);
+			}
+		}
+
+		if (requestedCodes.isEmpty()) {
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "OCR language не должен быть пустым.");
+		}
+
+		var installedLanguages = listInstalledOcrLanguages(tesseractExecutable, workingDirectory);
+		// Валидируем язык до запуска OCR, чтобы пользователь видел понятное product-сообщение,
+		// а не сырой stderr tesseract про missing traineddata и TESSDATA_PREFIX.
+		var missingLanguages = requestedCodes.stream()
+			.filter(code -> !installedLanguages.contains(code))
+			.toList();
+		if (!missingLanguages.isEmpty()) {
+			throw new ResponseStatusException(
+				HttpStatus.BAD_REQUEST,
+				"OCR язык %s не установлен в текущем окружении. Доступны: %s."
+					.formatted(String.join(", ", missingLanguages), String.join(", ", installedLanguages))
+			);
+		}
+
+		return String.join("+", requestedCodes);
+	}
+
+	private Set<String> listInstalledOcrLanguages(Path tesseractExecutable, Path workingDirectory) {
+		Process process = null;
+		Thread outputReader = null;
+		var output = new ByteArrayOutputStream();
+		var outputFailure = new AtomicReference<IOException>();
+
+		try {
+			process = new ProcessBuilder(tesseractExecutable.toString(), "--list-langs")
+				.directory(workingDirectory.toFile())
+				.redirectErrorStream(true)
+				.start();
+
+			var runningProcess = process;
+			outputReader = Thread.ofVirtual()
+				.name("jack-pdf-toolkit-ocr-langs")
+				.start(() -> {
+					try (var inputStream = runningProcess.getInputStream()) {
+						inputStream.transferTo(output);
+					}
+					catch (IOException exception) {
+						outputFailure.set(exception);
+					}
+				});
+
+			var finished = process.waitFor(timeout().toMillis(), TimeUnit.MILLISECONDS);
+			if (!finished) {
+				process.destroyForcibly();
+				process.waitFor(5, TimeUnit.SECONDS);
+				throw new ResponseStatusException(HttpStatus.REQUEST_TIMEOUT, "Не удалось вовремя получить список OCR языков.");
+			}
+
+			outputReader.join(1_000L);
+			if (outputFailure.get() != null) {
+				throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Не удалось прочитать список OCR языков.", outputFailure.get());
+			}
+			if (process.exitValue() != 0) {
+				throw new ResponseStatusException(
+					HttpStatus.SERVICE_UNAVAILABLE,
+					"Не удалось получить список OCR языков: %s".formatted(normalizeCommandOutput(output.toByteArray()))
+				);
+			}
+
+			var installedLanguages = new LinkedHashSet<String>();
+			for (String line : new String(output.toByteArray(), StandardCharsets.UTF_8).split("\\R")) {
+				var normalizedLine = line.trim();
+				if (normalizedLine.isBlank() || normalizedLine.startsWith("List of available languages")) {
+					continue;
+				}
+				installedLanguages.add(normalizedLine);
+			}
+
+			if (installedLanguages.isEmpty()) {
+				throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Tesseract не вернул ни одного доступного OCR языка.");
+			}
+
+			return Set.copyOf(installedLanguages);
+		}
+		catch (IOException exception) {
+			throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Не удалось запросить список OCR языков.", exception);
+		}
+		catch (InterruptedException exception) {
+			if (process != null) {
+				process.destroy();
+			}
+			Thread.currentThread().interrupt();
+			throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Получение OCR языков было прервано.", exception);
 		}
 	}
 
