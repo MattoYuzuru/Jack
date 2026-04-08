@@ -14,6 +14,7 @@ describe('processing client', () => {
   afterEach(() => {
     globalThis.fetch = originalFetch
     resetProcessingCapabilityScopeCache()
+    vi.unstubAllEnvs()
   })
 
   it('throws ProcessingJobCancelledError when polling sees a cancelled job', async () => {
@@ -88,5 +89,39 @@ describe('processing client', () => {
 
     expect(matrix.modules).toHaveLength(6)
     expect(matrix.modules[0]?.id).toBe('compression')
+  })
+
+  it('resolves relative production api base url against current origin', async () => {
+    vi.stubEnv('VITE_API_BASE_URL', '/api')
+
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          id: 'job-3',
+          uploadId: 'upload-3',
+          jobType: 'IMAGE_CONVERT',
+          status: 'CANCELLED',
+          progressPercent: 25,
+          message: 'Job отменён пользователем.',
+          errorMessage: null,
+          createdAt: new Date().toISOString(),
+          startedAt: new Date().toISOString(),
+          completedAt: new Date().toISOString(),
+          artifacts: [],
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        },
+      ),
+    )
+    globalThis.fetch = fetchMock as typeof fetch
+
+    await cancelProcessingJob('job-3')
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringMatching(/\/api\/jobs\/job-3$/),
+      expect.objectContaining({ method: 'DELETE' }),
+    )
   })
 })

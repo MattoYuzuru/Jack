@@ -372,7 +372,25 @@ async function resolveProcessingApiErrorMessage(response: Response): Promise<str
 }
 
 function resolveProcessingApiUrl(path: string): string {
-  return new URL(path, `${resolveProcessingApiBaseUrl()}/`).toString()
+  const baseUrl = resolveProcessingApiBaseUrl()
+
+  if (isAbsoluteProcessingApiBaseUrl(baseUrl)) {
+    return new URL(path, `${baseUrl}/`).toString()
+  }
+
+  const normalizedBasePath = normalizeRelativeProcessingApiBasePath(baseUrl)
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`
+
+  // В production база часто задаётся как "/api", а сами вызовы уже содержат тот же префикс.
+  // Здесь важно не дублировать его и всегда резолвить URL от origin текущего сайта.
+  if (
+    normalizedPath === normalizedBasePath ||
+    normalizedPath.startsWith(`${normalizedBasePath}/`)
+  ) {
+    return new URL(normalizedPath, window.location.origin).toString()
+  }
+
+  return new URL(`${normalizedBasePath}${normalizedPath}`, window.location.origin).toString()
 }
 
 function resolveProcessingApiBaseUrl(): string {
@@ -383,6 +401,20 @@ function resolveProcessingApiBaseUrl(): string {
   }
 
   return DEFAULT_API_BASE_URL
+}
+
+function isAbsoluteProcessingApiBaseUrl(baseUrl: string): boolean {
+  return /^[a-z][a-z\d+.-]*:/i.test(baseUrl)
+}
+
+function normalizeRelativeProcessingApiBasePath(baseUrl: string): string {
+  const trimmedBaseUrl = baseUrl.replace(/\/+$/, '')
+
+  if (!trimmedBaseUrl) {
+    return ''
+  }
+
+  return trimmedBaseUrl.startsWith('/') ? trimmedBaseUrl : `/${trimmedBaseUrl}`
 }
 
 function sleep(timeoutMs: number): Promise<void> {
