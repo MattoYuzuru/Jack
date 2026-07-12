@@ -53,6 +53,10 @@ function formatQueryEntryStatus(status: 'kept' | 'removed'): string {
 
       <div class="devtools-topbar__actions">
         <RouterLink class="back-link" to="/">На главную</RouterLink>
+        <label class="chip-pill devtools-persistence-toggle">
+          <input v-model="workspace.persistenceEnabled.value" type="checkbox" />
+          <span>Запоминать несекретные поля</span>
+        </label>
         <span class="chip-pill">Локальные вычисления</span>
         <span class="chip-pill chip-pill--accent">Быстрые ежедневные задачи</span>
       </div>

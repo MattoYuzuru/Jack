@@ -1,4 +1,4 @@
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import {
   runEncodingTool,
   type EncodingMode,
@@ -19,14 +19,13 @@ import { listDevTools, resolveDevTool, type DevToolId } from '../domain/dev-tool
 type HashSourceMode = 'text' | 'file'
 
 interface PersistedDevToolsState {
+  persistenceEnabled?: boolean
   activeToolId?: DevToolId
   encodingStrategyId?: EncodingStrategyId
   encodingMode?: EncodingMode
   encodingInput?: string
-  jwtInput?: string
   hashSourceMode?: HashSourceMode
   hashTextInput?: string
-  hashSecret?: string
   linkInput?: string
   linkStripTracking?: boolean
   linkRemoveFragment?: boolean
@@ -35,22 +34,20 @@ interface PersistedDevToolsState {
   validationInput?: string
   timestampInput?: string
   basicAuthUsername?: string
-  basicAuthPassword?: string
 }
 
 const STORAGE_KEY = 'jack.dev-tools.workspace.v1'
 
 export function useDevToolsWorkspace() {
   const tools = listDevTools()
+  const persistenceEnabled = ref(false)
   const activeToolId = ref<DevToolId>('encoding')
 
   const encodingStrategyId = ref<EncodingStrategyId>('base64')
   const encodingMode = ref<EncodingMode>('encode')
   const encodingInput = ref('Привет, Jack\n{"channel":"share"}')
 
-  const jwtInput = ref(
-    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6ImRldi1rZXkifQ.eyJpc3MiOiJqYWNrLmxvY2FsIiwic3ViIjoiZGV2LXVzZXIiLCJhdWQiOiJ3ZWItdG9vbHMiLCJpYXQiOjE3MDAwMDAwMDAsIm5iZiI6MTcwMDAwMDAwMCwiZXhwIjo0MTAyNDQ0ODAwLCJzY29wZSI6InJlYWQ6dG9vbHMgd3JpdGU6dG9vbHMifQ.signature',
-  )
+  const jwtInput = ref('')
 
   const hashSourceMode = ref<HashSourceMode>('text')
   const hashTextInput = ref('Подписываемый текст для сверки')
@@ -76,26 +73,24 @@ export function useDevToolsWorkspace() {
   const quickUlid = ref(generateUlid())
   const timestampInput = ref(String(Date.now()))
   const basicAuthUsername = ref('jack-user')
-  const basicAuthPassword = ref('demo-secret')
+  const basicAuthPassword = ref('')
 
   const actionMessage = ref('')
 
   restoreFromStorage({
+    persistenceEnabled,
     activeToolId,
     encodingStrategyId,
     encodingMode,
     encodingInput,
-    jwtInput,
     hashSourceMode,
     hashTextInput,
-    hashSecret,
     linkInput,
     linkOptions,
     validationFormatId,
     validationInput,
     timestampInput,
     basicAuthUsername,
-    basicAuthPassword,
   })
 
   const activeTool = computed(() => resolveDevTool(activeToolId.value) ?? tools[0])
@@ -155,14 +150,13 @@ export function useDevToolsWorkspace() {
 
   watch(
     () => ({
+      persistenceEnabled: persistenceEnabled.value,
       activeToolId: activeToolId.value,
       encodingStrategyId: encodingStrategyId.value,
       encodingMode: encodingMode.value,
       encodingInput: encodingInput.value,
-      jwtInput: jwtInput.value,
       hashSourceMode: hashSourceMode.value,
       hashTextInput: hashTextInput.value,
-      hashSecret: hashSecret.value,
       linkInput: linkInput.value,
       linkStripTracking: linkOptions.stripTracking,
       linkRemoveFragment: linkOptions.removeFragment,
@@ -171,11 +165,16 @@ export function useDevToolsWorkspace() {
       validationInput: validationInput.value,
       timestampInput: timestampInput.value,
       basicAuthUsername: basicAuthUsername.value,
-      basicAuthPassword: basicAuthPassword.value,
     }),
     (payload) => persistState(payload),
     { deep: true },
   )
+
+  onBeforeUnmount(() => {
+    jwtInput.value = ''
+    hashSecret.value = ''
+    basicAuthPassword.value = ''
+  })
 
   function selectTool(toolId: DevToolId): void {
     activeToolId.value = toolId
@@ -235,6 +234,7 @@ export function useDevToolsWorkspace() {
 
   return {
     tools,
+    persistenceEnabled,
     activeToolId,
     activeTool,
     actionMessage,
@@ -287,25 +287,28 @@ function persistState(payload: PersistedDevToolsState): void {
     return
   }
 
+  if (payload.persistenceEnabled !== true) {
+    window.localStorage.removeItem(STORAGE_KEY)
+    return
+  }
+
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload))
 }
 
 function restoreFromStorage(state: {
+  persistenceEnabled: { value: boolean }
   activeToolId: { value: DevToolId }
   encodingStrategyId: { value: EncodingStrategyId }
   encodingMode: { value: EncodingMode }
   encodingInput: { value: string }
-  jwtInput: { value: string }
   hashSourceMode: { value: HashSourceMode }
   hashTextInput: { value: string }
-  hashSecret: { value: string }
   linkInput: { value: string }
   linkOptions: { stripTracking: boolean; removeFragment: boolean; sortParams: boolean }
   validationFormatId: { value: ValidationFormatId }
   validationInput: { value: string }
   timestampInput: { value: string }
   basicAuthUsername: { value: string }
-  basicAuthPassword: { value: string }
 }): void {
   if (typeof window === 'undefined') {
     return
@@ -318,6 +321,12 @@ function restoreFromStorage(state: {
     }
 
     const parsed = JSON.parse(rawValue) as PersistedDevToolsState
+    if (parsed.persistenceEnabled !== true) {
+      window.localStorage.removeItem(STORAGE_KEY)
+      return
+    }
+
+    state.persistenceEnabled.value = true
     if (parsed.activeToolId) {
       state.activeToolId.value = parsed.activeToolId
     }
@@ -330,17 +339,11 @@ function restoreFromStorage(state: {
     if (typeof parsed.encodingInput === 'string') {
       state.encodingInput.value = parsed.encodingInput
     }
-    if (typeof parsed.jwtInput === 'string') {
-      state.jwtInput.value = parsed.jwtInput
-    }
     if (parsed.hashSourceMode) {
       state.hashSourceMode.value = parsed.hashSourceMode
     }
     if (typeof parsed.hashTextInput === 'string') {
       state.hashTextInput.value = parsed.hashTextInput
-    }
-    if (typeof parsed.hashSecret === 'string') {
-      state.hashSecret.value = parsed.hashSecret
     }
     if (typeof parsed.linkInput === 'string') {
       state.linkInput.value = parsed.linkInput
@@ -366,9 +369,26 @@ function restoreFromStorage(state: {
     if (typeof parsed.basicAuthUsername === 'string') {
       state.basicAuthUsername.value = parsed.basicAuthUsername
     }
-    if (typeof parsed.basicAuthPassword === 'string') {
-      state.basicAuthPassword.value = parsed.basicAuthPassword
-    }
+
+    // Перезаписываем legacy schema сразу после чтения: JWT, HMAC secret и
+    // Basic Auth password никогда не должны переживать текущую вкладку.
+    persistState({
+      persistenceEnabled: true,
+      activeToolId: state.activeToolId.value,
+      encodingStrategyId: state.encodingStrategyId.value,
+      encodingMode: state.encodingMode.value,
+      encodingInput: state.encodingInput.value,
+      hashSourceMode: state.hashSourceMode.value,
+      hashTextInput: state.hashTextInput.value,
+      linkInput: state.linkInput.value,
+      linkStripTracking: state.linkOptions.stripTracking,
+      linkRemoveFragment: state.linkOptions.removeFragment,
+      linkSortParams: state.linkOptions.sortParams,
+      validationFormatId: state.validationFormatId.value,
+      validationInput: state.validationInput.value,
+      timestampInput: state.timestampInput.value,
+      basicAuthUsername: state.basicAuthUsername.value,
+    })
   } catch {
     window.localStorage.removeItem(STORAGE_KEY)
   }
