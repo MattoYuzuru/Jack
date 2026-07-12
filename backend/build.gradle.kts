@@ -30,6 +30,7 @@ dependencies {
 	implementation("org.apache.poi:poi-ooxml:5.4.1")
 	implementation("org.apache.poi:poi-scratchpad:5.4.1")
 	implementation("org.jsoup:jsoup:1.18.3")
+	implementation("com.vladsch.flexmark:flexmark-all:0.64.8")
 	implementation("org.apache.commons:commons-csv:1.14.1")
 	implementation("com.drewnoakes:metadata-extractor:2.19.0")
 	implementation("org.apache.commons:commons-imaging:1.0.0-alpha6")

@@ -76,7 +76,6 @@ public class DocumentPreviewService {
 	private static final int SQLITE_SAMPLE_COLUMN_LIMIT = 12;
 	private static final int SQLITE_MAX_PREVIEW_TABLES = 12;
 	private static final String SQLITE_HEADER = "SQLite format 3\u0000";
-	private static final Pattern MARKDOWN_HEADING_PATTERN = Pattern.compile("(?m)^(#{1,6})\\s+(.+?)\\s*$");
 	private static final Pattern ENV_LINE_PATTERN = Pattern.compile("^\\s*(?:export\\s+)?([A-Za-z_][A-Za-z0-9_]*)\\s*=\\s*(.*)\\s*$");
 	private static final Pattern XML_TAG_PATTERN = Pattern.compile("(?m)^\\s*<([A-Za-z_][\\w:.-]*)");
 	private static final Set<String> TEXT_EXTENSIONS = Set.of("txt", "text", "log", "sql");
@@ -91,11 +90,17 @@ public class DocumentPreviewService {
 
 	private final ArtifactStorageService artifactStorageService;
 	private final ObjectMapper objectMapper;
+	private final MarkdownRenderService markdownRenderService;
 	private final Yaml yaml;
 
-	public DocumentPreviewService(ArtifactStorageService artifactStorageService, ObjectMapper objectMapper) {
+	public DocumentPreviewService(
+		ArtifactStorageService artifactStorageService,
+		ObjectMapper objectMapper,
+		MarkdownRenderService markdownRenderService
+	) {
 		this.artifactStorageService = artifactStorageService;
 		this.objectMapper = objectMapper;
+		this.markdownRenderService = markdownRenderService;
 		this.yaml = new Yaml();
 	}
 
@@ -317,7 +322,14 @@ public class DocumentPreviewService {
 
 	private DocumentPreviewPayload buildMarkdownPreview(StoredUpload upload) {
 		var markdown = readDocumentText(upload.storagePath());
-		var outline = extractMarkdownOutline(markdown);
+		var renderContract = this.markdownRenderService.render(
+			markdown,
+			"obsidian-safe",
+			Set.of("footnotes", "definition-lists", "heading-anchors", "toc", "highlight", "sub-sup")
+		);
+		var outline = renderContract.outline().stream()
+			.map(item -> new DocumentPreviewPayload.DocumentOutlineItem(item.id(), item.label(), item.depth()))
+			.toList();
 
 		return new DocumentPreviewPayload(
 			List.of(
@@ -327,14 +339,14 @@ public class DocumentPreviewService {
 				new DocumentPreviewPayload.DocumentFact("Режим preview", "Rendered article")
 			),
 			markdown,
-			List.of(),
+			renderContract.warnings(),
 			new DocumentPreviewPayload.DocumentLayoutPayload(
 				"html",
 				null,
 				markdown,
 				null,
 				null,
-				wrapDocumentHtml(renderMarkdownBody(markdown)),
+				wrapDocumentHtml(renderContract.sanitizedHtml()),
 				outline,
 				null,
 				null,
@@ -1585,95 +1597,6 @@ public class DocumentPreviewService {
 		return trimmed;
 	}
 
-	private List<DocumentPreviewPayload.DocumentOutlineItem> extractMarkdownOutline(String markdown) {
-		var outline = new ArrayList<DocumentPreviewPayload.DocumentOutlineItem>();
-		var matcher = MARKDOWN_HEADING_PATTERN.matcher(markdown);
-		int index = 0;
-
-		while (matcher.find()) {
-			index += 1;
-			outline.add(
-				new DocumentPreviewPayload.DocumentOutlineItem(
-					"md-heading-" + index,
-					normalizeText(matcher.group(2)),
-					clampHeadingLevel(matcher.group(1).length())
-				)
-			);
-		}
-
-		return List.copyOf(outline);
-	}
-
-	private String renderMarkdownBody(String markdown) {
-		var lines = markdown.split("\\R");
-		var html = new StringBuilder();
-		boolean insideList = false;
-
-		for (String rawLine : lines) {
-			var line = rawLine.trim();
-			if (line.isBlank()) {
-				if (insideList) {
-					html.append("</ul>");
-					insideList = false;
-				}
-				continue;
-			}
-
-			var headingMatcher = MARKDOWN_HEADING_PATTERN.matcher(line);
-			if (headingMatcher.matches()) {
-				if (insideList) {
-					html.append("</ul>");
-					insideList = false;
-				}
-				int level = clampHeadingLevel(headingMatcher.group(1).length());
-				html.append("<h").append(level).append(">")
-					.append(applyInlineMarkdown(headingMatcher.group(2)))
-					.append("</h").append(level).append(">");
-				continue;
-			}
-
-			if (line.startsWith("- ") || line.startsWith("* ")) {
-				if (!insideList) {
-					html.append("<ul>");
-					insideList = true;
-				}
-				html.append("<li>").append(applyInlineMarkdown(line.substring(2).trim())).append("</li>");
-				continue;
-			}
-
-			if (insideList) {
-				html.append("</ul>");
-				insideList = false;
-			}
-
-			if (line.startsWith(">")) {
-				html.append("<blockquote>").append(applyInlineMarkdown(line.replaceFirst("^>\\s*", ""))).append("</blockquote>");
-				continue;
-			}
-
-			html.append("<p>").append(applyInlineMarkdown(line)).append("</p>");
-		}
-
-		if (insideList) {
-			html.append("</ul>");
-		}
-
-		if (html.isEmpty()) {
-			html.append("<p>Пустой Markdown файл.</p>");
-		}
-
-		return html.toString();
-	}
-
-	private String applyInlineMarkdown(String text) {
-		var html = escapeHtml(text);
-		html = html.replaceAll("\\*\\*(.+?)\\*\\*", "<strong>$1</strong>");
-		html = html.replaceAll("__(.+?)__", "<strong>$1</strong>");
-		html = html.replaceAll("`([^`]+)`", "<code>$1</code>");
-		html = html.replaceAll("\\[(.+?)]\\((https?://[^)]+)\\)", "<a href=\"$2\" target=\"_blank\" rel=\"noreferrer noopener\">$1</a>");
-		html = html.replaceAll("(?<!\\*)\\*(?!\\s)(.+?)(?<!\\s)\\*", "<em>$1</em>");
-		return html;
-	}
 
 	private List<DocumentPreviewPayload.DocumentOutlineItem> extractJsonOutline(JsonNode node) {
 		if (node == null || !node.isObject()) {
