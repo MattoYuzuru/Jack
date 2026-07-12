@@ -342,7 +342,7 @@ onMounted(() => {
             class="editor-preview-frame"
             :srcdoc="workspace.preview.value.html"
             title="Предпросмотр документа"
-            sandbox="allow-same-origin"
+            sandbox=""
           ></iframe>
           <div
             v-else-if="workspace.preview.value.mode === 'rich-html'"
