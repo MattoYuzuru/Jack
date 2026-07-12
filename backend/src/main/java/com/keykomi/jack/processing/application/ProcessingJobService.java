@@ -26,6 +26,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
+import java.util.concurrent.FutureTask;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 import io.micrometer.core.instrument.Counter;
@@ -126,9 +128,24 @@ public class ProcessingJobService {
 		var job = StoredProcessingJob.queued(UUID.randomUUID(), upload.id(), jobType, normalizedParameters, Instant.now());
 		this.jobs.put(job.id(), job);
 
-		// Даже foundation-срез сразу запускаем через async executor, чтобы следующие
-		// фазы с ffmpeg/document/imaging не ломали уже заведённый job lifecycle contract.
-		this.submittedJobs.put(job.id(), this.processingExecutor.submit(() -> process(job.id())));
+		var task = new FutureTask<Void>(() -> {
+			process(job.id());
+			return null;
+		});
+		this.submittedJobs.put(job.id(), task);
+
+		try {
+			this.processingExecutor.execute(task);
+		}
+		catch (RejectedExecutionException exception) {
+			this.submittedJobs.remove(job.id(), task);
+			this.jobs.remove(job.id(), job);
+			throw new ResponseStatusException(
+				HttpStatus.TOO_MANY_REQUESTS,
+				"Очередь обработки заполнена. Повтори запрос позже.",
+				exception
+			);
+		}
 		return job;
 	}
 
