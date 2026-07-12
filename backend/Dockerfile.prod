@@ -49,29 +49,23 @@ RUN set -eux; \
       tesseract-ocr \
       tesseract-ocr-rus \
       tar; \
-    mkdir -p /opt/java /app; \
+    mkdir -p /opt/java /app /data/processing /tmp/jack-processing; \
     curl -fsSL https://corretto.aws/downloads/latest/amazon-corretto-26-x64-linux-jdk.tar.gz -o /tmp/amazon-corretto.tar.gz; \
     tar -xzf /tmp/amazon-corretto.tar.gz -C /opt/java; \
     CORRETTO_DIR="$(find /opt/java -maxdepth 1 -type d -name 'amazon-corretto-*' | head -n 1)"; \
     mv "$CORRETTO_DIR" "${JAVA_HOME}"; \
     rm -f /tmp/amazon-corretto.tar.gz; \
     rm -rf /var/lib/apt/lists/*; \
-    # Разрешаем PDF/PS family в policy, иначе ImageMagick в контейнере режет Phase 2 targets.
-    for policy in /etc/ImageMagick-6/policy.xml /etc/ImageMagick-7/policy.xml; do \
-      if [ -f "$policy" ]; then \
-        sed -i 's/rights="none" pattern="PDF"/rights="read|write" pattern="PDF"/g' "$policy"; \
-        sed -i 's/rights="none" pattern="PS"/rights="read|write" pattern="PS"/g' "$policy"; \
-        sed -i 's/rights="none" pattern="PS2"/rights="read|write" pattern="PS2"/g' "$policy"; \
-        sed -i 's/rights="none" pattern="PS3"/rights="read|write" pattern="PS3"/g' "$policy"; \
-        sed -i 's/rights="none" pattern="EPS"/rights="read|write" pattern="EPS"/g' "$policy"; \
-        sed -i 's/rights="none" pattern="XPS"/rights="read|write" pattern="XPS"/g' "$policy"; \
-      fi; \
-    done; \
+    groupadd --gid 10001 jack; \
+    useradd --uid 10001 --gid jack --no-create-home --shell /usr/sbin/nologin jack; \
+    chown -R jack:jack /app /data/processing /tmp/jack-processing; \
     java -version
 
-WORKDIR /workspace
+WORKDIR /app
 
 COPY --from=builder /workspace/build/libs/*.jar /app/jack.jar
+
+USER 10001:10001
 
 EXPOSE 8080
 

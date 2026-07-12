@@ -18,6 +18,13 @@ spec:
       labels:
         app: jack-backend
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: backend
           image: ghcr.io/mattoyuzuru/jack/backend:edge
@@ -52,6 +59,24 @@ spec:
                   key: web-allowed-origins
             - name: JACK_PROCESSING_STORAGE_ROOT
               value: /data/processing
+            - name: JACK_PROCESSING_MAX_UPLOAD_SIZE_BYTES
+              value: "67108864"
+            - name: JACK_PROCESSING_MAX_CONCURRENT_JOBS
+              value: "4"
+            - name: JACK_PROCESSING_JOB_QUEUE_CAPACITY
+              value: "16"
+            - name: JACK_PROCESSING_PUBLIC_REQUESTS_PER_MINUTE
+              value: "30"
+            - name: JACK_MULTIPART_MAX_FILE_SIZE
+              value: 64MB
+            - name: JACK_MULTIPART_MAX_REQUEST_SIZE
+              value: 64MB
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
           readinessProbe:
             httpGet:
               path: /actuator/health
@@ -80,7 +105,12 @@ spec:
           volumeMounts:
             - name: processing-data
               mountPath: /data/processing
+            - name: temporary-files
+              mountPath: /tmp
       volumes:
         - name: processing-data
           persistentVolumeClaim:
             claimName: jack-processing
+        - name: temporary-files
+          emptyDir:
+            sizeLimit: 1Gi

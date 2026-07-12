@@ -28,17 +28,6 @@ RUN set -eux; \
     mv "$CORRETTO_DIR" "${JAVA_HOME}"; \
     rm -f /tmp/amazon-corretto.tar.gz; \
     rm -rf /var/lib/apt/lists/*; \
-    # Разрешаем PDF/PS family в policy, иначе ImageMagick в контейнере режет Phase 2 targets.
-    for policy in /etc/ImageMagick-6/policy.xml /etc/ImageMagick-7/policy.xml; do \
-      if [ -f "$policy" ]; then \
-        sed -i 's/rights="none" pattern="PDF"/rights="read|write" pattern="PDF"/g' "$policy"; \
-        sed -i 's/rights="none" pattern="PS"/rights="read|write" pattern="PS"/g' "$policy"; \
-        sed -i 's/rights="none" pattern="PS2"/rights="read|write" pattern="PS2"/g' "$policy"; \
-        sed -i 's/rights="none" pattern="PS3"/rights="read|write" pattern="PS3"/g' "$policy"; \
-        sed -i 's/rights="none" pattern="EPS"/rights="read|write" pattern="EPS"/g' "$policy"; \
-        sed -i 's/rights="none" pattern="XPS"/rights="read|write" pattern="XPS"/g' "$policy"; \
-      fi; \
-    done; \
     java -version
 
 WORKDIR /workspace
