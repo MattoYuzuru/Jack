@@ -2,6 +2,8 @@ plugins {
 	java
 	id("org.springframework.boot") version "4.0.5"
 	id("io.spring.dependency-management") version "1.1.7"
+	id("org.owasp.dependencycheck") version "12.2.2"
+	id("org.cyclonedx.bom") version "3.2.4"
 }
 
 group = "com.keykomi"
@@ -56,4 +58,10 @@ tasks.withType<JavaExec>().configureEach {
 
 tasks.withType<Test> {
 	useJUnitPlatform()
+}
+
+dependencyCheck {
+	failBuildOnCVSS = 7.0F
+	formats = listOf("HTML", "JSON")
+	nvd.apiKey = System.getenv("NVD_API_KEY")
 }

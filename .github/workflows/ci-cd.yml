@@ -36,6 +36,9 @@ jobs:
       - name: Install frontend dependencies
         run: npm --prefix frontend ci
 
+      - name: Audit frontend dependencies
+        run: npm --prefix frontend audit --audit-level=high
+
       - name: Run frontend lint checks
         run: npm --prefix frontend run lint:check
 
@@ -45,12 +48,44 @@ jobs:
       - name: Run frontend unit tests
         run: npm --prefix frontend run test:unit -- --run
 
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+        working-directory: frontend
+
+      - name: Run accessibility and responsive E2E tests
+        run: npm --prefix frontend run test:e2e
+
       - name: Build frontend
         run: npm --prefix frontend run build
 
       - name: Run backend tests
         run: ./gradlew --no-daemon test
         working-directory: backend
+
+      - name: Scan backend dependencies
+        env:
+          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+        run: ./gradlew --no-daemon dependencyCheckAnalyze
+        working-directory: backend
+
+      - name: Generate frontend SBOM
+        run: npm sbom --sbom-format cyclonedx --package-lock-only > frontend-sbom.cdx.json
+        working-directory: frontend
+
+      - name: Generate backend SBOM
+        run: ./gradlew --no-daemon cyclonedxBom
+        working-directory: backend
+
+      - name: Upload security reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-reports
+          path: |
+            frontend/frontend-sbom.cdx.json
+            backend/build/reports/dependency-check-report.*
+            backend/build/reports/cyclonedx/*.json
+          if-no-files-found: warn
 
       - name: Validate Compose config
         run: docker compose config
