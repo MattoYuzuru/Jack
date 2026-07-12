@@ -1025,6 +1025,7 @@ onBeforeUnmount(() => {
           ref="fileInput"
           class="visually-hidden"
           type="file"
+          aria-label="Выбрать файл для просмотра"
           :accept="viewerAcceptAttribute"
           @change="onFileChange"
         />
@@ -1032,6 +1033,7 @@ onBeforeUnmount(() => {
           ref="subtitleInput"
           class="visually-hidden"
           type="file"
+          aria-label="Добавить субтитры к видео"
           :accept="viewerVideoSubtitleAcceptAttribute"
           multiple
           @change="onSubtitleChange"

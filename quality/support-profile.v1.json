@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "profileVersion": "1.0.0",
+  "capabilities": [
+    {
+      "id": "markdown-preview",
+      "status": "available",
+      "fixture": "fixtures/v1/valid/commonmark-gfm.md",
+      "contractTest": "editor markdown preview security"
+    },
+    {
+      "id": "plain-text-edit",
+      "status": "available",
+      "fixture": "fixtures/v1/valid/unicode-rtl.txt",
+      "contractTest": "editor registry"
+    },
+    {
+      "id": "json-edit",
+      "status": "available",
+      "fixture": "fixtures/v1/valid/structured.json",
+      "contractTest": "editor formatter"
+    },
+    {
+      "id": "csv-preview",
+      "status": "available",
+      "fixture": "fixtures/v1/valid/ragged-multiline.csv",
+      "contractTest": "document preview api"
+    },
+    {
+      "id": "adversarial-intake",
+      "status": "test-only",
+      "fixture": "fixtures/v1/security/misleading-image.jpg",
+      "contractTest": "processing file family resolver"
+    }
+  ]
+}

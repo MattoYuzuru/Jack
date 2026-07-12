@@ -301,6 +301,7 @@ onMounted(() => {
             ref="textarea"
             v-model="workspace.content.value"
             class="editor-textarea"
+            aria-label="Содержимое документа"
             spellcheck="false"
             @keydown="onEditorKeydown"
             @scroll="onEditorScroll"
@@ -313,21 +314,34 @@ onMounted(() => {
           <button
             v-for="tab in sideTabs"
             :key="tab"
+            :id="`editor-tab-${tab}`"
             class="icon-button editor-side__tab"
             :class="{ 'editor-side__tab--active': activeTab === tab }"
             type="button"
+            role="tab"
+            :aria-selected="activeTab === tab"
+            :aria-controls="`editor-panel-${tab}`"
+            :tabindex="activeTab === tab ? 0 : -1"
             @click="activeTab = tab"
           >
             {{ formatTabLabel(tab) }}
           </button>
         </div>
 
-        <div v-if="activeTab === 'preview'" class="editor-side__panel editor-side__panel--preview">
+        <div
+          v-if="activeTab === 'preview'"
+          id="editor-panel-preview"
+          class="editor-side__panel editor-side__panel--preview"
+          role="tabpanel"
+          aria-labelledby="editor-tab-preview"
+          tabindex="0"
+        >
           <p class="eyebrow">Просмотр</p>
           <iframe
             v-if="workspace.preview.value.mode === 'sandbox'"
             class="editor-preview-frame"
             :srcdoc="workspace.preview.value.html"
+            title="Предпросмотр документа"
             sandbox="allow-same-origin"
           ></iframe>
           <div
@@ -342,7 +356,14 @@ onMounted(() => {
           <pre v-else class="editor-syntax-preview" v-html="workspace.preview.value.html"></pre>
         </div>
 
-        <div v-else-if="activeTab === 'diagnostics'" class="editor-side__panel">
+        <div
+          v-else-if="activeTab === 'diagnostics'"
+          id="editor-panel-diagnostics"
+          class="editor-side__panel"
+          role="tabpanel"
+          aria-labelledby="editor-tab-diagnostics"
+          tabindex="0"
+        >
           <p class="eyebrow">Проверка</p>
           <p class="editor-side__note">
             {{
@@ -376,7 +397,14 @@ onMounted(() => {
           </p>
         </div>
 
-        <div v-else-if="activeTab === 'outline'" class="editor-side__panel">
+        <div
+          v-else-if="activeTab === 'outline'"
+          id="editor-panel-outline"
+          class="editor-side__panel"
+          role="tabpanel"
+          aria-labelledby="editor-tab-outline"
+          tabindex="0"
+        >
           <p class="eyebrow">Структура</p>
           <p class="editor-side__note">
             Здесь собирается структура документа: сначала локальная, а после проверки более точная.
@@ -406,7 +434,14 @@ onMounted(() => {
           </div>
         </div>
 
-        <div v-else class="editor-side__panel">
+        <div
+          v-else
+          id="editor-panel-exports"
+          class="editor-side__panel"
+          role="tabpanel"
+          aria-labelledby="editor-tab-exports"
+          tabindex="0"
+        >
           <p class="eyebrow">Экспорт</p>
           <div class="editor-facts">
             <article v-for="fact in summaryFacts" :key="fact.label" class="editor-fact">
