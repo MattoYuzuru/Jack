@@ -1,6 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
+import DiagnosticsPanel from '../components/editor/DiagnosticsPanel.vue'
+import EditorSurface from '../components/editor/EditorSurface.vue'
+import ExportPanel from '../components/editor/ExportPanel.vue'
+import FormatToolbar from '../components/editor/FormatToolbar.vue'
+import OutlinePanel from '../components/editor/OutlinePanel.vue'
+import PreviewPanel from '../components/editor/PreviewPanel.vue'
 import { useEditorWorkspace } from '../features/editor/composables/useEditorWorkspace'
 
 type EditorPanelTab = 'preview' | 'diagnostics' | 'outline' | 'exports'
@@ -8,9 +14,12 @@ type EditorPanelTab = 'preview' | 'diagnostics' | 'outline' | 'exports'
 const workspace = useEditorWorkspace()
 const activeTab = ref<EditorPanelTab>('preview')
 const sideTabs: EditorPanelTab[] = ['preview', 'diagnostics', 'outline', 'exports']
-const fileInput = ref<HTMLInputElement | null>(null)
-const textarea = ref<HTMLTextAreaElement | null>(null)
-const lineGutter = ref<HTMLElement | null>(null)
+const editorSurface = ref<{
+  applyCommand: (commandId: string) => boolean
+  runUndo: () => boolean
+  runRedo: () => boolean
+  focus: () => void
+} | null>(null)
 
 const summaryFacts = computed(() => {
   if (workspace.serverSummary.value.length) {
@@ -49,47 +58,65 @@ async function hydrateWorkspace(): Promise<void> {
   }
 }
 
-function triggerFileOpen(): void {
-  fileInput.value?.click()
-}
-
-async function onFileSelected(event: Event): Promise<void> {
-  const input = event.target as HTMLInputElement | null
-  const file = input?.files?.[0]
-  if (!file) {
-    return
-  }
-
+async function onFileSelected(file: File): Promise<void> {
   try {
     await workspace.openFile(file)
   } catch (error) {
     workspace.errorMessage.value =
       error instanceof Error ? error.message : 'Не удалось открыть выбранный файл.'
-  } finally {
-    if (input) {
-      input.value = ''
-    }
   }
-}
-
-function onEditorScroll(event: Event): void {
-  if (!lineGutter.value) {
-    return
-  }
-
-  lineGutter.value.scrollTop = (event.target as HTMLTextAreaElement).scrollTop
-}
-
-function onTemplateChange(): void {
-  workspace.applyTemplate(workspace.selectedTemplateId.value)
 }
 
 function onHelperClick(actionId: string): void {
-  workspace.applyHelperAction(actionId, textarea.value)
+  editorSurface.value?.applyCommand(actionId)
 }
 
-function onEditorKeydown(event: KeyboardEvent): void {
-  workspace.handleEditorKeydown(event, textarea.value)
+function onToolbarAction(
+  action: 'open' | 'undo' | 'redo' | 'format' | 'validate' | 'ready' | 'text' | 'cancel' | 'clear',
+): void {
+  switch (action) {
+    case 'open':
+      return
+    case 'undo':
+      editorSurface.value?.runUndo()
+      return
+    case 'redo':
+      editorSurface.value?.runRedo()
+      return
+    case 'format':
+      void workspace.formatDocument()
+      return
+    case 'validate':
+      void workspace.validateDocument()
+      return
+    case 'ready':
+      void workspace.downloadReadyFile()
+      return
+    case 'text':
+      void workspace.downloadPlainTextFile()
+      return
+    case 'cancel':
+      void workspace.cancelValidation()
+      return
+    case 'clear':
+      workspace.clearPersistedDraft()
+  }
+}
+
+function onEditorShortcut(action: 'save' | 'save-text' | 'validate' | 'format'): void {
+  switch (action) {
+    case 'save':
+      void workspace.downloadReadyFile()
+      return
+    case 'save-text':
+      void workspace.downloadPlainTextFile()
+      return
+    case 'validate':
+      void workspace.validateDocument()
+      return
+    case 'format':
+      void workspace.formatDocument()
+  }
 }
 
 onMounted(() => {
@@ -162,95 +189,32 @@ onMounted(() => {
 
     <section class="editor-shell">
       <article class="panel-surface editor-main">
-        <div class="editor-toolbar">
-          <div class="editor-toolbar__cluster">
-            <label class="editor-field">
-              <span>Формат</span>
-              <select v-model="workspace.selectedFormatId.value">
-                <option
-                  v-for="format in workspace.availableFormats.value"
-                  :key="format.id"
-                  :value="format.id"
-                >
-                  {{ format.label }}
-                </option>
-              </select>
-            </label>
-
-            <label class="editor-field">
-              <span>Имя файла</span>
-              <input v-model="workspace.fileName.value" type="text" spellcheck="false" />
-            </label>
-
-            <label class="editor-field">
-              <span>Шаблон</span>
-              <select v-model="workspace.selectedTemplateId.value" @change="onTemplateChange">
-                <option
-                  v-for="template in workspace.templateOptions.value"
-                  :key="template.id"
-                  :value="template.id"
-                >
-                  {{ template.label }}
-                </option>
-              </select>
-            </label>
-          </div>
-
-          <div class="editor-toolbar__cluster editor-toolbar__cluster--actions">
-            <button class="action-button" type="button" @click="triggerFileOpen">Открыть</button>
-            <button
-              class="action-button"
-              type="button"
-              :disabled="!workspace.canFormat.value"
-              @click="workspace.formatDocument"
-            >
-              Формат
-            </button>
-            <button
-              class="action-button action-button--accent"
-              type="button"
-              :disabled="workspace.isValidating.value"
-              @click="workspace.validateDocument()"
-            >
-              Проверить
-            </button>
-            <button
-              class="action-button"
-              type="button"
-              :disabled="workspace.isValidating.value"
-              @click="workspace.downloadReadyFile"
-            >
-              Файл
-            </button>
-            <button
-              class="action-button"
-              type="button"
-              :disabled="workspace.isValidating.value"
-              @click="workspace.downloadPlainTextFile"
-            >
-              Текст
-            </button>
-            <button
-              v-if="workspace.activeJobId.value"
-              class="action-button"
-              type="button"
-              :disabled="workspace.isCancelling.value"
-              @click="workspace.cancelValidation"
-            >
-              Стоп
-            </button>
-            <button class="action-button" type="button" @click="workspace.clearPersistedDraft">
-              Очистить
-            </button>
-            <input
-              ref="fileInput"
-              class="editor-hidden-input"
-              type="file"
-              :accept="workspace.editorAcceptAttribute.value"
-              @change="onFileSelected"
-            />
-          </div>
-        </div>
+        <FormatToolbar
+          :formats="workspace.availableFormats.value"
+          :format-id="workspace.selectedFormatId.value"
+          :file-name="workspace.fileName.value"
+          :encoding="workspace.encoding.value"
+          :newline="workspace.newline.value"
+          :persistence-enabled="workspace.persistenceEnabled.value"
+          :templates="workspace.templateOptions.value"
+          :selected-template-id="workspace.selectedTemplateId.value"
+          :current-content="workspace.content.value"
+          :helper-actions="workspace.helperActions.value"
+          :can-format="workspace.canFormat.value"
+          :busy="workspace.isValidating.value"
+          :active-job="Boolean(workspace.activeJobId.value)"
+          :cancelling="workspace.isCancelling.value"
+          :accept="workspace.editorAcceptAttribute.value"
+          @update:format-id="workspace.selectedFormatId.value = $event"
+          @update:file-name="workspace.fileName.value = $event"
+          @update:encoding="workspace.encoding.value = $event"
+          @update:newline="workspace.newline.value = $event"
+          @update:persistence-enabled="workspace.persistenceEnabled.value = $event"
+          @template="workspace.applyTemplate($event)"
+          @command="onHelperClick"
+          @action="onToolbarAction"
+          @file="onFileSelected"
+        />
 
         <div class="editor-meta-row">
           <span class="chip-pill chip-pill--compact">{{
@@ -267,20 +231,6 @@ onMounted(() => {
           </span>
         </div>
 
-        <div class="editor-helper-row" aria-label="Быстрые действия по формату">
-          <button
-            v-for="action in workspace.helperActions.value"
-            :key="action.id"
-            class="icon-button editor-helper"
-            type="button"
-            :title="action.detail"
-            @click="onHelperClick(action.id)"
-          >
-            <span>{{ action.label }}</span>
-            <small v-if="action.shortcut">{{ action.shortcut }}</small>
-          </button>
-        </div>
-
         <div v-if="workspace.processingMessage.value" class="editor-progress">
           <div class="editor-progress__track">
             <span
@@ -295,17 +245,17 @@ onMounted(() => {
           {{ workspace.errorMessage.value }}
         </p>
 
+        <p v-if="workspace.formatMismatchWarning.value" class="editor-warning" role="status">
+          {{ workspace.formatMismatchWarning.value }}
+        </p>
+
         <div class="editor-surface">
-          <pre ref="lineGutter" class="editor-gutter">{{ workspace.lineNumberGutter.value }}</pre>
-          <textarea
-            ref="textarea"
+          <EditorSurface
+            ref="editorSurface"
             v-model="workspace.content.value"
-            class="editor-textarea"
-            aria-label="Содержимое документа"
-            spellcheck="false"
-            @keydown="onEditorKeydown"
-            @scroll="onEditorScroll"
-          ></textarea>
+            :format-id="workspace.selectedFormatId.value"
+            @shortcut="onEditorShortcut"
+          />
         </div>
       </article>
 
@@ -336,24 +286,7 @@ onMounted(() => {
           aria-labelledby="editor-tab-preview"
           tabindex="0"
         >
-          <p class="eyebrow">Просмотр</p>
-          <iframe
-            v-if="workspace.preview.value.mode === 'sandbox'"
-            class="editor-preview-frame"
-            :srcdoc="workspace.preview.value.html"
-            title="Предпросмотр документа"
-            sandbox=""
-          ></iframe>
-          <div
-            v-else-if="workspace.preview.value.mode === 'rich-html'"
-            class="editor-rendered-preview"
-            v-html="workspace.preview.value.html"
-          ></div>
-          <pre
-            v-else-if="workspace.preview.value.mode === 'text'"
-            class="editor-syntax-preview"
-          ><code>{{ workspace.content.value }}</code></pre>
-          <pre v-else class="editor-syntax-preview" v-html="workspace.preview.value.html"></pre>
+          <PreviewPanel :preview="workspace.preview.value" :content="workspace.content.value" />
         </div>
 
         <div
@@ -364,37 +297,11 @@ onMounted(() => {
           aria-labelledby="editor-tab-diagnostics"
           tabindex="0"
         >
-          <p class="eyebrow">Проверка</p>
-          <p class="editor-side__note">
-            {{
-              workspace.hasFreshServerResult.value
-                ? 'Показаны результаты для текущего текста.'
-                : 'После изменений запусти проверку ещё раз, чтобы обновить замечания и структуру.'
-            }}
-          </p>
-
-          <div v-if="workspace.diagnostics.value.length" class="editor-issue-list">
-            <article
-              v-for="issue in workspace.diagnostics.value"
-              :key="`${issue.code}-${issue.line}-${issue.column}-${issue.message}`"
-              class="editor-issue"
-              :class="`editor-issue--${issue.severity}`"
-            >
-              <div class="editor-issue__topline">
-                <span class="chip-pill chip-pill--compact">{{ issue.severity }}</span>
-                <strong>{{ issue.code }}</strong>
-                <span v-if="issue.line" class="editor-issue__position">
-                  Строка {{ issue.line
-                  }}<span v-if="issue.column"> · Колонка {{ issue.column }}</span>
-                </span>
-              </div>
-              <p>{{ issue.message }}</p>
-              <small v-if="issue.hint">{{ issue.hint }}</small>
-            </article>
-          </div>
-          <p v-else class="editor-side__empty">
-            Проверка ещё не запускалась или заметных проблем не найдено.
-          </p>
+          <DiagnosticsPanel
+            :issues="workspace.diagnostics.value"
+            :fresh="workspace.hasFreshServerResult.value"
+            :scope-label="workspace.diagnosticsScope.value"
+          />
         </div>
 
         <div
@@ -405,33 +312,10 @@ onMounted(() => {
           aria-labelledby="editor-tab-outline"
           tabindex="0"
         >
-          <p class="eyebrow">Структура</p>
-          <p class="editor-side__note">
-            Здесь собирается структура документа: сначала локальная, а после проверки более точная.
-          </p>
-
-          <div v-if="workspace.outlineItems.value.length" class="editor-outline">
-            <div
-              v-for="item in workspace.outlineItems.value"
-              :key="item.id"
-              class="editor-outline__item"
-              :style="{ paddingInlineStart: `${12 + (item.depth - 1) * 18}px` }"
-            >
-              <strong>{{ item.label }}</strong>
-              <span>{{ item.kind }}</span>
-            </div>
-          </div>
-          <p v-else class="editor-side__empty">Для текущего текста структура пока не выделилась.</p>
-
-          <div class="editor-suggestions">
-            <span
-              v-for="suggestion in workspace.suggestionPills.value"
-              :key="suggestion"
-              class="chip-pill chip-pill--compact"
-            >
-              {{ suggestion }}
-            </span>
-          </div>
+          <OutlinePanel
+            :items="workspace.outlineItems.value"
+            :suggestions="workspace.suggestionPills.value"
+          />
         </div>
 
         <div
@@ -442,40 +326,13 @@ onMounted(() => {
           aria-labelledby="editor-tab-exports"
           tabindex="0"
         >
-          <p class="eyebrow">Экспорт</p>
-          <div class="editor-facts">
-            <article v-for="fact in summaryFacts" :key="fact.label" class="editor-fact">
-              <span>{{ fact.label }}</span>
-              <strong>{{ fact.value }}</strong>
-            </article>
-          </div>
-
-          <div class="editor-export-actions">
-            <button
-              class="action-button action-button--accent"
-              type="button"
-              :disabled="workspace.isValidating.value"
-              @click="workspace.validateDocument()"
-            >
-              Обновить проверку
-            </button>
-            <button
-              class="action-button"
-              type="button"
-              :disabled="workspace.isValidating.value"
-              @click="workspace.downloadReadyFile"
-            >
-              Скачать файл
-            </button>
-            <button
-              class="action-button"
-              type="button"
-              :disabled="workspace.isValidating.value"
-              @click="workspace.downloadPlainTextFile"
-            >
-              Скачать текст
-            </button>
-          </div>
+          <ExportPanel
+            :facts="summaryFacts"
+            :busy="workspace.isValidating.value"
+            @validate="workspace.validateDocument()"
+            @download-ready="workspace.downloadReadyFile"
+            @download-text="workspace.downloadPlainTextFile"
+          />
         </div>
       </article>
     </section>
@@ -601,10 +458,22 @@ onMounted(() => {
 }
 
 .editor-field select:focus-visible,
-.editor-field input:focus-visible,
-.editor-textarea:focus-visible {
+.editor-field input:focus-visible {
   outline: 2px solid rgba(29, 92, 85, 0.34);
   outline-offset: 3px;
+}
+
+.editor-field--checkbox {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  padding-bottom: 8px;
+}
+
+.editor-field--checkbox input {
+  width: 24px;
+  min-height: 24px;
+  padding: 0;
 }
 
 .editor-hidden-input {
@@ -670,46 +539,27 @@ onMounted(() => {
   color: #8a4120;
 }
 
+.editor-warning {
+  margin: 0 0 16px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: rgba(255, 207, 143, 0.18);
+  color: #72491d;
+}
+
 .editor-surface {
   display: grid;
-  grid-template-columns: 58px minmax(0, 1fr);
-  min-height: 620px;
+  min-width: 0;
+  min-height: 32rem;
+  overflow: hidden;
   border-radius: 30px;
-  background:
-    linear-gradient(180deg, rgba(16, 36, 38, 0.92), rgba(20, 48, 45, 0.96)),
-    radial-gradient(circle at top right, rgba(255, 207, 143, 0.08), transparent 22%);
+  background: rgba(255, 250, 242, 0.72);
   box-shadow: var(--shadow-floating);
 }
 
-.editor-gutter,
-.editor-textarea,
 .editor-syntax-preview {
   font-family:
     'SFMono-Regular', 'JetBrains Mono', 'Fira Code', 'IBM Plex Mono', 'Courier New', monospace;
-}
-
-.editor-gutter {
-  overflow: hidden;
-  margin: 0;
-  padding: 24px 8px 24px 18px;
-  border-right: 1px solid rgba(255, 255, 255, 0.08);
-  color: rgba(255, 245, 232, 0.42);
-  font-size: 0.82rem;
-  line-height: 1.7;
-  text-align: right;
-  user-select: none;
-}
-
-.editor-textarea {
-  width: 100%;
-  min-height: 620px;
-  padding: 24px 24px 24px 18px;
-  border: 0;
-  background: transparent;
-  color: rgba(255, 245, 232, 0.92);
-  font-size: 0.9rem;
-  line-height: 1.7;
-  resize: none;
 }
 
 .editor-side {
@@ -922,12 +772,9 @@ onMounted(() => {
   }
 
   .editor-surface {
-    grid-template-columns: 44px minmax(0, 1fr);
-    min-height: 520px;
+    min-height: 26rem;
   }
 
-  .editor-textarea,
-  .editor-gutter,
   .editor-side__panel,
   .editor-preview-frame,
   .editor-rendered-preview,

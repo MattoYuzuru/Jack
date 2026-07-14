@@ -258,9 +258,7 @@ public class EditorProcessingService {
 		List<EditorPayloads.EditorOutlineItem> outline,
 		List<DocumentPreviewPayload.DocumentFact> summary
 	) {
-		var previewPayload = this.documentPreviewService.analyze(
-			createVirtualTextUpload("editor.html", "text/html", "html", normalizedText)
-		);
+		var previewPayload = analyzeVirtualHtml(normalizedText);
 		var document = Jsoup.parse(normalizedText);
 
 		for (DocumentPreviewPayload.DocumentOutlineItem item : previewPayload.layout().outline()) {
@@ -487,28 +485,36 @@ public class EditorProcessingService {
 		return normalizedText;
 	}
 
-	private StoredUpload createVirtualTextUpload(
-		String fileName,
-		String mediaType,
-		String extension,
-		String content
-	) {
+	private DocumentPreviewPayload analyzeVirtualHtml(String content) {
+		java.nio.file.Path tempPath = null;
 		try {
-			var tempPath = Files.createTempFile("jack-editor-", "." + extension);
+			tempPath = Files.createTempFile("jack-editor-", ".html");
 			Files.writeString(tempPath, content, StandardCharsets.UTF_8);
-			return new StoredUpload(
+			var upload = new StoredUpload(
 				java.util.UUID.randomUUID(),
-				fileName,
-				mediaType,
-				extension,
+				"editor.html",
+				"text/html",
+				"html",
 				Files.size(tempPath),
 				"",
 				Instant.now(),
 				tempPath
 			);
+			return this.documentPreviewService.analyze(upload);
 		}
 		catch (IOException exception) {
 			throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Не удалось подготовить временный editor preview upload.", exception);
+		}
+		finally {
+			if (tempPath != null) {
+				try {
+					// Временный HTML нужен только на время analyze и не должен переживать job.
+					Files.deleteIfExists(tempPath);
+				}
+				catch (IOException exception) {
+					throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Не удалось удалить временный editor preview upload.", exception);
+				}
+			}
 		}
 	}
 

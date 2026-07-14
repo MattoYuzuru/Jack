@@ -119,6 +119,11 @@ class EditorApiTests {
 
 		assertThat(manifest.path("formatId").asText()).isEqualTo("json");
 		assertThat(manifest.path("issues").toString()).contains("JSON_PARSE_ERROR");
+		var parseIssue = manifest.path("issues").findValue("quickFixCode");
+		assertThat(parseIssue.asText()).isEqualTo("repair-structured-syntax");
+		var firstIssue = manifest.path("issues").get(0);
+		assertThat(firstIssue.path("line").asInt()).isPositive();
+		assertThat(firstIssue.path("endLine").asInt()).isEqualTo(firstIssue.path("line").asInt());
 		assertThat(artifacts).containsKeys("editor-export-ready", "editor-export-plain-text");
 		assertThat(artifacts.get("editor-export-ready").path("fileName").asText()).isEqualTo("payload.json");
 	}

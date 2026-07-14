@@ -85,7 +85,7 @@ test('editor accepts a local file without a pointer device', async ({ page }) =>
   })
 
   await expect(page.locator('input[type="text"]').first()).toHaveValue('fixture.md')
-  await expect(page.getByText('Keyboard upload.', { exact: false })).toBeVisible()
+  await expect(page.locator('.cm-line').getByText('Keyboard upload.', { exact: true })).toBeVisible()
 })
 
 test('home visual baseline', async ({ page }) => {
