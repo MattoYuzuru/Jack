@@ -11,6 +11,10 @@ import {
 } from '../features/viewer/composables/useViewerVideoPlayback'
 import { useViewerAudioPlayback } from '../features/viewer/composables/useViewerAudioPlayback'
 import { findViewerDocumentMatches } from '../features/viewer/application/viewer-document'
+import {
+  buildViewerFacts,
+  formatViewerPreviewLabel,
+} from '../features/viewer/application/viewer-presentation'
 import { formatViewerVideoDuration } from '../features/viewer/application/viewer-video'
 import { formatViewerVideoBitrate } from '../features/viewer/application/viewer-video-tools'
 import {
@@ -195,187 +199,7 @@ watch(
   { immediate: true },
 )
 
-function formatSelectionPreviewLabel(): string {
-  if (!selection.value) {
-    return ''
-  }
-
-  if (selection.value.kind === 'image') {
-    return selection.value.format.previewPipeline === 'browser-native'
-      ? 'Мгновенный просмотр'
-      : 'Подготовленный просмотр'
-  }
-
-  if (selection.value.kind === 'video') {
-    return 'Видеоплеер'
-  }
-
-  if (selection.value.kind === 'audio') {
-    return 'Аудиоплеер'
-  }
-
-  if (selection.value.kind !== 'document') {
-    return 'Просмотр'
-  }
-
-  switch (selection.value.layout.mode) {
-    case 'pdf':
-      return 'Постраничный просмотр'
-    case 'table':
-      return 'Табличный просмотр'
-    case 'html':
-      return 'Веб-предпросмотр'
-    case 'workbook':
-      return 'Рабочая книга'
-    case 'slides':
-      return 'Просмотр слайдов'
-    case 'database':
-      return 'Структура базы'
-    default:
-      return 'Текстовый просмотр'
-  }
-}
-
-function formatViewerFactLabel(label: string): string {
-  switch (label) {
-    case 'Headings':
-      return 'Заголовки'
-    case 'Delimiter':
-      return 'Разделитель'
-    case 'Sandbox':
-      return 'Режим HTML'
-    case 'Top-level keys':
-      return 'Ключи верхнего уровня'
-    case 'Root node':
-      return 'Корневой узел'
-    case 'Outline entries':
-      return 'Элементы структуры'
-    case 'Sheets':
-      return 'Листы'
-    case 'Rows':
-      return 'Строки'
-    case 'Columns':
-      return 'Колонки'
-    case 'Views':
-      return 'Представления'
-    case 'Triggers':
-      return 'Триггеры'
-    case 'Sections':
-      return 'Разделы'
-    case 'Blocks':
-      return 'Блоки'
-    case 'Top-level symbols':
-      return 'Символы верхнего уровня'
-    case 'Root':
-      return 'Корень'
-    case 'Режим preview':
-      return 'Режим просмотра'
-    default:
-      return label
-  }
-}
-
-function formatViewerFactValue(_label: string, value: string): string {
-  switch (value) {
-    case 'Browser preview only':
-      return 'Без извлечения текста'
-    case 'Backend srcdoc':
-      return 'Безопасный встроенный просмотр'
-    case 'Backend PDF text extraction':
-      return 'С поиском по тексту'
-    case 'Rendered article':
-      return 'Статья'
-    case 'Structured config':
-      return 'Структурный просмотр'
-    case 'Config review':
-      return 'Проверка конфигурации'
-    case 'Schema read':
-      return 'Просмотр структуры'
-    case 'Config table':
-      return 'Таблица переменных'
-    case 'Delimited table preview':
-      return 'Табличный просмотр'
-    case 'Tabbed table preview':
-      return 'Таблица с таб-разделителями'
-    case 'PDF server preview':
-      return 'Постраничный просмотр'
-    case 'HTML sanitized preview':
-      return 'Безопасный HTML'
-    case 'Markdown reading preview':
-      return 'Чтение Markdown'
-    case 'JSON structured preview':
-      return 'Структурный JSON'
-    case 'YAML structured preview':
-      return 'Структурный YAML'
-    case 'XML structure preview':
-      return 'Структура XML'
-    case 'Environment config preview':
-      return 'Переменные окружения'
-    default:
-      return value
-  }
-}
-
-function normalizeViewerFacts(facts: Array<{ label: string; value: string }>) {
-  return facts.map((fact) => ({
-    label: formatViewerFactLabel(fact.label),
-    value: formatViewerFactValue(fact.label, fact.value),
-  }))
-}
-
-const selectionFacts = computed(() => {
-  if (!selection.value) {
-    return []
-  }
-
-  const items = [
-    { label: 'Имя файла', value: selection.value.file.name },
-    {
-      label: 'Размер',
-      value: new Intl.NumberFormat('ru-RU').format(selection.value.file.size) + ' байт',
-    },
-    { label: 'Расширение', value: selection.value.extension || 'неизвестно' },
-    { label: 'MIME', value: selection.value.file.type || 'Не определён' },
-  ]
-
-  if (selection.value.kind === 'image') {
-    items.push({
-      label: 'Размерность',
-      value: `${selection.value.dimensions.width} x ${selection.value.dimensions.height}`,
-    })
-    items.push({
-      label: 'Режим просмотра',
-      value: formatSelectionPreviewLabel(),
-    })
-    items.push(...normalizeViewerFacts(selection.value.metadata.summary))
-  }
-
-  if (selection.value.kind === 'document') {
-    items.push({
-      label: 'Режим просмотра',
-      value: formatSelectionPreviewLabel(),
-    })
-    items.push(...normalizeViewerFacts(selection.value.summary))
-  }
-
-  if (selection.value.kind === 'video') {
-    items.push({
-      label: 'Режим просмотра',
-      value: formatSelectionPreviewLabel(),
-    })
-    items.push(...normalizeViewerFacts(selection.value.summary))
-  }
-
-  if (selection.value.kind === 'audio') {
-    items.push({
-      label: 'Режим просмотра',
-      value: formatSelectionPreviewLabel(),
-    })
-    items.push(...normalizeViewerFacts(selection.value.summary))
-  }
-
-  return items
-})
+const selectionFacts = computed(() => buildViewerFacts(selection.value))
 
 const filteredMetadataGroups = computed(() => {
   if (selection.value?.kind !== 'image') {
@@ -1734,7 +1558,7 @@ onBeforeUnmount(() => {
             "
             class="chip-pill chip-pill--compact chip-pill--accent"
           >
-            {{ formatSelectionPreviewLabel() }}
+            {{ formatViewerPreviewLabel(selection) }}
           </span>
         </div>
       </article>
