@@ -13,6 +13,7 @@ docker run --rm --ipc=host \
   --env CI=1 \
   --mount "type=bind,source=${project_root},target=/work" \
   --mount type=volume,target=/work/frontend/node_modules \
+  --mount type=volume,target=/work/frontend/dist \
   --mount "type=bind,source=${npm_cache},target=/root/.npm" \
   --workdir /work \
   "${playwright_image}" \

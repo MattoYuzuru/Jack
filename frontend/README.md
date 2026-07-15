@@ -41,6 +41,6 @@ npm run test:e2e:linux -- --update-snapshots
 ```
 
 Контейнер использует production build, фиксированные Chromium, locale, timezone, light scheme,
-reduced motion и device scale factor. Временные `node_modules` живут в анонимном Docker volume
-и удаляются вместе с контейнером; download cache npm переиспользуется с хоста.
+reduced motion и device scale factor. Временные `node_modules` и production `dist` живут в
+анонимных Docker volumes и удаляются вместе с контейнером; download cache npm переиспользуется с хоста.
 При падении CI публикует `playwright-report` и `test-results` с screenshots, diff и trace.
