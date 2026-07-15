@@ -896,12 +896,17 @@ async function openDocumentDraftInEditor() {
     return
   }
 
-  stashEditorIncomingDraft({
+  const handoff = stashEditorIncomingDraft({
     formatId: documentDraftEditorFormatId.value,
     fileName: documentDraftFileName.value,
     content: documentDraftText.value,
     sourceLabel: selection.value?.file.name || 'viewer',
   })
+
+  if (!handoff.accepted) {
+    documentActionMessage.value = handoff.message
+    return
+  }
 
   await router.push('/editor')
 }
