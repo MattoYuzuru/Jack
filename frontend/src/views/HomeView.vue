@@ -209,6 +209,7 @@ void hydrateQueuedModuleCards().catch(() => undefined)
 h1 {
   margin: 16px 0 0;
   max-width: 11ch;
+  overflow-wrap: normal;
   color: var(--text-strong);
   font-family: var(--font-display);
   font-size: clamp(2.8rem, 4.4vw, 4.8rem);
@@ -446,6 +447,12 @@ h1 {
   .tool-card__meta,
   .tool-card__footer {
     flex-direction: column;
+  }
+}
+
+@media (max-width: 360px) {
+  h1 {
+    font-size: 2.65rem;
   }
 }
 

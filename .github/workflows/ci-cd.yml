@@ -48,13 +48,6 @@ jobs:
       - name: Run frontend unit tests
         run: npm --prefix frontend run test:unit -- --run
 
-      - name: Install Playwright Chromium
-        run: npx playwright install --with-deps chromium
-        working-directory: frontend
-
-      - name: Run accessibility and responsive E2E tests
-        run: npm --prefix frontend run test:e2e
-
       - name: Build frontend
         run: npm --prefix frontend run build
 
@@ -90,10 +83,46 @@ jobs:
       - name: Validate Compose config
         run: docker compose config
 
+  browser-quality:
+    name: Browser Quality
+    runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.61.1-noble@sha256:5b8f294aff9041b7191c34a4bab3ac270157a28774d4b0660e9743297b697e48
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm --prefix frontend ci
+
+      - name: Run accessibility, responsive and visual E2E tests
+        run: npm --prefix frontend run test:e2e
+
+      - name: Upload Playwright failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-failure-${{ github.run_id }}
+          path: |
+            frontend/playwright-report
+            frontend/test-results
+          if-no-files-found: warn
+          retention-days: 7
+
   publish:
     name: Publish Images
     runs-on: ubuntu-latest
-    needs: verify
+    needs:
+      - verify
+      - browser-quality
     if: github.event_name == 'push'
     permissions:
       contents: read
