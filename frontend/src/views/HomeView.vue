@@ -2,6 +2,8 @@
 import { ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import HomeToolIllustration from '../components/HomeToolIllustration.vue'
+import AppShell from '../components/ui/AppShell.vue'
+import WorkspaceHeader from '../components/ui/WorkspaceHeader.vue'
 import { getProcessingPlatformModules } from '../features/processing/domain/platform-registry'
 import type { ProcessingPlatformModuleCapability } from '../features/processing/application/processing-client'
 
@@ -125,21 +127,13 @@ void hydrateQueuedModuleCards().catch(() => undefined)
 </script>
 
 <template>
-  <main class="workspace-shell">
-    <header class="panel-surface app-topbar">
-      <div class="brand-lockup">
-        <img class="brand-lockup__logo" src="/logo.svg" alt="Логотип Jack" />
-        <div class="brand-lockup__copy">
-          <p class="eyebrow">Jack · Workspace</p>
-          <p class="brand-lockup__title">Главное рабочее пространство</p>
-        </div>
-      </div>
-
-      <div class="app-topbar__status">
+  <AppShell>
+    <WorkspaceHeader eyebrow="Jack · Workspace" title="Главное рабочее пространство">
+      <template #actions>
         <span class="chip-pill">6 инструментов</span>
         <span class="chip-pill chip-pill--accent">Файлы, PDF, текст и dev-задачи</span>
-      </div>
-    </header>
+      </template>
+    </WorkspaceHeader>
 
     <section class="hero-grid">
       <article class="panel-surface hero-copy">
@@ -195,7 +189,7 @@ void hydrateQueuedModuleCards().catch(() => undefined)
         </div>
       </component>
     </section>
-  </main>
+  </AppShell>
 </template>
 
 <style scoped>

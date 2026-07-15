@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { RouterLink } from 'vue-router'
+import AppShell from '../components/ui/AppShell.vue'
+import WorkspaceHeader from '../components/ui/WorkspaceHeader.vue'
 import { useCompressionWorkspace } from '../features/compression/composables/useCompressionWorkspace'
 import type {
   CompressionSourceFormatDefinition,
@@ -242,22 +244,14 @@ function onDrop(event: DragEvent) {
 </script>
 
 <template>
-  <main class="workspace-shell compression-workspace">
-    <header class="panel-surface app-topbar">
-      <div class="brand-lockup">
-        <img class="brand-lockup__logo" src="/logo.svg" alt="Логотип Jack" />
-        <div class="brand-lockup__copy">
-          <p class="eyebrow">Jack · Compression</p>
-          <p class="brand-lockup__title">Сжатие файлов</p>
-        </div>
-      </div>
-
-      <div class="app-topbar__status">
+  <AppShell class="compression-workspace">
+    <WorkspaceHeader eyebrow="Jack · Compression" title="Сжатие файлов">
+      <template #actions>
         <RouterLink class="back-link" to="/">На главную</RouterLink>
         <span class="chip-pill">Сжатие файлов</span>
         <span class="chip-pill chip-pill--accent">Под размер или на максимум</span>
-      </div>
-    </header>
+      </template>
+    </WorkspaceHeader>
 
     <section class="compression-hero-grid">
       <article class="panel-surface compression-hero-copy">
@@ -702,7 +696,7 @@ function onDrop(event: DragEvent) {
         </div>
       </article>
     </section>
-  </main>
+  </AppShell>
 </template>
 
 <style scoped>

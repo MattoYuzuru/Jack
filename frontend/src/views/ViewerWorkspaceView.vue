@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
+import AppShell from '../components/ui/AppShell.vue'
+import WorkspaceHeader from '../components/ui/WorkspaceHeader.vue'
 import { useViewerWorkspace } from '../features/viewer/composables/useViewerWorkspace'
 import { useViewerImageTools } from '../features/viewer/composables/useViewerImageTools'
 import {
@@ -995,22 +997,14 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <main class="workspace-shell viewer-workspace">
-    <header class="panel-surface app-topbar">
-      <div class="brand-lockup">
-        <img class="brand-lockup__logo" src="/logo.svg" alt="Логотип Jack" />
-        <div class="brand-lockup__copy">
-          <p class="eyebrow">Jack · Viewer</p>
-          <p class="brand-lockup__title">Просмотр файлов</p>
-        </div>
-      </div>
-
-      <div class="app-topbar__status">
+  <AppShell class="viewer-workspace">
+    <WorkspaceHeader eyebrow="Jack · Viewer" title="Просмотр файлов">
+      <template #actions>
         <RouterLink class="back-link" to="/">На главную</RouterLink>
         <span class="chip-pill">Изображения, документы, медиа</span>
         <span class="chip-pill chip-pill--accent">Видео и аудио в одном экране</span>
-      </div>
-    </header>
+      </template>
+    </WorkspaceHeader>
 
     <section class="viewer-hero-grid">
       <article class="panel-surface viewer-intro">
@@ -2381,7 +2375,7 @@ onBeforeUnmount(() => {
         </p>
       </article>
     </section>
-  </main>
+  </AppShell>
 </template>
 
 <style scoped>

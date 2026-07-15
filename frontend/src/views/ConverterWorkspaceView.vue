@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { RouterLink } from 'vue-router'
+import AppShell from '../components/ui/AppShell.vue'
+import WorkspaceHeader from '../components/ui/WorkspaceHeader.vue'
 import { useConverterWorkspace } from '../features/converter/composables/useConverterWorkspace'
 
 const fileInput = ref<HTMLInputElement | null>(null)
@@ -325,22 +327,14 @@ function onDrop(event: DragEvent) {
 </script>
 
 <template>
-  <main class="workspace-shell converter-workspace">
-    <header class="panel-surface app-topbar">
-      <div class="brand-lockup">
-        <img class="brand-lockup__logo" src="/logo.svg" alt="Логотип Jack" />
-        <div class="brand-lockup__copy">
-          <p class="eyebrow">Jack · Converter</p>
-          <p class="brand-lockup__title">Конвертация файлов</p>
-        </div>
-      </div>
-
-      <div class="app-topbar__status">
+  <AppShell class="converter-workspace">
+    <WorkspaceHeader eyebrow="Jack · Converter" title="Конвертация файлов">
+      <template #actions>
         <RouterLink class="back-link" to="/">На главную</RouterLink>
         <span class="chip-pill">Конвертация файлов</span>
         <span class="chip-pill chip-pill--accent">Изображения, документы, медиа</span>
-      </div>
-    </header>
+      </template>
+    </WorkspaceHeader>
 
     <section class="converter-hero-grid">
       <article class="panel-surface converter-hero-copy">
@@ -783,7 +777,7 @@ function onDrop(event: DragEvent) {
         </div>
       </article>
     </section>
-  </main>
+  </AppShell>
 </template>
 
 <style scoped>

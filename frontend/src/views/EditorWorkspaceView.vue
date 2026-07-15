@@ -7,6 +7,11 @@ import ExportPanel from '../components/editor/ExportPanel.vue'
 import FormatToolbar from '../components/editor/FormatToolbar.vue'
 import OutlinePanel from '../components/editor/OutlinePanel.vue'
 import PreviewPanel from '../components/editor/PreviewPanel.vue'
+import AppShell from '../components/ui/AppShell.vue'
+import UiProgress from '../components/ui/UiProgress.vue'
+import UiStatusBanner from '../components/ui/UiStatusBanner.vue'
+import UiTabs from '../components/ui/UiTabs.vue'
+import WorkspaceHeader from '../components/ui/WorkspaceHeader.vue'
 import { useEditorWorkspace } from '../features/editor/composables/useEditorWorkspace'
 
 type EditorPanelTab = 'preview' | 'diagnostics' | 'outline' | 'exports'
@@ -14,6 +19,7 @@ type EditorPanelTab = 'preview' | 'diagnostics' | 'outline' | 'exports'
 const workspace = useEditorWorkspace()
 const activeTab = ref<EditorPanelTab>('preview')
 const sideTabs: EditorPanelTab[] = ['preview', 'diagnostics', 'outline', 'exports']
+const sideTabItems = sideTabs.map((id) => ({ id, label: formatTabLabel(id) }))
 const editorSurface = ref<{
   applyCommand: (commandId: string) => boolean
   runUndo: () => boolean
@@ -125,22 +131,14 @@ onMounted(() => {
 </script>
 
 <template>
-  <main class="workspace-shell editor-workspace">
-    <header class="panel-surface app-topbar">
-      <div class="brand-lockup">
-        <img class="brand-lockup__logo" src="/logo.svg" alt="Логотип Jack" />
-        <div class="brand-lockup__copy">
-          <p class="eyebrow">Jack · Editor</p>
-          <p class="brand-lockup__title">Редактор документов и текстов</p>
-        </div>
-      </div>
-
-      <div class="editor-topbar__actions">
+  <AppShell class="editor-workspace">
+    <WorkspaceHeader eyebrow="Jack · Editor" title="Редактор документов и текстов">
+      <template #actions>
         <RouterLink class="back-link" to="/">На главную</RouterLink>
         <span class="chip-pill">Несколько текстовых форматов</span>
         <span class="chip-pill chip-pill--accent">Просмотр, проверка, экспорт</span>
-      </div>
-    </header>
+      </template>
+    </WorkspaceHeader>
 
     <section class="editor-hero">
       <article class="panel-surface editor-hero__copy">
@@ -231,23 +229,24 @@ onMounted(() => {
           </span>
         </div>
 
-        <div v-if="workspace.processingMessage.value" class="editor-progress">
-          <div class="editor-progress__track">
-            <span
-              class="editor-progress__fill"
-              :style="{ width: `${workspace.activeJobProgressPercent.value}%` }"
-            ></span>
-          </div>
-          <p>{{ workspace.processingMessage.value }}</p>
-        </div>
+        <UiProgress
+          v-if="workspace.processingMessage.value"
+          class="editor-progress"
+          :value="workspace.activeJobProgressPercent.value"
+          :label="workspace.processingMessage.value"
+        />
 
-        <p v-if="workspace.errorMessage.value" class="editor-error">
+        <UiStatusBanner v-if="workspace.errorMessage.value" class="editor-error" tone="error">
           {{ workspace.errorMessage.value }}
-        </p>
+        </UiStatusBanner>
 
-        <p v-if="workspace.formatMismatchWarning.value" class="editor-warning" role="status">
+        <UiStatusBanner
+          v-if="workspace.formatMismatchWarning.value"
+          class="editor-warning"
+          tone="warning"
+        >
           {{ workspace.formatMismatchWarning.value }}
-        </p>
+        </UiStatusBanner>
 
         <div class="editor-surface">
           <EditorSurface
@@ -260,23 +259,12 @@ onMounted(() => {
       </article>
 
       <article class="panel-surface editor-side">
-        <div class="editor-side__tabs" role="tablist" aria-label="Editor side panels">
-          <button
-            v-for="tab in sideTabs"
-            :key="tab"
-            :id="`editor-tab-${tab}`"
-            class="icon-button editor-side__tab"
-            :class="{ 'editor-side__tab--active': activeTab === tab }"
-            type="button"
-            role="tab"
-            :aria-selected="activeTab === tab"
-            :aria-controls="`editor-panel-${tab}`"
-            :tabindex="activeTab === tab ? 0 : -1"
-            @click="activeTab = tab"
-          >
-            {{ formatTabLabel(tab) }}
-          </button>
-        </div>
+        <UiTabs
+          v-model="activeTab"
+          :items="sideTabItems"
+          label="Editor side panels"
+          id-prefix="editor"
+        />
 
         <div
           v-if="activeTab === 'preview'"
@@ -336,20 +324,13 @@ onMounted(() => {
         </div>
       </article>
     </section>
-  </main>
+  </AppShell>
 </template>
 
 <style scoped>
 .editor-workspace {
   display: grid;
   gap: 22px;
-}
-
-.editor-topbar__actions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 12px;
 }
 
 .editor-hero,
@@ -508,22 +489,6 @@ onMounted(() => {
   box-shadow: var(--shadow-pressed);
 }
 
-.editor-progress__track {
-  overflow: hidden;
-  height: 10px;
-  margin-bottom: 10px;
-  border-radius: 999px;
-  background: rgba(29, 92, 85, 0.12);
-}
-
-.editor-progress__fill {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: linear-gradient(90deg, var(--accent-coral), var(--accent-cool));
-}
-
-.editor-progress p,
 .editor-error,
 .editor-side__note,
 .editor-side__empty {
@@ -565,25 +530,6 @@ onMounted(() => {
 .editor-side {
   display: grid;
   gap: 16px;
-}
-
-.editor-side__tabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.editor-side__tab {
-  min-width: 108px;
-  text-transform: capitalize;
-}
-
-.editor-side__tab--active {
-  color: var(--accent-cool-strong);
-  background:
-    radial-gradient(circle at top left, rgba(255, 203, 148, 0.64), transparent 42%),
-    linear-gradient(145deg, rgba(255, 247, 236, 0.98), rgba(231, 220, 205, 0.96));
-  box-shadow: var(--shadow-floating);
 }
 
 .editor-side__panel {

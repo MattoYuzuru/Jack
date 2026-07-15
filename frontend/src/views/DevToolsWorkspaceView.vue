@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { RouterLink } from 'vue-router'
+import AppShell from '../components/ui/AppShell.vue'
+import WorkspaceHeader from '../components/ui/WorkspaceHeader.vue'
 import { useDevToolsWorkspace } from '../features/dev-tools/composables/useDevToolsWorkspace'
 import type { EncodingStrategyId } from '../features/dev-tools/application/encoding-tools'
 import type { ValidationFormatId } from '../features/dev-tools/application/validation-tools'
@@ -41,17 +43,9 @@ function formatQueryEntryStatus(status: 'kept' | 'removed'): string {
 </script>
 
 <template>
-  <main class="workspace-shell devtools-workspace">
-    <header class="panel-surface app-topbar">
-      <div class="brand-lockup">
-        <img class="brand-lockup__logo" src="/logo.svg" alt="Логотип Jack" />
-        <div class="brand-lockup__copy">
-          <p class="eyebrow">Jack · Dev-инструменты</p>
-          <p class="brand-lockup__title">Инженерные утилиты</p>
-        </div>
-      </div>
-
-      <div class="devtools-topbar__actions">
+  <AppShell class="devtools-workspace">
+    <WorkspaceHeader eyebrow="Jack · Dev-инструменты" title="Инженерные утилиты">
+      <template #actions>
         <RouterLink class="back-link" to="/">На главную</RouterLink>
         <label class="chip-pill devtools-persistence-toggle">
           <input v-model="workspace.persistenceEnabled.value" type="checkbox" />
@@ -59,8 +53,8 @@ function formatQueryEntryStatus(status: 'kept' | 'removed'): string {
         </label>
         <span class="chip-pill">Локальные вычисления</span>
         <span class="chip-pill chip-pill--accent">Быстрые ежедневные задачи</span>
-      </div>
-    </header>
+      </template>
+    </WorkspaceHeader>
 
     <section class="devtools-hero">
       <article class="panel-surface devtools-hero__copy">
@@ -920,17 +914,10 @@ function formatQueryEntryStatus(status: 'kept' | 'removed'): string {
         </div>
       </article>
     </section>
-  </main>
+  </AppShell>
 </template>
 
 <style scoped>
-.devtools-topbar__actions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 12px;
-}
-
 .devtools-hero {
   display: grid;
   gap: 22px;
@@ -1273,7 +1260,6 @@ function formatQueryEntryStatus(status: 'kept' | 'removed'): string {
 }
 
 @media (max-width: 760px) {
-  .devtools-topbar__actions,
   .devtools-panel__header,
   .devtools-tool-card__meta,
   .devtools-tool-card__tags,
