@@ -8,6 +8,24 @@
 production-рисков. Он рассчитан на следующего агента: каждый этап содержит конкретный scope,
 проверки и критерий завершения.
 
+## Статус выполнения
+
+Статус на 15 июля 2026 года:
+
+- этапы 0–3 закрыты отдельными commits: security hotfixes, quality gates, единый
+  CommonMark/GFM + safe Obsidian contract и CodeMirror-based Editor;
+- этап 4 закрыт: общие responsive UI primitives, локальные шрифты, reduced motion,
+  forced colors и обновлённые visual snapshots;
+- этап 5 выполняется: Viewer получил abort-aware processing lifecycle, отмену server job при
+  замене файла/уходе с маршрута, освобождение поздних Blob URL, bounded in-memory handoff в
+  Editor и выделенный presentation module. Следующая часть этапа — вынести renderer-компоненты
+  из `ViewerWorkspaceView.vue`;
+- этап 6 начат с SQLite profile: preview открывает БД read-only, ограничивает catalog/schema/
+  sample queries и не делает `COUNT(*)` по пользовательским таблицам. CSV/XLSX paging,
+  virtualization и остальные document profiles ещё не считаются завершёнными.
+
+Пункты ниже остаются backlog до тех пор, пока не выполнены все критерии соответствующего этапа.
+
 Под «полной поддержкой Markdown» здесь понимается не бесконечный набор несовместимых плагинов,
 а версионируемый профиль:
 
