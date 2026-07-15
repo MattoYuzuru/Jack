@@ -4,14 +4,8 @@ import {
   resolveViewerFormat,
   type ViewerFormatDefinition,
 } from '../domain/viewer-registry'
-import {
-  createViewerRuntime,
-  releaseViewerEntry,
-  ViewerResolutionCancelledError,
-  type ViewerResolvedEntry,
-} from '../application/viewer-runtime'
-
-const viewerRuntime = createViewerRuntime()
+import { createViewerRuntime, type ViewerResolvedEntry } from '../application/viewer-runtime'
+import { createViewerSession } from '../application/viewer-session'
 
 export function useViewerWorkspace() {
   const selection = shallowRef<ViewerResolvedEntry | null>(null)
@@ -25,8 +19,6 @@ export function useViewerWorkspace() {
   const audioFormats = ref<ViewerFormatDefinition[]>([])
   const zoom = ref(1)
   const rotation = ref(0)
-  let activeSelectionRequest = 0
-  let activeResolutionController: AbortController | null = null
   let capabilityMatrixRequest: Promise<void> | null = null
 
   async function ensureCapabilityMatrix(): Promise<void> {
@@ -52,88 +44,30 @@ export function useViewerWorkspace() {
 
   void ensureCapabilityMatrix().catch(() => undefined)
 
-  function releaseSelection() {
-    releaseViewerEntry(selection.value)
-  }
-
-  function cancelActiveResolution(): void {
-    activeResolutionController?.abort()
-    activeResolutionController = null
-  }
-
   function resetViewportTransform() {
     zoom.value = 1
     rotation.value = 0
   }
 
+  const session = createViewerSession({
+    runtime: createViewerRuntime(),
+    prepare: ensureCapabilityMatrix,
+    describeLoading: resolveLoadingMessage,
+    onChange(snapshot) {
+      selection.value = snapshot.selection
+      isLoading.value = snapshot.status === 'resolving'
+      errorMessage.value = snapshot.errorMessage
+      loadingMessage.value = snapshot.loadingMessage
+    },
+  })
+
   async function selectFile(file: File) {
-    const selectionRequest = ++activeSelectionRequest
-    cancelActiveResolution()
-    const resolutionController = new AbortController()
-    activeResolutionController = resolutionController
-    releaseSelection()
-    selection.value = null
-    errorMessage.value = ''
-    isLoading.value = true
-    loadingMessage.value = 'Подготавливаю просмотр...'
     resetViewportTransform()
-
-    void resolveLoadingMessage(file)
-      .then((message) => {
-        if (selectionRequest === activeSelectionRequest && isLoading.value) {
-          loadingMessage.value = message
-        }
-      })
-      .catch(() => undefined)
-
-    try {
-      await ensureCapabilityMatrix()
-      const resolvedEntry = await viewerRuntime.resolve(file, {
-        signal: resolutionController.signal,
-        onProgress(message) {
-          if (selectionRequest === activeSelectionRequest) {
-            loadingMessage.value = message
-          }
-        },
-      })
-
-      if (selectionRequest !== activeSelectionRequest) {
-        releaseViewerEntry(resolvedEntry)
-        return
-      }
-
-      selection.value = resolvedEntry
-    } catch (error) {
-      if (selectionRequest !== activeSelectionRequest) {
-        return
-      }
-
-      if (error instanceof ViewerResolutionCancelledError) {
-        return
-      }
-
-      errorMessage.value =
-        error instanceof Error
-          ? error.message
-          : 'Не удалось подготовить просмотр для выбранного файла.'
-    } finally {
-      if (selectionRequest === activeSelectionRequest) {
-        if (activeResolutionController === resolutionController) {
-          activeResolutionController = null
-        }
-        isLoading.value = false
-      }
-    }
+    await session.select(file)
   }
 
   function clearSelection() {
-    cancelActiveResolution()
-    activeSelectionRequest += 1
-    releaseSelection()
-    selection.value = null
-    errorMessage.value = ''
-    isLoading.value = false
-    loadingMessage.value = 'Подготавливаю просмотр...'
+    session.clear()
     resetViewportTransform()
   }
 
@@ -160,8 +94,7 @@ export function useViewerWorkspace() {
   )
 
   onBeforeUnmount(() => {
-    cancelActiveResolution()
-    releaseSelection()
+    session.dispose()
   })
 
   return {
