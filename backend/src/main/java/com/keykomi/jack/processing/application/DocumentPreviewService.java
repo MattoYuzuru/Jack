@@ -75,6 +75,8 @@ public class DocumentPreviewService {
 	private static final int SQLITE_SAMPLE_ROW_LIMIT = 24;
 	private static final int SQLITE_SAMPLE_COLUMN_LIMIT = 12;
 	private static final int SQLITE_MAX_PREVIEW_TABLES = 12;
+	private static final int SQLITE_MAX_PREVIEW_COLUMNS = 128;
+	private static final int SQLITE_QUERY_TIMEOUT_SECONDS = 3;
 	private static final String SQLITE_HEADER = "SQLite format 3\u0000";
 	private static final Pattern ENV_LINE_PATTERN = Pattern.compile("^\\s*(?:export\\s+)?([A-Za-z_][A-Za-z0-9_]*)\\s*=\\s*(.*)\\s*$");
 	private static final Pattern XML_TAG_PATTERN = Pattern.compile("(?m)^\\s*<([A-Za-z_][\\w:.-]*)");
@@ -1011,10 +1013,11 @@ public class DocumentPreviewService {
 				throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Файл распознан как DB/SQLite по расширению, но его сигнатура не похожа на SQLite container.");
 			}
 
-			try (var connection = DriverManager.getConnection("jdbc:sqlite:" + upload.storagePath().toAbsolutePath())) {
+			try (var connection = DriverManager.getConnection(readOnlySqliteJdbcUrl(upload.storagePath()))) {
 				var tableEntries = queryRows(
 					connection,
-					"SELECT name, sql FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name"
+					"SELECT name, sql FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name LIMIT " +
+						(SQLITE_MAX_PREVIEW_TABLES + 1)
 				);
 				var viewCount = querySingleLong(
 					connection,
@@ -1046,15 +1049,23 @@ public class DocumentPreviewService {
 				warnings.add("Просмотр базы доступен только для чтения: можно изучить структуру и примеры строк без изменения файла.");
 				if (tableEntries.size() > SQLITE_MAX_PREVIEW_TABLES) {
 					warnings.add(
-						"Для скорости показаны первые %s таблиц из %s, а полный список остаётся доступен через поиск по содержимому."
-							.formatted(SQLITE_MAX_PREVIEW_TABLES, tableEntries.size())
+						"Для скорости показаны первые %s таблиц. Полный каталог не материализуется в preview."
+							.formatted(SQLITE_MAX_PREVIEW_TABLES)
 					);
 				}
+				warnings.add(
+					"Количество строк не вычисляется через COUNT(*): показана только ограниченная read-only выборка."
+				);
 
 				return new DocumentPreviewPayload(
 					List.of(
 						new DocumentPreviewPayload.DocumentFact("Тип документа", "SQLite"),
-						new DocumentPreviewPayload.DocumentFact("Таблицы", String.valueOf(tableEntries.size())),
+						new DocumentPreviewPayload.DocumentFact(
+							"Таблицы",
+							tableEntries.size() > SQLITE_MAX_PREVIEW_TABLES
+								? "≥" + SQLITE_MAX_PREVIEW_TABLES
+								: String.valueOf(tableEntries.size())
+						),
 						new DocumentPreviewPayload.DocumentFact("Views", String.valueOf(viewCount == null ? 0 : viewCount)),
 						new DocumentPreviewPayload.DocumentFact("Triggers", String.valueOf(triggerCount == null ? 0 : triggerCount))
 					),
@@ -1451,7 +1462,7 @@ public class DocumentPreviewService {
 		String schemaSql
 	) {
 		var quotedName = quoteSqlIdentifier(tableName);
-		var columns = queryRows(connection, "PRAGMA table_info(" + quotedName + ")").stream()
+		var columns = queryRows(connection, "PRAGMA table_info(" + quotedName + ")", SQLITE_MAX_PREVIEW_COLUMNS).stream()
 			.map(column -> new DocumentPreviewPayload.DocumentDatabaseColumnPreview(
 				String.valueOf(column.getOrDefault("name", "")),
 				String.valueOf(column.getOrDefault("type", "")),
@@ -1460,14 +1471,13 @@ public class DocumentPreviewService {
 				column.get("dflt_value") == null ? "—" : String.valueOf(column.get("dflt_value"))
 			))
 			.toList();
-		var rowCount = querySingleLong(connection, "SELECT COUNT(*) AS count FROM " + quotedName);
 		var sampleRows = queryRows(connection, "SELECT * FROM " + quotedName + " LIMIT " + SQLITE_SAMPLE_ROW_LIMIT);
-		var sample = buildDatabaseSample(columns, sampleRows, rowCount);
+		var sample = buildDatabaseSample(columns, sampleRows);
 
 		return new DocumentPreviewPayload.DocumentDatabaseTablePreview(
 			"sqlite-table-" + tableName,
 			tableName,
-			rowCount,
+			null,
 			schemaSql == null || schemaSql.isBlank() ? "CREATE TABLE " + tableName + " (...)" : schemaSql,
 			columns,
 			sample
@@ -1476,8 +1486,7 @@ public class DocumentPreviewService {
 
 	private DocumentPreviewPayload.DocumentTablePreview buildDatabaseSample(
 		List<DocumentPreviewPayload.DocumentDatabaseColumnPreview> columns,
-		List<Map<String, Object>> sampleRows,
-		Long rowCount
+		List<Map<String, Object>> sampleRows
 	) {
 		var visibleColumns = columns.stream()
 			.map(DocumentPreviewPayload.DocumentDatabaseColumnPreview::name)
@@ -1493,25 +1502,39 @@ public class DocumentPreviewService {
 		return new DocumentPreviewPayload.DocumentTablePreview(
 			visibleColumns,
 			rows,
-			rowCount == null ? rows.size() : rowCount.intValue(),
+			rows.size(),
 			columns.size(),
 			""
 		);
 	}
 
 	private List<Map<String, Object>> queryRows(java.sql.Connection connection, String sql) {
-		try (var statement = connection.createStatement();
-			var resultSet = statement.executeQuery(sql)) {
-			var rows = new ArrayList<Map<String, Object>>();
-			var metadata = resultSet.getMetaData();
-			while (resultSet.next()) {
-				var row = new LinkedHashMap<String, Object>();
-				for (int columnIndex = 1; columnIndex <= metadata.getColumnCount(); columnIndex += 1) {
-					row.put(metadata.getColumnLabel(columnIndex), resultSet.getObject(columnIndex));
-				}
-				rows.add(row);
+		return queryRows(connection, sql, 0);
+	}
+
+	private List<Map<String, Object>> queryRows(
+		java.sql.Connection connection,
+		String sql,
+		int maxRows
+	) {
+		try (var statement = connection.createStatement()) {
+			statement.setQueryTimeout(SQLITE_QUERY_TIMEOUT_SECONDS);
+			if (maxRows > 0) {
+				statement.setMaxRows(maxRows);
 			}
-			return rows;
+
+			try (var resultSet = statement.executeQuery(sql)) {
+				var rows = new ArrayList<Map<String, Object>>();
+				var metadata = resultSet.getMetaData();
+				while (resultSet.next()) {
+					var row = new LinkedHashMap<String, Object>();
+					for (int columnIndex = 1; columnIndex <= metadata.getColumnCount(); columnIndex += 1) {
+						row.put(metadata.getColumnLabel(columnIndex), resultSet.getObject(columnIndex));
+					}
+					rows.add(row);
+				}
+				return rows;
+			}
 		}
 		catch (SQLException exception) {
 			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Не удалось выполнить SQLite introspection query.", exception);
@@ -1524,6 +1547,10 @@ public class DocumentPreviewService {
 			return null;
 		}
 		return asLong(rows.getFirst().values().stream().findFirst().orElse(null));
+	}
+
+	private String readOnlySqliteJdbcUrl(Path path) {
+		return "jdbc:sqlite:" + path.toAbsolutePath().toUri() + "?mode=ro";
 	}
 
 	private Long asLong(Object value) {

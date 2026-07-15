@@ -276,7 +276,9 @@ class DocumentPreviewApiTests {
 		assertThat(manifest.path("layout").path("mode").asText()).isEqualTo("database");
 		assertThat(manifest.path("layout").path("tables")).hasSize(1);
 		assertThat(manifest.path("layout").path("tables").get(0).path("name").asText()).isEqualTo("notes");
+		assertThat(manifest.path("layout").path("tables").get(0).path("rowCount").isNull()).isTrue();
 		assertThat(manifest.path("layout").path("tables").get(0).path("sample").path("rows").get(0).get(1).asText()).isEqualTo("viewer payload");
+		assertThat(manifest.path("warnings").toString()).contains("COUNT(*)");
 	}
 
 	private String upload(String fileName, String mediaType, byte[] bytes) throws Exception {
