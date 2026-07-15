@@ -92,6 +92,7 @@ interface PreviewStrategyContext {
   extension: string
   format: ViewerFormatDefinition
   reportProgress: (message: string) => void
+  signal?: AbortSignal
 }
 
 interface PreviewStrategy<TResult extends ViewerResolvedEntry> {
@@ -104,6 +105,14 @@ export interface ViewerRuntime {
 
 export interface ViewerResolveOptions {
   onProgress?: (message: string) => void
+  signal?: AbortSignal
+}
+
+export class ViewerResolutionCancelledError extends Error {
+  constructor() {
+    super('Подготовка просмотра была остановлена.')
+    this.name = 'ViewerResolutionCancelledError'
+  }
 }
 
 export interface ViewerRuntimeDependencies {
@@ -187,8 +196,10 @@ export function createViewerRuntime(dependencies: ViewerRuntimeDependencies = {}
 
   return {
     async resolve(file, options = {}) {
+      throwIfViewerResolutionAborted(options.signal)
       const extension = detectFileExtension(file.name)
       const format = await resolveViewerFormat(file.name, file.type)
+      throwIfViewerResolutionAborted(options.signal)
 
       if (!format) {
         return {
@@ -216,12 +227,28 @@ export function createViewerRuntime(dependencies: ViewerRuntimeDependencies = {}
         }
       }
 
-      return strategies[format.previewStrategyId].resolve({
-        file,
-        extension,
-        format,
-        reportProgress: options.onProgress ?? (() => undefined),
-      })
+      try {
+        const resolvedEntry = await strategies[format.previewStrategyId].resolve({
+          file,
+          extension,
+          format,
+          reportProgress: options.onProgress ?? (() => undefined),
+          signal: options.signal,
+        })
+
+        if (options.signal?.aborted) {
+          releaseViewerEntry(resolvedEntry)
+          throw new ViewerResolutionCancelledError()
+        }
+
+        return resolvedEntry
+      } catch (error) {
+        if (options.signal?.aborted) {
+          throw new ViewerResolutionCancelledError()
+        }
+
+        throw error
+      }
     },
   }
 }
@@ -389,7 +416,13 @@ async function defaultBuildNativeAudio(
 async function defaultBuildServerViewer(
   context: PreviewStrategyContext,
 ): Promise<ViewerServerResolvedPayload> {
-  return resolveServerViewerPreview(context.file, context.reportProgress)
+  return resolveServerViewerPreview(context.file, context.reportProgress, context.signal)
+}
+
+function throwIfViewerResolutionAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) {
+    throw new ViewerResolutionCancelledError()
+  }
 }
 
 function defaultInspectNativeImage(objectUrl: string): Promise<{ width: number; height: number }> {

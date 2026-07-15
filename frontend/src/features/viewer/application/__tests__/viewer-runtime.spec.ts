@@ -2,7 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createViewerCapabilityScopeFixture } from '../../../processing/application/__tests__/capability-matrix.fixtures'
 import { resetProcessingCapabilityScopeCache } from '../../../processing/application/processing-client'
 import { createEmptyMetadataPayload } from '../viewer-metadata'
-import { createViewerRuntime, releaseViewerEntry } from '../viewer-runtime'
+import {
+  createViewerRuntime,
+  releaseViewerEntry,
+  ViewerResolutionCancelledError,
+} from '../viewer-runtime'
 
 const originalFetch = globalThis.fetch
 const originalCreateObjectUrl = URL.createObjectURL
@@ -83,6 +87,37 @@ describe('viewer runtime', () => {
     expect(result.format.extension).toBe('heic')
     expect(result.previewLabel).toBe('Server image preview')
     expect(result.metadata.summary).toEqual([{ label: 'Тип файла', value: 'HEIC' }])
+  })
+
+  it('releases a late preview result after its resolution signal is aborted', async () => {
+    const controller = new AbortController()
+    const revokeObjectUrl = vi.fn()
+
+    Object.defineProperty(URL, 'revokeObjectURL', {
+      configurable: true,
+      value: revokeObjectUrl,
+    })
+
+    const runtime = createViewerRuntime({
+      buildServerViewer: async () => {
+        controller.abort()
+        return {
+          kind: 'image',
+          objectUrl: 'blob:late-preview',
+          dimensions: { width: 1600, height: 900 },
+          metadata: createEmptyMetadataPayload(),
+          previewLabel: 'Late server image',
+        }
+      },
+    })
+
+    await expect(
+      runtime.resolve(new File(['image'], 'capture.heic', { type: 'image/heic' }), {
+        signal: controller.signal,
+      }),
+    ).rejects.toBeInstanceOf(ViewerResolutionCancelledError)
+
+    expect(revokeObjectUrl).toHaveBeenCalledWith('blob:late-preview')
   })
 
   it('routes document formats through the unified server viewer adapter', async () => {

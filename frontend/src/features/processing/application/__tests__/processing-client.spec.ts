@@ -3,10 +3,15 @@ import {
   awaitProcessingJob,
   cancelProcessingJob,
   getPlatformCapabilityMatrix,
+  ProcessingJobAbortedError,
   ProcessingJobCancelledError,
   resetProcessingCapabilityScopeCache,
+  runProcessingJob,
 } from '../processing-client'
-import { createPlatformCapabilityScopeFixture } from './capability-matrix.fixtures'
+import {
+  createPlatformCapabilityScopeFixture,
+  createViewerCapabilityScopeFixture,
+} from './capability-matrix.fixtures'
 
 const originalFetch = globalThis.fetch
 
@@ -75,6 +80,83 @@ describe('processing client', () => {
       'http://localhost:8080/api/jobs/job-2',
       expect.objectContaining({ method: 'DELETE' }),
     )
+  })
+
+  it('cancels a created job when the caller aborts polling', async () => {
+    const controller = new AbortController()
+    const runningJob = {
+      id: 'job-4',
+      uploadId: 'upload-4',
+      jobType: 'VIEWER_RESOLVE',
+      status: 'RUNNING',
+      progressPercent: 20,
+      message: 'Готовлю preview.',
+      errorMessage: null,
+      createdAt: new Date().toISOString(),
+      startedAt: new Date().toISOString(),
+      completedAt: null,
+      artifacts: [],
+    }
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+
+      if (url.endsWith('/api/capabilities/viewer')) {
+        return Promise.resolve(
+          new Response(JSON.stringify(createViewerCapabilityScopeFixture()), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }),
+        )
+      }
+
+      if (url.endsWith('/api/uploads')) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ id: 'upload-4' }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }),
+        )
+      }
+
+      if (url.endsWith('/api/jobs') && init?.method === 'POST') {
+        return Promise.resolve(
+          new Response(JSON.stringify(runningJob), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }),
+        )
+      }
+
+      if (url.endsWith('/api/jobs/job-4') && init?.method === 'DELETE') {
+        return Promise.resolve(
+          new Response(JSON.stringify({ ...runningJob, status: 'CANCELLED' }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }),
+        )
+      }
+
+      controller.abort()
+      return Promise.reject(new DOMException('Aborted', 'AbortError'))
+    })
+    globalThis.fetch = fetchMock as typeof fetch
+
+    await expect(
+      runProcessingJob({
+        scope: 'viewer',
+        file: new File(['viewer'], 'preview.pdf', { type: 'application/pdf' }),
+        jobType: 'VIEWER_RESOLVE',
+        maxAttempts: 2,
+        signal: controller.signal,
+      }),
+    ).rejects.toBeInstanceOf(ProcessingJobAbortedError)
+
+    await vi.waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        'http://localhost:8080/api/jobs/job-4',
+        expect.objectContaining({ method: 'DELETE' }),
+      )
+    })
   })
 
   it('loads platform matrix from backend capability scope', async () => {
