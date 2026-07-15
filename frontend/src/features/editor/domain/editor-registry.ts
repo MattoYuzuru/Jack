@@ -24,6 +24,12 @@ export interface EditorCapabilityMatrix {
   formats: EditorFormatDefinition[]
 }
 
+export interface EditorFormatResolution {
+  format: EditorFormatDefinition | null
+  source: 'extension' | 'mime' | null
+  mismatchWarning: string | null
+}
+
 export function normalizeEditorExtension(rawValue: string): string {
   return rawValue.trim().toLowerCase().replace(/^\./u, '')
 }
@@ -70,26 +76,47 @@ export async function resolveEditorFormat(
   fileName: string,
   mimeType?: string,
 ): Promise<EditorFormatDefinition | null> {
-  const matrix = await getEditorCapabilityMatrix()
-  const normalizedMimeType = mimeType?.trim().toLowerCase()
+  return (await resolveEditorFormatMatch(fileName, mimeType)).format
+}
 
-  if (normalizedMimeType) {
-    const matchByMime = matrix.formats.find((format) =>
-      format.mimeTypes.some((candidate) => candidate.trim().toLowerCase() === normalizedMimeType),
-    )
-    if (matchByMime) {
-      return matchByMime
+export async function resolveEditorFormatMatch(
+  fileName: string,
+  mimeType?: string,
+): Promise<EditorFormatResolution> {
+  const matrix = await getEditorCapabilityMatrix()
+  const extension = detectEditorExtension(fileName)
+  const matchByExtension = extension
+    ? (matrix.formats.find((format) =>
+        format.extensions.some((candidate) => normalizeEditorExtension(candidate) === extension),
+      ) ?? null)
+    : null
+  const normalizedMimeType = mimeType?.trim().toLowerCase()
+  const matchByMime = normalizedMimeType
+    ? (matrix.formats.find((format) =>
+        format.mimeTypes.some((candidate) => candidate.trim().toLowerCase() === normalizedMimeType),
+      ) ?? null)
+    : null
+
+  if (matchByExtension) {
+    return {
+      format: matchByExtension,
+      source: 'extension',
+      mismatchWarning:
+        matchByMime && matchByMime.id !== matchByExtension.id
+          ? `Расширение .${extension} определяет формат ${matchByExtension.label}, хотя браузер сообщил MIME ${normalizedMimeType}.`
+          : null,
     }
   }
 
-  const extension = detectEditorExtension(fileName)
-  if (!extension) {
-    return null
+  if (matchByMime) {
+    return {
+      format: matchByMime,
+      source: 'mime',
+      mismatchWarning: extension
+        ? `Расширение .${extension} неизвестно Editor; формат ${matchByMime.label} выбран по MIME ${normalizedMimeType}.`
+        : null,
+    }
   }
 
-  return (
-    matrix.formats.find((format) =>
-      format.extensions.some((candidate) => normalizeEditorExtension(candidate) === extension),
-    ) ?? null
-  )
+  return { format: null, source: null, mismatchWarning: null }
 }

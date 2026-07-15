@@ -35,8 +35,39 @@ public final class EditorPayloads {
 		String message,
 		Integer line,
 		Integer column,
-		String hint
+		Integer endLine,
+		Integer endColumn,
+		String hint,
+		String quickFixCode
 	) {
+		public EditorIssue(
+			String severity,
+			String code,
+			String message,
+			Integer line,
+			Integer column,
+			String hint
+		) {
+			this(severity, code, message, line, column, line, column, hint, resolveQuickFixCode(code));
+		}
+
+		private static String resolveQuickFixCode(String code) {
+			if (code == null) {
+				return null;
+			}
+			if (code.endsWith("_PARSE_ERROR")) {
+				return "repair-structured-syntax";
+			}
+			if (code.endsWith("_DELIMITER") || code.endsWith("_CLOSER")) {
+				return "balance-delimiters";
+			}
+			return switch (code) {
+				case "HTML_NO_NOOPENER" -> "add-noopener";
+				case "HTML_INLINE_HANDLER" -> "extract-inline-handler";
+				case "HTML_JAVASCRIPT_URL" -> "remove-unsafe-url";
+				default -> null;
+			};
+		}
 	}
 
 	public record EditorOutlineItem(

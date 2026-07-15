@@ -13,7 +13,6 @@ import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.StringReader;
 import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -41,7 +40,6 @@ import javax.imageio.ImageIO;
 import javax.imageio.ImageWriteParam;
 import javax.imageio.ImageWriter;
 import javax.imageio.stream.ImageOutputStream;
-import javax.xml.parsers.DocumentBuilderFactory;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
@@ -69,7 +67,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 import org.w3c.dom.Node;
-import org.xml.sax.InputSource;
 
 @Service
 public class OfficeConversionService {
@@ -1687,9 +1684,7 @@ public class OfficeConversionService {
 
 	private org.w3c.dom.Document parseXml(String content) {
 		try {
-			var factory = DocumentBuilderFactory.newInstance();
-			factory.setNamespaceAware(true);
-			return factory.newDocumentBuilder().parse(new InputSource(new StringReader(content)));
+			return SecureXmlParser.parse(content);
 		}
 		catch (Exception exception) {
 			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Не удалось разобрать XML внутри office container.", exception);

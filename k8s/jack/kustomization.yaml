@@ -10,4 +10,7 @@ resources:
   - backend-deployment.yaml
   - frontend-service.yaml
   - frontend-deployment.yaml
+  - processing-limits.yaml
+  - network-policy.yaml
+  - pod-disruption-budgets.yaml
   - ingress.yaml

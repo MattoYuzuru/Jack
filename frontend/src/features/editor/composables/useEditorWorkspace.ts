@@ -1,5 +1,14 @@
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 import { buildEditorLocalPreview, type EditorLocalPreview } from '../application/editor-preview'
+import { renderMarkdownPreview } from '../application/markdown-preview-runtime'
+import { decodeEditorFile, encodeEditorFile } from '../application/editor-file-codec'
+import {
+  clearEditorDraft,
+  isEditorPersistenceEnabled,
+  persistEditorDraft,
+  readEditorDraft,
+  setEditorPersistenceEnabled,
+} from '../application/editor-persistence'
 import { consumeEditorIncomingDraft } from '../application/editor-handoff'
 import { canFormatEditorFormat, formatEditorContent } from '../application/editor-formatters'
 import {
@@ -11,7 +20,7 @@ import {
 import {
   getEditorAcceptAttribute,
   listEditorFormats,
-  resolveEditorFormat,
+  resolveEditorFormatMatch,
   type EditorFormatDefinition,
 } from '../domain/editor-registry'
 import {
@@ -35,14 +44,7 @@ interface EditorHelperAction {
   shortcut?: string
 }
 
-interface PersistedEditorDraft {
-  formatId: string
-  fileName: string
-  content: string
-  templateId: string
-}
-
-const EDITOR_DRAFT_STORAGE_KEY = 'jack.editor.draft.v1'
+const MAX_EDITOR_FILE_BYTES = 2 * 1024 * 1024
 const TEMPLATE_DEFINITIONS: EditorTemplateDefinition[] = [
   {
     id: 'markdown-brief',
@@ -161,28 +163,52 @@ const TEMPLATE_DEFINITIONS: EditorTemplateDefinition[] = [
 
 const HELPER_ACTIONS_BY_FORMAT: Record<string, EditorHelperAction[]> = {
   markdown: [
-    { id: 'md-heading', label: 'Заголовок', detail: 'Добавить заголовок раздела' },
+    { id: 'md-h1', label: 'H1', detail: 'Заголовок первого уровня' },
+    { id: 'md-h2', label: 'H2', detail: 'Заголовок второго уровня' },
+    { id: 'md-h3', label: 'H3', detail: 'Заголовок третьего уровня' },
+    { id: 'md-h4', label: 'H4', detail: 'Заголовок четвёртого уровня' },
+    { id: 'md-h5', label: 'H5', detail: 'Заголовок пятого уровня' },
+    { id: 'md-h6', label: 'H6', detail: 'Заголовок шестого уровня' },
     { id: 'md-bold', label: 'Жирный', detail: 'Выделить текст жирным', shortcut: 'Mod+B' },
+    { id: 'md-italic', label: 'Курсив', detail: 'Выделить текст курсивом' },
+    { id: 'md-strike', label: 'Strike', detail: 'Зачеркнуть текст' },
+    { id: 'md-inline-code', label: 'Inline code', detail: 'Выделить фрагмент кода' },
     { id: 'md-link', label: 'Ссылка', detail: 'Вставить markdown-ссылку', shortcut: 'Mod+K' },
-    { id: 'md-code', label: 'Код', detail: 'Вставить блок кода' },
+    { id: 'md-image', label: 'Изображение', detail: 'Вставить image syntax' },
+    { id: 'md-code', label: 'Code block', detail: 'Вставить блок кода' },
+    { id: 'md-quote', label: 'Цитата', detail: 'Добавить blockquote' },
+    { id: 'md-bullet', label: 'Список', detail: 'Добавить маркированный список' },
+    { id: 'md-ordered', label: '1. Список', detail: 'Добавить нумерованный список' },
+    { id: 'md-task', label: 'Задача', detail: 'Добавить task item' },
+    { id: 'md-table', label: 'Таблица', detail: 'Вставить GFM table' },
+    { id: 'md-hr', label: 'Разделитель', detail: 'Вставить thematic break' },
+    { id: 'md-footnote', label: 'Сноска', detail: 'Вставить footnote' },
   ],
   html: [
     { id: 'html-section', label: 'Секция', detail: 'Добавить базовый section-блок' },
     { id: 'html-card', label: 'Карточка', detail: 'Вставить компактный блок-карточку' },
     { id: 'html-link', label: 'Ссылка', detail: 'Безопасная внешняя ссылка' },
     { id: 'html-list', label: 'Список', detail: 'Маркированный список' },
+    { id: 'html-table', label: 'Таблица', detail: 'Таблица с caption и scope' },
+    { id: 'html-form', label: 'Форма', detail: 'Форма с доступной подписью' },
+    { id: 'html-landmarks', label: 'Landmarks', detail: 'Семантический каркас страницы' },
   ],
   css: [
     { id: 'css-variables', label: 'Переменные', detail: 'Блок переменных в :root' },
     { id: 'css-flex', label: 'Flex', detail: 'Центрирование через flex' },
     { id: 'css-grid', label: 'Grid', detail: 'Адаптивная сетка' },
     { id: 'css-media', label: 'Media', detail: 'Правило для маленьких экранов' },
+    { id: 'css-rule', label: 'Rule', detail: 'Обычное CSS-правило' },
+    { id: 'css-container', label: 'Container', detail: 'Container query' },
+    { id: 'css-keyframes', label: 'Keyframes', detail: 'Анимация с keyframes' },
   ],
   javascript: [
     { id: 'js-async', label: 'Async', detail: 'Асинхронная функция' },
     { id: 'js-fetch', label: 'Fetch', detail: 'Запрос с обработкой ошибки' },
     { id: 'js-try', label: 'Try/Catch', detail: 'Блок обработки ошибок' },
     { id: 'js-listener', label: 'Listener', detail: 'Обработчик события' },
+    { id: 'js-module', label: 'Module', detail: 'Import/export блок' },
+    { id: 'js-function', label: 'Function', detail: 'Экспортируемая функция' },
   ],
   json: [
     { id: 'json-object', label: 'Object', detail: 'Добавить объект JSON' },
@@ -199,40 +225,6 @@ const HELPER_ACTIONS_BY_FORMAT: Record<string, EditorHelperAction[]> = {
     { id: 'txt-checklist', label: 'Чеклист', detail: 'Список задач с чекбоксами' },
     { id: 'txt-divider', label: 'Разделитель', detail: 'Горизонтальный разделитель' },
   ],
-}
-
-function readPersistedDraft(): PersistedEditorDraft | null {
-  if (typeof window === 'undefined') {
-    return null
-  }
-
-  try {
-    const rawValue = window.localStorage.getItem(EDITOR_DRAFT_STORAGE_KEY)
-    if (!rawValue) {
-      return null
-    }
-
-    const payload = JSON.parse(rawValue) as Partial<PersistedEditorDraft>
-    if (
-      typeof payload.formatId !== 'string' ||
-      typeof payload.fileName !== 'string' ||
-      typeof payload.content !== 'string'
-    ) {
-      return null
-    }
-
-    return {
-      formatId: payload.formatId,
-      fileName: payload.fileName,
-      content: payload.content,
-      templateId:
-        typeof payload.templateId === 'string'
-          ? payload.templateId
-          : (TEMPLATE_DEFINITIONS[0]?.id ?? ''),
-    }
-  } catch {
-    return null
-  }
 }
 
 function downloadBlob(blob: Blob, fileName: string): void {
@@ -255,78 +247,6 @@ function countWords(content: string): number {
   return normalized.split(/\s+/u).filter(Boolean).length
 }
 
-function normalizeSelectionContent(value: string): string {
-  return value || 'text'
-}
-
-function insertText(
-  textarea: HTMLTextAreaElement,
-  nextValue: string,
-  selectionStart: number,
-  selectionEnd = selectionStart,
-): void {
-  textarea.value = nextValue
-  textarea.setSelectionRange(selectionStart, selectionEnd)
-  textarea.focus()
-  textarea.dispatchEvent(new Event('input', { bubbles: true }))
-}
-
-function wrapSelection(
-  textarea: HTMLTextAreaElement,
-  prefix: string,
-  suffix: string,
-  fallback = 'text',
-): void {
-  const start = textarea.selectionStart
-  const end = textarea.selectionEnd
-  const currentValue = textarea.value
-  const selection = currentValue.slice(start, end) || fallback
-  const nextValue =
-    currentValue.slice(0, start) + prefix + selection + suffix + currentValue.slice(end)
-  const selectionStart = start + prefix.length
-  const selectionEnd = selectionStart + selection.length
-
-  insertText(textarea, nextValue, selectionStart, selectionEnd)
-}
-
-function replaceSelection(
-  textarea: HTMLTextAreaElement,
-  replacement: string,
-  caretOffset = replacement.length,
-): void {
-  const start = textarea.selectionStart
-  const end = textarea.selectionEnd
-  const currentValue = textarea.value
-  const nextValue = currentValue.slice(0, start) + replacement + currentValue.slice(end)
-  const nextCaret = start + caretOffset
-
-  insertText(textarea, nextValue, nextCaret, nextCaret)
-}
-
-function indentSelection(textarea: HTMLTextAreaElement, outdent = false): void {
-  const value = textarea.value
-  const start = textarea.selectionStart
-  const end = textarea.selectionEnd
-  const lineStart = value.lastIndexOf('\n', start - 1) + 1
-  const lineEnd = value.indexOf('\n', end)
-  const blockEnd = lineEnd === -1 ? value.length : lineEnd
-  const selectedBlock = value.slice(lineStart, blockEnd)
-  const lines = selectedBlock.split('\n')
-
-  const transformedLines = lines.map((line) => {
-    if (!outdent) {
-      return `  ${line}`
-    }
-
-    return line.startsWith('  ') ? line.slice(2) : line.startsWith('\t') ? line.slice(1) : line
-  })
-  const nextBlock = transformedLines.join('\n')
-  const nextValue = value.slice(0, lineStart) + nextBlock + value.slice(blockEnd)
-  const delta = nextBlock.length - selectedBlock.length
-
-  insertText(textarea, nextValue, start + (outdent ? -2 : 2), end + delta)
-}
-
 export function useEditorWorkspace() {
   const availableFormats = ref<EditorFormatDefinition[]>([])
   const editorAcceptAttribute = ref('.md,.html,.css,.js,.json,.yaml,.yml,.txt')
@@ -334,7 +254,15 @@ export function useEditorWorkspace() {
   const fileName = ref('notes.md')
   const content = ref(TEMPLATE_DEFINITIONS[0]?.content ?? '')
   const selectedTemplateId = ref(TEMPLATE_DEFINITIONS[0]?.id ?? '')
+  const encoding = ref<'utf-8' | 'utf-8-bom'>('utf-8')
+  const newline = ref<'lf' | 'crlf'>('lf')
+  const persistenceEnabled = ref(
+    typeof window !== 'undefined' && window.localStorage
+      ? isEditorPersistenceEnabled(window.localStorage)
+      : false,
+  )
   const errorMessage = ref('')
+  const formatMismatchWarning = ref('')
   const processingMessage = ref('')
   const isHydrating = ref(false)
   const isValidating = ref(false)
@@ -348,13 +276,23 @@ export function useEditorWorkspace() {
   const lastValidatedResult = shallowRef<ServerEditorResult | null>(null)
   let capabilityRequest: Promise<void> | null = null
   let persistTimeoutId = 0
+  let markdownPreviewTimeoutId = 0
+  let markdownPreviewRevision = 0
+  let validationRevision = 0
+  let markdownPreviewController: AbortController | null = null
+  let lastAppliedTemplateId = selectedTemplateId.value
+  const serverMarkdownPreview = shallowRef<EditorLocalPreview | null>(null)
 
   const activeFormat = computed(
     () => availableFormats.value.find((format) => format.id === selectedFormatId.value) ?? null,
   )
-  const preview = computed<EditorLocalPreview>(() =>
-    buildEditorLocalPreview(selectedFormatId.value, content.value),
-  )
+  const preview = computed<EditorLocalPreview>(() => {
+    if (selectedFormatId.value === 'markdown' && serverMarkdownPreview.value) {
+      return serverMarkdownPreview.value
+    }
+
+    return buildEditorLocalPreview(selectedFormatId.value, content.value)
+  })
   const lineCount = computed(() => (content.value ? content.value.split('\n').length : 1))
   const lineNumberGutter = computed(() =>
     Array.from({ length: lineCount.value }, (_unused, index) => String(index + 1)).join('\n'),
@@ -367,7 +305,9 @@ export function useEditorWorkspace() {
   const helperActions = computed<EditorHelperAction[]>(
     () => HELPER_ACTIONS_BY_FORMAT[selectedFormatId.value] ?? [],
   )
-  const templateOptions = computed(() => TEMPLATE_DEFINITIONS)
+  const templateOptions = computed(() =>
+    TEMPLATE_DEFINITIONS.filter((template) => template.formatId === selectedFormatId.value),
+  )
   const currentFingerprint = computed(
     () => `${selectedFormatId.value}\u0000${fileName.value}\u0000${content.value}`,
   )
@@ -399,6 +339,15 @@ export function useEditorWorkspace() {
     warning: diagnostics.value.filter((issue) => issue.severity === 'warning').length,
     info: diagnostics.value.filter((issue) => issue.severity === 'info').length,
   }))
+  const diagnosticsScope = computed(() =>
+    ['json', 'yaml'].includes(selectedFormatId.value)
+      ? 'Parser-backed diagnostics с точной позицией ошибки.'
+      : ['css', 'javascript'].includes(selectedFormatId.value)
+        ? 'Structural preflight: это не полная runtime-валидация.'
+        : selectedFormatId.value === 'html'
+          ? 'HTML parse и security preflight; browser-runtime не запускается.'
+          : 'Server diagnostics для текущего формата.',
+  )
 
   function queueDraftPersistence(): void {
     if (typeof window === 'undefined') {
@@ -406,23 +355,36 @@ export function useEditorWorkspace() {
     }
 
     window.clearTimeout(persistTimeoutId)
+    if (!persistenceEnabled.value) {
+      clearEditorDraft(window.localStorage)
+      draftPersistenceStatus.value = 'Локальное восстановление выключено'
+      return
+    }
+
     persistTimeoutId = window.setTimeout(() => {
-      window.localStorage.setItem(
-        EDITOR_DRAFT_STORAGE_KEY,
-        JSON.stringify({
-          formatId: selectedFormatId.value,
-          fileName: fileName.value,
-          content: content.value,
-          templateId: selectedTemplateId.value,
-        }),
-      )
-      draftPersistenceStatus.value = 'Черновик сохранён локально'
-    }, 220)
+      const result = persistEditorDraft(window.localStorage, {
+        version: 2,
+        formatId: selectedFormatId.value,
+        fileName: fileName.value,
+        content: content.value,
+        templateId: selectedTemplateId.value,
+        encoding: encoding.value,
+        newline: newline.value,
+      })
+      draftPersistenceStatus.value =
+        result.status === 'saved'
+          ? 'Recovery snapshot сохранён локально'
+          : result.status === 'too-large'
+            ? 'Черновик больше лимита 512 KiB и не сохранён'
+            : result.status === 'quota-error'
+              ? 'Браузер отказал в сохранении: квота исчерпана'
+              : 'Локальное восстановление выключено'
+    }, 500)
   }
 
   function clearPersistedDraft(): void {
     if (typeof window !== 'undefined') {
-      window.localStorage.removeItem(EDITOR_DRAFT_STORAGE_KEY)
+      clearEditorDraft(window.localStorage)
     }
     draftPersistenceStatus.value = 'Локальная копия очищена'
   }
@@ -459,18 +421,20 @@ export function useEditorWorkspace() {
           return
         }
 
-        const persistedDraft = readPersistedDraft()
+        const persistedDraft = readEditorDraft(window.localStorage)
         if (persistedDraft) {
           selectedFormatId.value = persistedDraft.formatId
           fileName.value = persistedDraft.fileName
           content.value = persistedDraft.content
           selectedTemplateId.value = persistedDraft.templateId
+          encoding.value = persistedDraft.encoding
+          newline.value = persistedDraft.newline
           restoredDraft.value = true
           draftPersistenceStatus.value = 'Локальная копия восстановлена'
           return
         }
 
-        applyTemplate(TEMPLATE_DEFINITIONS[0]?.id ?? '')
+        applyTemplate(TEMPLATE_DEFINITIONS[0]?.id ?? '', false)
       })
       .finally(() => {
         isHydrating.value = false
@@ -480,13 +444,30 @@ export function useEditorWorkspace() {
     return capabilityRequest
   }
 
-  function applyTemplate(templateId: string): void {
+  function applyTemplate(templateId: string, requireConfirmation = true): void {
     const template = TEMPLATE_DEFINITIONS.find((entry) => entry.id === templateId)
     if (!template) {
       return
     }
 
+    const previousTemplate = TEMPLATE_DEFINITIONS.find(
+      (entry) => entry.id === lastAppliedTemplateId,
+    )
+    const isDirty =
+      !previousTemplate ||
+      content.value !== previousTemplate.content ||
+      fileName.value !== previousTemplate.fileName
+    if (
+      requireConfirmation &&
+      isDirty &&
+      !window.confirm('Заменить несохранённый черновик выбранным шаблоном?')
+    ) {
+      selectedTemplateId.value = lastAppliedTemplateId
+      return
+    }
+
     selectedTemplateId.value = template.id
+    lastAppliedTemplateId = template.id
     selectedFormatId.value = template.formatId
     fileName.value = template.fileName
     content.value = template.content
@@ -497,7 +478,12 @@ export function useEditorWorkspace() {
 
   async function openFile(file: File): Promise<void> {
     errorMessage.value = ''
-    const format = await resolveEditorFormat(file.name, file.type)
+    formatMismatchWarning.value = ''
+    if (file.size > MAX_EDITOR_FILE_BYTES) {
+      throw new Error('Editor открывает локальные файлы размером не более 2 MiB.')
+    }
+    const resolution = await resolveEditorFormatMatch(file.name, file.type)
+    const format = resolution.format
 
     if (!format?.available) {
       throw new Error(
@@ -507,8 +493,14 @@ export function useEditorWorkspace() {
     }
 
     selectedFormatId.value = format.id
+    formatMismatchWarning.value = resolution.mismatchWarning ?? ''
     fileName.value = file.name
-    content.value = await file.text()
+    const decoded = decodeEditorFile(await file.arrayBuffer())
+    encoding.value = decoded.encoding
+    newline.value = decoded.newline
+    content.value = decoded.content
+    selectedTemplateId.value = ''
+    lastAppliedTemplateId = ''
     lastValidatedResult.value = null
     lastValidatedFingerprint.value = ''
     queueDraftPersistence()
@@ -531,10 +523,12 @@ export function useEditorWorkspace() {
   }
 
   async function validateDocument(downloadMode: 'ready' | 'plain' | null = null): Promise<void> {
-    if (!activeFormat.value) {
+    if (!activeFormat.value || isValidating.value) {
       return
     }
 
+    const requestRevision = ++validationRevision
+    const requestFingerprint = currentFingerprint.value
     errorMessage.value = ''
     isValidating.value = true
     processingMessage.value = 'Проверяю документ и собираю итоговые файлы...'
@@ -557,8 +551,17 @@ export function useEditorWorkspace() {
         },
       })
 
+      // Ответ для уже изменённого draft не должен вытеснить актуальную локальную ревизию.
+      if (
+        requestRevision !== validationRevision ||
+        requestFingerprint !== currentFingerprint.value
+      ) {
+        draftPersistenceStatus.value = 'Текст изменился во время проверки — результат отброшен'
+        return
+      }
+
       lastValidatedResult.value = result
-      lastValidatedFingerprint.value = currentFingerprint.value
+      lastValidatedFingerprint.value = requestFingerprint
       draftPersistenceStatus.value = 'Проверка завершена, результат актуален'
       processingMessage.value = ''
 
@@ -639,171 +642,13 @@ export function useEditorWorkspace() {
 
   function buildDraftFile(): File {
     const fileType = activeFormat.value?.mimeTypes[0] || 'text/plain'
-    return new File([content.value], fileName.value, {
-      type: fileType,
-    })
-  }
-
-  function applyHelperAction(actionId: string, textarea: HTMLTextAreaElement | null): void {
-    if (!textarea) {
-      return
-    }
-
-    switch (actionId) {
-      case 'md-heading':
-        replaceSelection(
-          textarea,
-          `## ${normalizeSelectionContent(textarea.value.slice(textarea.selectionStart, textarea.selectionEnd))}`,
-        )
-        return
-      case 'md-bold':
-        wrapSelection(textarea, '**', '**', 'bold')
-        return
-      case 'md-link':
-        wrapSelection(textarea, '[', '](https://example.com)', 'label')
-        return
-      case 'md-code':
-        replaceSelection(
-          textarea,
-          `\`\`\`ts\n${normalizeSelectionContent(textarea.value.slice(textarea.selectionStart, textarea.selectionEnd))}\n\`\`\``,
-        )
-        return
-      case 'html-section':
-        replaceSelection(
-          textarea,
-          `<section>\n  <h2>Section title</h2>\n  <p>Section copy</p>\n</section>`,
-        )
-        return
-      case 'html-card':
-        replaceSelection(
-          textarea,
-          `<article class="card">\n  <h3>Card title</h3>\n  <p>Supportive text.</p>\n</article>`,
-        )
-        return
-      case 'html-link':
-        replaceSelection(
-          textarea,
-          `<a href="https://example.com" target="_blank" rel="noopener noreferrer">Open link</a>`,
-        )
-        return
-      case 'html-list':
-        replaceSelection(textarea, `<ul>\n  <li>First item</li>\n  <li>Second item</li>\n</ul>`)
-        return
-      case 'css-variables':
-        replaceSelection(textarea, `:root {\n  --accent: #1d5c55;\n  --panel: #fffaf2;\n}`)
-        return
-      case 'css-flex':
-        replaceSelection(textarea, `display: flex;\nalign-items: center;\njustify-content: center;`)
-        return
-      case 'css-grid':
-        replaceSelection(
-          textarea,
-          `display: grid;\ngrid-template-columns: repeat(auto-fit, minmax(180px, 1fr));\ngap: 16px;`,
-        )
-        return
-      case 'css-media':
-        replaceSelection(
-          textarea,
-          `@media (max-width: 720px) {\n  .preview-grid {\n    grid-template-columns: 1fr;\n  }\n}`,
-        )
-        return
-      case 'js-async':
-        replaceSelection(
-          textarea,
-          `async function runTask() {\n  try {\n    return await Promise.resolve('done')\n  } catch (error) {\n    console.error(error)\n    throw error\n  }\n}`,
-        )
-        return
-      case 'js-fetch':
-        replaceSelection(
-          textarea,
-          `const response = await fetch('/api/example')\nif (!response.ok) {\n  throw new Error('Request failed')\n}\nconst payload = await response.json()`,
-        )
-        return
-      case 'js-try':
-        replaceSelection(textarea, `try {\n  // work\n} catch (error) {\n  console.error(error)\n}`)
-        return
-      case 'js-listener':
-        replaceSelection(
-          textarea,
-          `window.addEventListener('click', (event) => {\n  console.log(event.type)\n})`,
-        )
-        return
-      case 'json-object':
-        replaceSelection(textarea, `{\n  "key": "value"\n}`)
-        return
-      case 'json-array':
-        replaceSelection(textarea, `[\n  "item-1",\n  "item-2"\n]`)
-        return
-      case 'json-field':
-        replaceSelection(textarea, `"key": "value"`)
-        return
-      case 'yaml-map':
-        replaceSelection(textarea, `root:\n  key: value\n  nested:\n    enabled: true`)
-        return
-      case 'yaml-list':
-        replaceSelection(textarea, `items:\n  - first\n  - second`)
-        return
-      case 'yaml-service':
-        replaceSelection(textarea, `service:\n  enabled: true\n  port: 8080\n  host: localhost`)
-        return
-      case 'txt-section':
-        replaceSelection(textarea, `SECTION:\n`)
-        return
-      case 'txt-checklist':
-        replaceSelection(textarea, `- [ ] First task\n- [ ] Second task`)
-        return
-      case 'txt-divider':
-        replaceSelection(textarea, `------------------------------`)
-        return
-    }
-  }
-
-  function handleEditorKeydown(event: KeyboardEvent, textarea: HTMLTextAreaElement | null): void {
-    const isMod = event.metaKey || event.ctrlKey
-    const normalizedKey = event.key.toLowerCase()
-
-    if (isMod && normalizedKey === 's') {
-      event.preventDefault()
-      if (event.shiftKey) {
-        void downloadPlainTextFile()
-      } else {
-        void downloadReadyFile()
-      }
-      return
-    }
-
-    if (isMod && normalizedKey === 'enter') {
-      event.preventDefault()
-      void validateDocument()
-      return
-    }
-
-    if (event.altKey && event.shiftKey && normalizedKey === 'f') {
-      event.preventDefault()
-      void formatDocument()
-      return
-    }
-
-    if (!textarea) {
-      return
-    }
-
-    if (event.key === 'Tab') {
-      event.preventDefault()
-      indentSelection(textarea, event.shiftKey)
-      return
-    }
-
-    if (selectedFormatId.value === 'markdown' && isMod && normalizedKey === 'b') {
-      event.preventDefault()
-      applyHelperAction('md-bold', textarea)
-      return
-    }
-
-    if (selectedFormatId.value === 'markdown' && isMod && normalizedKey === 'k') {
-      event.preventDefault()
-      applyHelperAction('md-link', textarea)
-    }
+    return new File(
+      [encodeEditorFile(content.value, encoding.value, newline.value)],
+      fileName.value,
+      {
+        type: fileType,
+      },
+    )
   }
 
   watch([selectedFormatId, fileName, content, selectedTemplateId], () => {
@@ -812,6 +657,42 @@ export function useEditorWorkspace() {
     }
     queueDraftPersistence()
   })
+
+  watch(
+    [selectedFormatId, content],
+    ([formatId, source]) => {
+      window.clearTimeout(markdownPreviewTimeoutId)
+      markdownPreviewController?.abort()
+      markdownPreviewController = null
+      const revision = ++markdownPreviewRevision
+
+      if (formatId !== 'markdown') {
+        serverMarkdownPreview.value = null
+        return
+      }
+
+      markdownPreviewTimeoutId = window.setTimeout(() => {
+        const controller = new AbortController()
+        markdownPreviewController = controller
+
+        void renderMarkdownPreview(source, controller.signal)
+          .then((nextPreview) => {
+            if (revision === markdownPreviewRevision) {
+              serverMarkdownPreview.value = nextPreview
+            }
+          })
+          .catch(() => {
+            // При offline/stale request сохраняем inert fallback и не заменяем новый draft.
+          })
+          .finally(() => {
+            if (revision === markdownPreviewRevision) {
+              markdownPreviewController = null
+            }
+          })
+      }, 280)
+    },
+    { immediate: true },
+  )
 
   watch(selectedFormatId, (nextFormatId) => {
     const currentFormat = availableFormats.value.find((format) => format.id === nextFormatId)
@@ -827,10 +708,25 @@ export function useEditorWorkspace() {
     if (!currentFormat.extensions.includes(currentExtension)) {
       fileName.value = `${baseName || 'untitled'}.${currentFormat.extensions[0]}`
     }
+
+    const currentTemplateIsCompatible = templateOptions.value.some(
+      (template) => template.id === selectedTemplateId.value,
+    )
+    if (!currentTemplateIsCompatible) {
+      selectedTemplateId.value = ''
+      lastAppliedTemplateId = ''
+    }
+  })
+
+  watch(persistenceEnabled, (enabled) => {
+    setEditorPersistenceEnabled(window.localStorage, enabled)
+    queueDraftPersistence()
   })
 
   onBeforeUnmount(() => {
     window.clearTimeout(persistTimeoutId)
+    window.clearTimeout(markdownPreviewTimeoutId)
+    markdownPreviewController?.abort()
   })
 
   return {
@@ -840,7 +736,11 @@ export function useEditorWorkspace() {
     fileName,
     content,
     selectedTemplateId,
+    encoding,
+    newline,
+    persistenceEnabled,
     errorMessage,
+    formatMismatchWarning,
     processingMessage,
     isHydrating,
     isValidating,
@@ -866,6 +766,7 @@ export function useEditorWorkspace() {
     serverSummary,
     suggestionPills,
     diagnosticsBySeverity,
+    diagnosticsScope,
     hydrateCapabilities,
     applyTemplate,
     openFile,
@@ -875,7 +776,5 @@ export function useEditorWorkspace() {
     downloadPlainTextFile,
     cancelValidation,
     clearPersistedDraft,
-    applyHelperAction,
-    handleEditorKeydown,
   }
 }

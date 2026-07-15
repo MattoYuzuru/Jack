@@ -1,0 +1,10 @@
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: processing-limits
+  namespace: jack
+spec:
+  buffering:
+    maxRequestBodyBytes: 67108864
+    memRequestBodyBytes: 2097152
+    retryExpression: IsNetworkError() && Attempts() < 2

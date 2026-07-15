@@ -1,0 +1,21 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: backend
+  namespace: jack
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: jack-backend
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: frontend
+  namespace: jack
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: jack-frontend

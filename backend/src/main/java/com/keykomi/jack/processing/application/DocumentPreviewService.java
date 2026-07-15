@@ -9,7 +9,6 @@ import com.keykomi.jack.processing.domain.StoredUpload;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.StringReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -33,8 +32,6 @@ import java.util.zip.ZipFile;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.DefaultStyledDocument;
 import javax.swing.text.rtf.RTFEditorKit;
-import javax.xml.XMLConstants;
-import javax.xml.parsers.DocumentBuilderFactory;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
 import org.apache.pdfbox.Loader;
@@ -66,7 +63,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 import org.w3c.dom.Node;
-import org.xml.sax.InputSource;
 import org.yaml.snakeyaml.Yaml;
 
 @Service
@@ -79,8 +75,9 @@ public class DocumentPreviewService {
 	private static final int SQLITE_SAMPLE_ROW_LIMIT = 24;
 	private static final int SQLITE_SAMPLE_COLUMN_LIMIT = 12;
 	private static final int SQLITE_MAX_PREVIEW_TABLES = 12;
+	private static final int SQLITE_MAX_PREVIEW_COLUMNS = 128;
+	private static final int SQLITE_QUERY_TIMEOUT_SECONDS = 3;
 	private static final String SQLITE_HEADER = "SQLite format 3\u0000";
-	private static final Pattern MARKDOWN_HEADING_PATTERN = Pattern.compile("(?m)^(#{1,6})\\s+(.+?)\\s*$");
 	private static final Pattern ENV_LINE_PATTERN = Pattern.compile("^\\s*(?:export\\s+)?([A-Za-z_][A-Za-z0-9_]*)\\s*=\\s*(.*)\\s*$");
 	private static final Pattern XML_TAG_PATTERN = Pattern.compile("(?m)^\\s*<([A-Za-z_][\\w:.-]*)");
 	private static final Set<String> TEXT_EXTENSIONS = Set.of("txt", "text", "log", "sql");
@@ -95,11 +92,17 @@ public class DocumentPreviewService {
 
 	private final ArtifactStorageService artifactStorageService;
 	private final ObjectMapper objectMapper;
+	private final MarkdownRenderService markdownRenderService;
 	private final Yaml yaml;
 
-	public DocumentPreviewService(ArtifactStorageService artifactStorageService, ObjectMapper objectMapper) {
+	public DocumentPreviewService(
+		ArtifactStorageService artifactStorageService,
+		ObjectMapper objectMapper,
+		MarkdownRenderService markdownRenderService
+	) {
 		this.artifactStorageService = artifactStorageService;
 		this.objectMapper = objectMapper;
+		this.markdownRenderService = markdownRenderService;
 		this.yaml = new Yaml();
 	}
 
@@ -321,7 +324,14 @@ public class DocumentPreviewService {
 
 	private DocumentPreviewPayload buildMarkdownPreview(StoredUpload upload) {
 		var markdown = readDocumentText(upload.storagePath());
-		var outline = extractMarkdownOutline(markdown);
+		var renderContract = this.markdownRenderService.render(
+			markdown,
+			"obsidian-safe",
+			Set.of("footnotes", "definition-lists", "heading-anchors", "toc", "highlight", "sub-sup")
+		);
+		var outline = renderContract.outline().stream()
+			.map(item -> new DocumentPreviewPayload.DocumentOutlineItem(item.id(), item.label(), item.depth()))
+			.toList();
 
 		return new DocumentPreviewPayload(
 			List.of(
@@ -331,14 +341,14 @@ public class DocumentPreviewService {
 				new DocumentPreviewPayload.DocumentFact("Режим preview", "Rendered article")
 			),
 			markdown,
-			List.of(),
+			renderContract.warnings(),
 			new DocumentPreviewPayload.DocumentLayoutPayload(
 				"html",
 				null,
 				markdown,
 				null,
 				null,
-				wrapDocumentHtml(renderMarkdownBody(markdown)),
+				wrapDocumentHtml(renderContract.sanitizedHtml()),
 				outline,
 				null,
 				null,
@@ -1003,10 +1013,11 @@ public class DocumentPreviewService {
 				throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Файл распознан как DB/SQLite по расширению, но его сигнатура не похожа на SQLite container.");
 			}
 
-			try (var connection = DriverManager.getConnection("jdbc:sqlite:" + upload.storagePath().toAbsolutePath())) {
+			try (var connection = DriverManager.getConnection(readOnlySqliteJdbcUrl(upload.storagePath()))) {
 				var tableEntries = queryRows(
 					connection,
-					"SELECT name, sql FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name"
+					"SELECT name, sql FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name LIMIT " +
+						(SQLITE_MAX_PREVIEW_TABLES + 1)
 				);
 				var viewCount = querySingleLong(
 					connection,
@@ -1038,15 +1049,23 @@ public class DocumentPreviewService {
 				warnings.add("Просмотр базы доступен только для чтения: можно изучить структуру и примеры строк без изменения файла.");
 				if (tableEntries.size() > SQLITE_MAX_PREVIEW_TABLES) {
 					warnings.add(
-						"Для скорости показаны первые %s таблиц из %s, а полный список остаётся доступен через поиск по содержимому."
-							.formatted(SQLITE_MAX_PREVIEW_TABLES, tableEntries.size())
+						"Для скорости показаны первые %s таблиц. Полный каталог не материализуется в preview."
+							.formatted(SQLITE_MAX_PREVIEW_TABLES)
 					);
 				}
+				warnings.add(
+					"Количество строк не вычисляется через COUNT(*): показана только ограниченная read-only выборка."
+				);
 
 				return new DocumentPreviewPayload(
 					List.of(
 						new DocumentPreviewPayload.DocumentFact("Тип документа", "SQLite"),
-						new DocumentPreviewPayload.DocumentFact("Таблицы", String.valueOf(tableEntries.size())),
+						new DocumentPreviewPayload.DocumentFact(
+							"Таблицы",
+							tableEntries.size() > SQLITE_MAX_PREVIEW_TABLES
+								? "≥" + SQLITE_MAX_PREVIEW_TABLES
+								: String.valueOf(tableEntries.size())
+						),
 						new DocumentPreviewPayload.DocumentFact("Views", String.valueOf(viewCount == null ? 0 : viewCount)),
 						new DocumentPreviewPayload.DocumentFact("Triggers", String.valueOf(triggerCount == null ? 0 : triggerCount))
 					),
@@ -1443,7 +1462,7 @@ public class DocumentPreviewService {
 		String schemaSql
 	) {
 		var quotedName = quoteSqlIdentifier(tableName);
-		var columns = queryRows(connection, "PRAGMA table_info(" + quotedName + ")").stream()
+		var columns = queryRows(connection, "PRAGMA table_info(" + quotedName + ")", SQLITE_MAX_PREVIEW_COLUMNS).stream()
 			.map(column -> new DocumentPreviewPayload.DocumentDatabaseColumnPreview(
 				String.valueOf(column.getOrDefault("name", "")),
 				String.valueOf(column.getOrDefault("type", "")),
@@ -1452,14 +1471,13 @@ public class DocumentPreviewService {
 				column.get("dflt_value") == null ? "—" : String.valueOf(column.get("dflt_value"))
 			))
 			.toList();
-		var rowCount = querySingleLong(connection, "SELECT COUNT(*) AS count FROM " + quotedName);
 		var sampleRows = queryRows(connection, "SELECT * FROM " + quotedName + " LIMIT " + SQLITE_SAMPLE_ROW_LIMIT);
-		var sample = buildDatabaseSample(columns, sampleRows, rowCount);
+		var sample = buildDatabaseSample(columns, sampleRows);
 
 		return new DocumentPreviewPayload.DocumentDatabaseTablePreview(
 			"sqlite-table-" + tableName,
 			tableName,
-			rowCount,
+			null,
 			schemaSql == null || schemaSql.isBlank() ? "CREATE TABLE " + tableName + " (...)" : schemaSql,
 			columns,
 			sample
@@ -1468,8 +1486,7 @@ public class DocumentPreviewService {
 
 	private DocumentPreviewPayload.DocumentTablePreview buildDatabaseSample(
 		List<DocumentPreviewPayload.DocumentDatabaseColumnPreview> columns,
-		List<Map<String, Object>> sampleRows,
-		Long rowCount
+		List<Map<String, Object>> sampleRows
 	) {
 		var visibleColumns = columns.stream()
 			.map(DocumentPreviewPayload.DocumentDatabaseColumnPreview::name)
@@ -1485,25 +1502,39 @@ public class DocumentPreviewService {
 		return new DocumentPreviewPayload.DocumentTablePreview(
 			visibleColumns,
 			rows,
-			rowCount == null ? rows.size() : rowCount.intValue(),
+			rows.size(),
 			columns.size(),
 			""
 		);
 	}
 
 	private List<Map<String, Object>> queryRows(java.sql.Connection connection, String sql) {
-		try (var statement = connection.createStatement();
-			var resultSet = statement.executeQuery(sql)) {
-			var rows = new ArrayList<Map<String, Object>>();
-			var metadata = resultSet.getMetaData();
-			while (resultSet.next()) {
-				var row = new LinkedHashMap<String, Object>();
-				for (int columnIndex = 1; columnIndex <= metadata.getColumnCount(); columnIndex += 1) {
-					row.put(metadata.getColumnLabel(columnIndex), resultSet.getObject(columnIndex));
-				}
-				rows.add(row);
+		return queryRows(connection, sql, 0);
+	}
+
+	private List<Map<String, Object>> queryRows(
+		java.sql.Connection connection,
+		String sql,
+		int maxRows
+	) {
+		try (var statement = connection.createStatement()) {
+			statement.setQueryTimeout(SQLITE_QUERY_TIMEOUT_SECONDS);
+			if (maxRows > 0) {
+				statement.setMaxRows(maxRows);
 			}
-			return rows;
+
+			try (var resultSet = statement.executeQuery(sql)) {
+				var rows = new ArrayList<Map<String, Object>>();
+				var metadata = resultSet.getMetaData();
+				while (resultSet.next()) {
+					var row = new LinkedHashMap<String, Object>();
+					for (int columnIndex = 1; columnIndex <= metadata.getColumnCount(); columnIndex += 1) {
+						row.put(metadata.getColumnLabel(columnIndex), resultSet.getObject(columnIndex));
+					}
+					rows.add(row);
+				}
+				return rows;
+			}
 		}
 		catch (SQLException exception) {
 			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Не удалось выполнить SQLite introspection query.", exception);
@@ -1516,6 +1547,10 @@ public class DocumentPreviewService {
 			return null;
 		}
 		return asLong(rows.getFirst().values().stream().findFirst().orElse(null));
+	}
+
+	private String readOnlySqliteJdbcUrl(Path path) {
+		return "jdbc:sqlite:" + path.toAbsolutePath().toUri() + "?mode=ro";
 	}
 
 	private Long asLong(Object value) {
@@ -1589,95 +1624,6 @@ public class DocumentPreviewService {
 		return trimmed;
 	}
 
-	private List<DocumentPreviewPayload.DocumentOutlineItem> extractMarkdownOutline(String markdown) {
-		var outline = new ArrayList<DocumentPreviewPayload.DocumentOutlineItem>();
-		var matcher = MARKDOWN_HEADING_PATTERN.matcher(markdown);
-		int index = 0;
-
-		while (matcher.find()) {
-			index += 1;
-			outline.add(
-				new DocumentPreviewPayload.DocumentOutlineItem(
-					"md-heading-" + index,
-					normalizeText(matcher.group(2)),
-					clampHeadingLevel(matcher.group(1).length())
-				)
-			);
-		}
-
-		return List.copyOf(outline);
-	}
-
-	private String renderMarkdownBody(String markdown) {
-		var lines = markdown.split("\\R");
-		var html = new StringBuilder();
-		boolean insideList = false;
-
-		for (String rawLine : lines) {
-			var line = rawLine.trim();
-			if (line.isBlank()) {
-				if (insideList) {
-					html.append("</ul>");
-					insideList = false;
-				}
-				continue;
-			}
-
-			var headingMatcher = MARKDOWN_HEADING_PATTERN.matcher(line);
-			if (headingMatcher.matches()) {
-				if (insideList) {
-					html.append("</ul>");
-					insideList = false;
-				}
-				int level = clampHeadingLevel(headingMatcher.group(1).length());
-				html.append("<h").append(level).append(">")
-					.append(applyInlineMarkdown(headingMatcher.group(2)))
-					.append("</h").append(level).append(">");
-				continue;
-			}
-
-			if (line.startsWith("- ") || line.startsWith("* ")) {
-				if (!insideList) {
-					html.append("<ul>");
-					insideList = true;
-				}
-				html.append("<li>").append(applyInlineMarkdown(line.substring(2).trim())).append("</li>");
-				continue;
-			}
-
-			if (insideList) {
-				html.append("</ul>");
-				insideList = false;
-			}
-
-			if (line.startsWith(">")) {
-				html.append("<blockquote>").append(applyInlineMarkdown(line.replaceFirst("^>\\s*", ""))).append("</blockquote>");
-				continue;
-			}
-
-			html.append("<p>").append(applyInlineMarkdown(line)).append("</p>");
-		}
-
-		if (insideList) {
-			html.append("</ul>");
-		}
-
-		if (html.isEmpty()) {
-			html.append("<p>Пустой Markdown файл.</p>");
-		}
-
-		return html.toString();
-	}
-
-	private String applyInlineMarkdown(String text) {
-		var html = escapeHtml(text);
-		html = html.replaceAll("\\*\\*(.+?)\\*\\*", "<strong>$1</strong>");
-		html = html.replaceAll("__(.+?)__", "<strong>$1</strong>");
-		html = html.replaceAll("`([^`]+)`", "<code>$1</code>");
-		html = html.replaceAll("\\[(.+?)]\\((https?://[^)]+)\\)", "<a href=\"$2\" target=\"_blank\" rel=\"noreferrer noopener\">$1</a>");
-		html = html.replaceAll("(?<!\\*)\\*(?!\\s)(.+?)(?<!\\s)\\*", "<em>$1</em>");
-		return html;
-	}
 
 	private List<DocumentPreviewPayload.DocumentOutlineItem> extractJsonOutline(JsonNode node) {
 		if (node == null || !node.isObject()) {
@@ -2082,17 +2028,7 @@ public class DocumentPreviewService {
 
 	private org.w3c.dom.Document parseXml(String content) {
 		try {
-			var factory = DocumentBuilderFactory.newInstance();
-			factory.setNamespaceAware(true);
-			factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
-			factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
-			factory.setFeature("http://xml.org/sax/features/external-general-entities", false);
-			factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
-			factory.setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false);
-			factory.setXIncludeAware(false);
-			factory.setExpandEntityReferences(false);
-			var builder = factory.newDocumentBuilder();
-			return builder.parse(new InputSource(new StringReader(content)));
+			return SecureXmlParser.parse(content);
 		}
 		catch (Exception exception) {
 			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Не удалось разобрать XML внутри document container.", exception);

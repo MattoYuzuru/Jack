@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, reactive } from 'vue'
 import { RouterLink } from 'vue-router'
+import AppShell from '../components/ui/AppShell.vue'
+import WorkspaceHeader from '../components/ui/WorkspaceHeader.vue'
 import { usePdfToolkitWorkspace } from '../features/pdf-toolkit/composables/usePdfToolkitWorkspace'
 
 const workspace = reactive(usePdfToolkitWorkspace())
@@ -94,21 +96,13 @@ function formatBytes(value: number): string {
 </script>
 
 <template>
-  <main class="workspace-shell pdf-toolkit-shell">
-    <header class="panel-surface app-topbar">
-      <div class="brand-lockup">
-        <img class="brand-lockup__logo" src="/logo.svg" alt="Логотип Jack" />
-        <div class="brand-lockup__copy">
-          <p class="eyebrow">Jack · PDF Toolkit</p>
-          <p class="brand-lockup__title">Работа с PDF</p>
-        </div>
-      </div>
-
-      <div class="app-topbar__status">
+  <AppShell class="pdf-toolkit-shell">
+    <WorkspaceHeader eyebrow="Jack · PDF Toolkit" title="Работа с PDF">
+      <template #actions>
         <span class="chip-pill">PDF-инструменты</span>
         <span class="chip-pill chip-pill--accent">Объединение · OCR · Защита</span>
-      </div>
-    </header>
+      </template>
+    </WorkspaceHeader>
 
     <section class="pdf-hero-grid">
       <article class="panel-surface pdf-hero-card">
@@ -585,7 +579,7 @@ function formatBytes(value: number): string {
         </div>
       </article>
     </section>
-  </main>
+  </AppShell>
 </template>
 
 <style scoped>

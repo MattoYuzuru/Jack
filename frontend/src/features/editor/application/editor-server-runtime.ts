@@ -20,7 +20,10 @@ export interface EditorIssue {
   message: string
   line: number | null
   column: number | null
+  endLine: number | null
+  endColumn: number | null
   hint: string | null
+  quickFixCode: string | null
 }
 
 export interface EditorOutlineItem {

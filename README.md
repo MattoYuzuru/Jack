@@ -140,6 +140,9 @@ ssh -tt -i ~/sshKeysDir/id_ed25519_hse matto@158.160.66.87 '
 
 Проект уже прошёл несколько завершённых итераций:
 
+Текущий приоритизированный аудит Viewer, Editor, UI/UX, security и processing-platform вынесен в
+[план quality hardening](./docs/quality-hardening-roadmap.md).
+
 | Итерация | Что было сделано                                                                           |
 | -------- | ------------------------------------------------------------------------------------------ |
 | `0`      | Поднят bootstrap проекта, контейнерный запуск и базовый workflow                           |
@@ -153,3 +156,5 @@ ssh -tt -i ~/sshKeysDir/id_ed25519_hse matto@158.160.66.87 '
 | `8`      | Проведён polish: cleaner UX, согласование терминов, cleanup policy и метрики               |
 
 Если нужен более технический разбор processing-платформы, он вынесен отдельно в [docs/processing-platform.md](./docs/processing-platform.md).
+Версионированный CommonMark/GFM и Obsidian-compatible contract описан в
+[docs/markdown-profile.md](./docs/markdown-profile.md).

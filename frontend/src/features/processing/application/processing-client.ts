@@ -97,7 +97,7 @@ export interface ProcessingJobResponse {
   artifacts: ProcessingArtifact[]
 }
 
-interface RunProcessingJobOptions {
+export interface RunProcessingJobOptions {
   scope: Exclude<ProcessingCapabilityScopeName, 'platform'>
   file: File
   jobType: string
@@ -110,14 +110,22 @@ interface RunProcessingJobOptions {
   timeoutMessage?: string
   onJobCreated?: (job: ProcessingJobResponse) => void
   onJobUpdate?: (job: ProcessingJobResponse) => void
+  /**
+   * Останавливает сетевое ожидание и отменяет уже созданную backend-задачу.
+   * Это важно для экранов с быстрой заменой файла: stale-задача не должна
+   * продолжать занимать лимит processing platform после ухода пользователя.
+   */
+  signal?: AbortSignal
 }
 
-interface AwaitProcessingJobOptions {
+export interface AwaitProcessingJobOptions {
   reportProgress?: ProcessingProgressReporter
   maxAttempts?: number
   pollIntervalMs?: number
   timeoutMessage?: string
   onUpdate?: (job: ProcessingJobResponse) => void
+  signal?: AbortSignal
+  cancelOnAbort?: boolean
 }
 
 const DEFAULT_API_BASE_URL = 'http://localhost:8080'
@@ -135,6 +143,13 @@ export class ProcessingJobCancelledError extends Error {
     super(job.errorMessage || job.message || 'Операция была остановлена до завершения.')
     this.name = 'ProcessingJobCancelledError'
     this.job = job
+  }
+}
+
+export class ProcessingJobAbortedError extends Error {
+  constructor() {
+    super('Операция была остановлена до завершения.')
+    this.name = 'ProcessingJobAbortedError'
   }
 }
 
@@ -181,13 +196,17 @@ export async function ensureProcessingCapability(
   return capability
 }
 
-export async function uploadProcessingFile(file: File): Promise<ProcessingUploadResponse> {
+export async function uploadProcessingFile(
+  file: File,
+  init: Pick<RequestInit, 'signal'> = {},
+): Promise<ProcessingUploadResponse> {
   const formData = new FormData()
   formData.set('file', file, file.name)
 
   return requestProcessingJson<ProcessingUploadResponse>('/api/uploads', {
     method: 'POST',
     body: formData,
+    ...init,
   })
 }
 
@@ -201,11 +220,14 @@ export async function getPlatformCapabilityMatrix(): Promise<ProcessingPlatformC
   return scope.platformMatrix
 }
 
-export async function createProcessingJob(input: {
-  uploadId: string
-  jobType: string
-  parameters?: Record<string, unknown>
-}): Promise<ProcessingJobResponse> {
+export async function createProcessingJob(
+  input: {
+    uploadId: string
+    jobType: string
+    parameters?: Record<string, unknown>
+  },
+  init: Pick<RequestInit, 'signal'> = {},
+): Promise<ProcessingJobResponse> {
   const sanitizedParameters = sanitizeProcessingParameters(input.parameters)
 
   return requestProcessingJson<ProcessingJobResponse>('/api/jobs', {
@@ -217,11 +239,15 @@ export async function createProcessingJob(input: {
       ...input,
       ...(sanitizedParameters ? { parameters: sanitizedParameters } : {}),
     }),
+    ...init,
   })
 }
 
-export async function getProcessingJob(jobId: string): Promise<ProcessingJobResponse> {
-  return requestProcessingJson<ProcessingJobResponse>(`/api/jobs/${jobId}`)
+export async function getProcessingJob(
+  jobId: string,
+  init: Pick<RequestInit, 'signal'> = {},
+): Promise<ProcessingJobResponse> {
+  return requestProcessingJson<ProcessingJobResponse>(`/api/jobs/${jobId}`, init)
 }
 
 export async function cancelProcessingJob(jobId: string): Promise<ProcessingJobResponse> {
@@ -240,31 +266,46 @@ export async function awaitProcessingJob(
     pollIntervalMs = DEFAULT_POLL_INTERVAL_MS,
     timeoutMessage = 'Операция заняла больше времени, чем ожидалось.',
     onUpdate,
+    signal,
+    cancelOnAbort = true,
   } = options
   let lastMessage = ''
 
-  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-    const job = await getProcessingJob(jobId)
-    onUpdate?.(job)
+  try {
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      throwIfProcessingAborted(signal)
+      const job = await getProcessingJob(jobId, { signal })
+      onUpdate?.(job)
 
-    if (job.message && job.message !== lastMessage) {
-      reportProgress?.(job.message)
-      lastMessage = job.message
+      if (job.message && job.message !== lastMessage) {
+        reportProgress?.(job.message)
+        lastMessage = job.message
+      }
+
+      if (job.status === 'COMPLETED') {
+        return job
+      }
+
+      if (job.status === 'FAILED') {
+        throw new Error(job.errorMessage || job.message || 'Операция завершилась с ошибкой.')
+      }
+
+      if (job.status === 'CANCELLED') {
+        throw new ProcessingJobCancelledError(job)
+      }
+
+      await sleep(pollIntervalMs, signal)
+    }
+  } catch (error) {
+    if (isProcessingAbort(error, signal)) {
+      if (cancelOnAbort) {
+        void cancelProcessingJob(jobId).catch(() => undefined)
+      }
+
+      throw new ProcessingJobAbortedError()
     }
 
-    if (job.status === 'COMPLETED') {
-      return job
-    }
-
-    if (job.status === 'FAILED') {
-      throw new Error(job.errorMessage || job.message || 'Операция завершилась с ошибкой.')
-    }
-
-    if (job.status === 'CANCELLED') {
-      throw new ProcessingJobCancelledError(job)
-    }
-
-    await sleep(pollIntervalMs)
+    throw error
   }
 
   throw new Error(timeoutMessage)
@@ -286,29 +327,47 @@ export async function runProcessingJob(
     timeoutMessage = 'Обработка заняла больше времени, чем ожидалось.',
     onJobCreated,
     onJobUpdate,
+    signal,
   } = options
 
+  throwIfProcessingAborted(signal)
   reportProgress?.('Проверяю доступность обработки...')
   await ensureProcessingCapability(scope, jobType)
+  throwIfProcessingAborted(signal)
 
   reportProgress?.(uploadMessage)
-  const upload = await uploadProcessingFile(file)
+  const upload = await uploadProcessingFile(file, { signal })
 
   reportProgress?.(createMessage)
-  const job = await createProcessingJob({
-    uploadId: upload.id,
-    jobType,
-    parameters,
-  })
+  const job = await createProcessingJob(
+    {
+      uploadId: upload.id,
+      jobType,
+      parameters,
+    },
+    { signal },
+  )
   onJobCreated?.(job)
 
-  return awaitProcessingJob(job.id, {
-    reportProgress,
-    maxAttempts,
-    pollIntervalMs,
-    timeoutMessage,
-    onUpdate: onJobUpdate,
-  })
+  try {
+    return await awaitProcessingJob(job.id, {
+      reportProgress,
+      maxAttempts,
+      pollIntervalMs,
+      timeoutMessage,
+      onUpdate: onJobUpdate,
+      signal,
+      // runProcessingJob сам отменяет задачу в catch, чтобы DELETE ушёл
+      // ровно один раз и при timeout, и при отмене маршрута.
+      cancelOnAbort: false,
+    })
+  } catch (error) {
+    if (!(error instanceof ProcessingJobCancelledError)) {
+      void cancelProcessingJob(job.id).catch(() => undefined)
+    }
+
+    throw error
+  }
 }
 
 export async function requestProcessingJson<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -332,9 +391,15 @@ export async function requestProcessingBlob(path: string, init: RequestInit = {}
 }
 
 async function processingFetch(path: string, init: RequestInit): Promise<Response> {
+  throwIfProcessingAborted(init.signal)
+
   try {
     return await fetch(resolveProcessingApiUrl(path), init)
-  } catch {
+  } catch (error) {
+    if (isProcessingAbort(error, init.signal)) {
+      throw new ProcessingJobAbortedError()
+    }
+
     throw new Error(
       'Не удалось связаться с сервисом обработки. Проверь, что Jack запущен и доступен.',
     )
@@ -417,10 +482,39 @@ function normalizeRelativeProcessingApiBasePath(baseUrl: string): string {
   return trimmedBaseUrl.startsWith('/') ? trimmedBaseUrl : `/${trimmedBaseUrl}`
 }
 
-function sleep(timeoutMs: number): Promise<void> {
-  return new Promise((resolve) => {
-    window.setTimeout(resolve, timeoutMs)
+function sleep(timeoutMs: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const onAbort = () => {
+      window.clearTimeout(timeoutId)
+      signal?.removeEventListener('abort', onAbort)
+      reject(new ProcessingJobAbortedError())
+    }
+    const timeoutId = window.setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort)
+      resolve()
+    }, timeoutMs)
+
+    if (signal?.aborted) {
+      onAbort()
+      return
+    }
+
+    signal?.addEventListener('abort', onAbort, { once: true })
   })
+}
+
+function throwIfProcessingAborted(signal?: AbortSignal | null): void {
+  if (signal?.aborted) {
+    throw new ProcessingJobAbortedError()
+  }
+}
+
+function isProcessingAbort(error: unknown, signal?: AbortSignal | null): boolean {
+  return (
+    signal?.aborted === true ||
+    error instanceof ProcessingJobAbortedError ||
+    (error instanceof DOMException && error.name === 'AbortError')
+  )
 }
 
 function sanitizeProcessingParameters(

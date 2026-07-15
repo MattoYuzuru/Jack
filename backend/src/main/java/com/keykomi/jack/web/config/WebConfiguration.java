@@ -26,7 +26,7 @@ public class WebConfiguration {
 				// CORS нужен уже на foundation-этапе, а не только после production gateway.
 				registry.addMapping("/api/**")
 					.allowedOrigins(allowedOrigins)
-					.allowedMethods("GET", "POST", "OPTIONS")
+					.allowedMethods("GET", "POST", "DELETE", "OPTIONS")
 					.allowedHeaders("*");
 			}
 		};

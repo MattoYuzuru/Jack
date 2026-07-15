@@ -7,6 +7,7 @@ import {
 import {
   createViewerRuntime,
   releaseViewerEntry,
+  ViewerResolutionCancelledError,
   type ViewerResolvedEntry,
 } from '../application/viewer-runtime'
 
@@ -25,6 +26,7 @@ export function useViewerWorkspace() {
   const zoom = ref(1)
   const rotation = ref(0)
   let activeSelectionRequest = 0
+  let activeResolutionController: AbortController | null = null
   let capabilityMatrixRequest: Promise<void> | null = null
 
   async function ensureCapabilityMatrix(): Promise<void> {
@@ -54,6 +56,11 @@ export function useViewerWorkspace() {
     releaseViewerEntry(selection.value)
   }
 
+  function cancelActiveResolution(): void {
+    activeResolutionController?.abort()
+    activeResolutionController = null
+  }
+
   function resetViewportTransform() {
     zoom.value = 1
     rotation.value = 0
@@ -61,6 +68,9 @@ export function useViewerWorkspace() {
 
   async function selectFile(file: File) {
     const selectionRequest = ++activeSelectionRequest
+    cancelActiveResolution()
+    const resolutionController = new AbortController()
+    activeResolutionController = resolutionController
     releaseSelection()
     selection.value = null
     errorMessage.value = ''
@@ -79,6 +89,7 @@ export function useViewerWorkspace() {
     try {
       await ensureCapabilityMatrix()
       const resolvedEntry = await viewerRuntime.resolve(file, {
+        signal: resolutionController.signal,
         onProgress(message) {
           if (selectionRequest === activeSelectionRequest) {
             loadingMessage.value = message
@@ -97,18 +108,26 @@ export function useViewerWorkspace() {
         return
       }
 
+      if (error instanceof ViewerResolutionCancelledError) {
+        return
+      }
+
       errorMessage.value =
         error instanceof Error
           ? error.message
           : 'Не удалось подготовить просмотр для выбранного файла.'
     } finally {
       if (selectionRequest === activeSelectionRequest) {
+        if (activeResolutionController === resolutionController) {
+          activeResolutionController = null
+        }
         isLoading.value = false
       }
     }
   }
 
   function clearSelection() {
+    cancelActiveResolution()
     activeSelectionRequest += 1
     releaseSelection()
     selection.value = null
@@ -141,6 +160,7 @@ export function useViewerWorkspace() {
   )
 
   onBeforeUnmount(() => {
+    cancelActiveResolution()
     releaseSelection()
   })
 

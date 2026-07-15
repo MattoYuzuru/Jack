@@ -2,6 +2,8 @@ plugins {
 	java
 	id("org.springframework.boot") version "4.0.5"
 	id("io.spring.dependency-management") version "1.1.7"
+	id("org.owasp.dependencycheck") version "12.2.2"
+	id("org.cyclonedx.bom") version "3.2.4"
 }
 
 group = "com.keykomi"
@@ -28,6 +30,7 @@ dependencies {
 	implementation("org.apache.poi:poi-ooxml:5.4.1")
 	implementation("org.apache.poi:poi-scratchpad:5.4.1")
 	implementation("org.jsoup:jsoup:1.18.3")
+	implementation("com.vladsch.flexmark:flexmark-all:0.64.8")
 	implementation("org.apache.commons:commons-csv:1.14.1")
 	implementation("com.drewnoakes:metadata-extractor:2.19.0")
 	implementation("org.apache.commons:commons-imaging:1.0.0-alpha6")
@@ -56,4 +59,10 @@ tasks.withType<JavaExec>().configureEach {
 
 tasks.withType<Test> {
 	useJUnitPlatform()
+}
+
+dependencyCheck {
+	failBuildOnCVSS = 7.0F
+	formats = listOf("HTML", "JSON")
+	nvd.apiKey = System.getenv("NVD_API_KEY")
 }

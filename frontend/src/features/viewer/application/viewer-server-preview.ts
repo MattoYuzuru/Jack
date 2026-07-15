@@ -152,6 +152,7 @@ const VIEWER_RESOLVE_JOB_TYPE = 'VIEWER_RESOLVE'
 export async function resolveServerViewerPreview(
   file: File,
   reportProgress?: ViewerProgressReporter,
+  signal?: AbortSignal,
 ): Promise<ViewerServerResolvedPayload> {
   const completedJob = await runProcessingJob({
     scope: 'viewer',
@@ -161,6 +162,7 @@ export async function resolveServerViewerPreview(
     createMessage: 'Подготавливаю просмотр...',
     timeoutMessage:
       'Подготовка просмотра заняла слишком много времени. Попробуй файл меньшего размера или повтори позже.',
+    signal,
   })
 
   const manifestArtifact = completedJob.artifacts.find(
@@ -174,29 +176,31 @@ export async function resolveServerViewerPreview(
   reportProgress?.('Загружаю данные для просмотра...')
   const manifest = await requestProcessingJson<ViewerServerResolveManifest>(
     manifestArtifact.downloadPath,
+    { signal },
   )
 
   switch (manifest.kind) {
     case 'image':
-      return buildImagePayload(manifest)
+      return buildImagePayload(manifest, signal)
     case 'document':
-      return buildDocumentPayload(manifest)
+      return buildDocumentPayload(manifest, signal)
     case 'video':
-      return buildVideoPayload(manifest)
+      return buildVideoPayload(manifest, signal)
     case 'audio':
-      return buildAudioPayload(manifest)
+      return buildAudioPayload(manifest, signal)
   }
 }
 
 async function buildImagePayload(
   manifest: ViewerServerResolveManifest,
+  signal?: AbortSignal,
 ): Promise<ViewerServerResolvedPayload> {
   if (!manifest.imagePayload) {
     throw new Error('Не удалось получить данные изображения.')
   }
 
   const binaryArtifact = requireBinaryArtifact(manifest, 'image')
-  const previewBlob = await requestProcessingBlob(binaryArtifact.downloadPath)
+  const previewBlob = await requestProcessingBlob(binaryArtifact.downloadPath, { signal })
   const objectUrl = URL.createObjectURL(previewBlob)
 
   return {
@@ -213,6 +217,7 @@ async function buildImagePayload(
 
 async function buildDocumentPayload(
   manifest: ViewerServerResolveManifest,
+  signal?: AbortSignal,
 ): Promise<ViewerServerResolvedPayload> {
   if (!manifest.documentPayload) {
     throw new Error('Не удалось получить данные документа.')
@@ -222,7 +227,7 @@ async function buildDocumentPayload(
 
   if (manifest.documentPayload.layout.mode === 'pdf') {
     const binaryArtifact = requireBinaryArtifact(manifest, 'document')
-    const previewBlob = await requestProcessingBlob(binaryArtifact.downloadPath)
+    const previewBlob = await requestProcessingBlob(binaryArtifact.downloadPath, { signal })
     previewObjectUrl = URL.createObjectURL(previewBlob)
   }
 
@@ -246,13 +251,14 @@ async function buildDocumentPayload(
 
 async function buildVideoPayload(
   manifest: ViewerServerResolveManifest,
+  signal?: AbortSignal,
 ): Promise<ViewerServerResolvedPayload> {
   if (!manifest.videoPayload) {
     throw new Error('Не удалось получить данные видео.')
   }
 
   const binaryArtifact = requireBinaryArtifact(manifest, 'video')
-  const previewBlob = await requestProcessingBlob(binaryArtifact.downloadPath)
+  const previewBlob = await requestProcessingBlob(binaryArtifact.downloadPath, { signal })
   const objectUrl = URL.createObjectURL(previewBlob)
 
   return {
@@ -269,13 +275,14 @@ async function buildVideoPayload(
 
 async function buildAudioPayload(
   manifest: ViewerServerResolveManifest,
+  signal?: AbortSignal,
 ): Promise<ViewerServerResolvedPayload> {
   if (!manifest.audioPayload) {
     throw new Error('Не удалось получить данные аудио.')
   }
 
   const binaryArtifact = requireBinaryArtifact(manifest, 'audio')
-  const previewBlob = await requestProcessingBlob(binaryArtifact.downloadPath)
+  const previewBlob = await requestProcessingBlob(binaryArtifact.downloadPath, { signal })
   const objectUrl = URL.createObjectURL(previewBlob)
 
   return {

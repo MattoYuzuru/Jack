@@ -25,10 +25,10 @@ export function buildEditorLocalPreview(formatId: string, content: string): Edit
   switch (formatId) {
     case 'markdown':
       return {
-        mode: 'rich-html',
-        html: renderMarkdown(content),
+        mode: 'text',
+        html: escapeHtml(content),
         outline: extractMarkdownOutline(content),
-        note: 'Предпросмотр обновляется сразу по мере редактирования.',
+        note: 'До подключения единого серверного renderer показываем безопасный исходный текст.',
       }
     case 'html':
       return {
@@ -171,100 +171,6 @@ function buildHighlightRules(formatId: string): HighlightRule[] {
     default:
       return []
   }
-}
-
-function renderMarkdown(content: string): string {
-  const escaped = escapeHtml(content)
-  const codeBlocks: string[] = []
-  let prepared = escaped.replace(/```([\s\S]*?)```/g, (_, block: string) => {
-    const token = `@@CODEBLOCK_${codeBlocks.length}@@`
-    codeBlocks.push(`<pre><code>${block.trim()}</code></pre>`)
-    return token
-  })
-
-  prepared = prepared
-    .replace(/^######\s+(.*)$/gm, '<h6>$1</h6>')
-    .replace(/^#####\s+(.*)$/gm, '<h5>$1</h5>')
-    .replace(/^####\s+(.*)$/gm, '<h4>$1</h4>')
-    .replace(/^###\s+(.*)$/gm, '<h3>$1</h3>')
-    .replace(/^##\s+(.*)$/gm, '<h2>$1</h2>')
-    .replace(/^#\s+(.*)$/gm, '<h1>$1</h1>')
-    .replace(/^>\s?(.*)$/gm, '<blockquote>$1</blockquote>')
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/__(.+?)__/g, '<strong>$1</strong>')
-    .replace(/(^|[^*])\*(?!\s)(.+?)(?<!\s)\*/g, '$1<em>$2</em>')
-    .replace(/(^|[^_])_(?!\s)(.+?)(?<!\s)_/g, '$1<em>$2</em>')
-    .replace(/`([^`]+)`/g, '<code>$1</code>')
-    .replace(/!\[([^\]]*)]\(([^)]+)\)/g, '<span class="md-image">Image: $1</span>')
-    .replace(
-      /\[([^\]]+)]\(([^)]+)\)/g,
-      '<a href="$2" target="_blank" rel="noreferrer noopener">$1</a>',
-    )
-
-  prepared = prepared.replace(/(?:^|\n)(?:-\s.+(?:\n|$))+?/g, (block) => {
-    const lines = block.trim().split('\n')
-
-    // Поддерживаем markdown task list без отдельной библиотеки, чтобы чек-листы
-    // в preview вели себя как ожидает пользователь и не разваливали обычные списки.
-    const items = lines.map((line) => {
-      const taskMatch = line.match(/^-\s+\[( |x|X)\]\s+(.*)$/u)
-
-      if (!taskMatch) {
-        return {
-          html: `<li>${line.replace(/^-\s+/u, '')}</li>`,
-          task: false,
-        }
-      }
-
-      const [, state = ' ', label = ''] = taskMatch
-      const checked = state.toLowerCase() === 'x'
-
-      return {
-        html: `<li class="task-list__item"><label><input type="checkbox" disabled${
-          checked ? ' checked' : ''
-        } /><span>${label}</span></label></li>`,
-        task: true,
-      }
-    })
-
-    const listClass = items.some((item) => item.task) ? ' class="task-list"' : ''
-    return `<ul${listClass}>${items.map((item) => item.html).join('')}</ul>`
-  })
-
-  prepared = prepared.replace(
-    /(?:^|\n)(?:\d+\.\s.+(?:\n|$))+?/g,
-    (block) =>
-      `<ol>${block
-        .trim()
-        .split('\n')
-        .map((line) => `<li>${line.replace(/^\d+\.\s+/u, '')}</li>`)
-        .join('')}</ol>`,
-  )
-
-  const paragraphs = prepared
-    .split(/\n{2,}/)
-    .map((block) => block.trim())
-    .filter(Boolean)
-    .map((block) => {
-      if (
-        block.startsWith('<h') ||
-        block.startsWith('<ul>') ||
-        block.startsWith('<ol>') ||
-        block.startsWith('<blockquote>') ||
-        block.startsWith('<pre>')
-      ) {
-        return block
-      }
-
-      return `<p>${block.replace(/\n/g, '<br />')}</p>`
-    })
-
-  let html = paragraphs.join('')
-  for (const [index, codeBlock] of codeBlocks.entries()) {
-    html = html.replace(`@@CODEBLOCK_${index}@@`, codeBlock)
-  }
-
-  return html || '<p class="editor-preview-empty">Документ пока пуст.</p>'
 }
 
 function sanitizeHtmlPreview(content: string): string {

@@ -7,7 +7,10 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public class ProcessingProperties {
 
 	private Path storageRoot = Path.of(System.getProperty("java.io.tmpdir"), "jack-processing");
-	private long maxUploadSizeBytes = 268_435_456L;
+	private long maxUploadSizeBytes = 67_108_864L;
+	private int maxConcurrentJobs = 4;
+	private int jobQueueCapacity = 16;
+	private int publicRequestsPerMinute = 30;
 	private String ffmpegExecutable = "ffmpeg";
 	private String ffprobeExecutable = "ffprobe";
 	private long mediaPreviewTimeoutSeconds = 240L;
@@ -37,6 +40,30 @@ public class ProcessingProperties {
 
 	public void setMaxUploadSizeBytes(long maxUploadSizeBytes) {
 		this.maxUploadSizeBytes = maxUploadSizeBytes;
+	}
+
+	public int getMaxConcurrentJobs() {
+		return this.maxConcurrentJobs;
+	}
+
+	public void setMaxConcurrentJobs(int maxConcurrentJobs) {
+		this.maxConcurrentJobs = maxConcurrentJobs;
+	}
+
+	public int getJobQueueCapacity() {
+		return this.jobQueueCapacity;
+	}
+
+	public void setJobQueueCapacity(int jobQueueCapacity) {
+		this.jobQueueCapacity = jobQueueCapacity;
+	}
+
+	public int getPublicRequestsPerMinute() {
+		return this.publicRequestsPerMinute;
+	}
+
+	public void setPublicRequestsPerMinute(int publicRequestsPerMinute) {
+		this.publicRequestsPerMinute = publicRequestsPerMinute;
 	}
 
 	public Path uploadsDirectory() {
