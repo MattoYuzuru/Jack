@@ -33,6 +33,20 @@ jobs:
           java-version: "26"
           cache: gradle
 
+      - name: Derive dependency-check cache key
+        id: dependency-check-cache-key
+        shell: bash
+        run: echo "hour=$(date -u '+%Y%m%d%H')" >> "$GITHUB_OUTPUT"
+
+      - name: Restore dependency-check database
+        id: dependency-check-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.gradle/dependency-check-data
+          key: ${{ runner.os }}-dependency-check-v1-${{ steps.dependency-check-cache-key.outputs.hour }}
+          restore-keys: |
+            ${{ runner.os }}-dependency-check-v1-
+
       - name: Install frontend dependencies
         run: npm --prefix frontend ci
 
@@ -60,6 +74,13 @@ jobs:
           NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
         run: ./gradlew --no-daemon dependencyCheckAnalyze
         working-directory: backend
+
+      - name: Save dependency-check database
+        if: ${{ always() && steps.dependency-check-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.gradle/dependency-check-data
+          key: ${{ runner.os }}-dependency-check-v1-${{ steps.dependency-check-cache-key.outputs.hour }}
 
       - name: Generate frontend SBOM
         run: npm sbom --sbom-format cyclonedx --package-lock-only > frontend-sbom.cdx.json

@@ -82,4 +82,6 @@ dependencyCheck {
 	failBuildOnCVSS = 7.0F
 	formats = listOf("HTML", "JSON")
 	nvd.apiKey = System.getenv("NVD_API_KEY")
+	// Стабильный путь позволяет CI переносить локальную NVD-базу между ephemeral runner'ами.
+	data.directory = gradle.gradleUserHomeDir.resolve("dependency-check-data").absolutePath
 }
