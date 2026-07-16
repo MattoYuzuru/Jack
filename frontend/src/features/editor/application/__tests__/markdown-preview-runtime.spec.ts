@@ -13,9 +13,11 @@ describe('markdown preview runtime', () => {
         async () =>
           new Response(
             JSON.stringify({
-              profileVersion: 'jack-markdown-1.0.0',
+              profileVersion: 'jack-markdown-1.1.0',
               profile: 'obsidian-safe',
               sanitizedHtml: '<h1 id="safe">Safe</h1><p>Body</p>',
+              previewDocument:
+                '<!doctype html><meta http-equiv="Content-Security-Policy" content="default-src \'none\'"><body><h1 id="safe">Safe</h1><p>Body</p></body>',
               outline: [{ id: 'safe', label: 'Safe', depth: 1, kind: 'heading' }],
               unresolvedReferences: [],
               warnings: [],

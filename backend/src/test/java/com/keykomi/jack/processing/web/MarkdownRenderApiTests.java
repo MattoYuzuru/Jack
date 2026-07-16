@@ -47,9 +47,11 @@ class MarkdownRenderApiTests {
 				.content(this.objectMapper.writeValueAsBytes(Map.of("source", markdown, "profile", "commonmark-gfm")))
 		)
 			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.profileVersion").value("jack-markdown-1.0.0"))
+			.andExpect(jsonPath("$.profileVersion").value("jack-markdown-1.1.0"))
 			.andExpect(jsonPath("$.profile").value("commonmark-gfm"))
 			.andExpect(jsonPath("$.sanitizedHtml").value(org.hamcrest.Matchers.containsString("<table")))
+			.andExpect(jsonPath("$.previewDocument").value(org.hamcrest.Matchers.containsString("markdown-table-scroll")))
+			.andExpect(jsonPath("$.previewDocument").value(org.hamcrest.Matchers.containsString("scope=\"col\"")))
 			.andExpect(jsonPath("$.sanitizedHtml").value(org.hamcrest.Matchers.containsString("<del>done</del>")))
 			.andExpect(jsonPath("$.outline[0].label").value("Title"));
 	}

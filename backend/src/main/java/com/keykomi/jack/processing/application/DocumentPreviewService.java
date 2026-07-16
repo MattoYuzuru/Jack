@@ -348,7 +348,7 @@ public class DocumentPreviewService {
 				markdown,
 				null,
 				null,
-				wrapDocumentHtml(renderContract.sanitizedHtml()),
+				renderContract.previewDocument(),
 				outline,
 				null,
 				null,

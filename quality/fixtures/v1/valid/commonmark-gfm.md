@@ -4,8 +4,8 @@
 - nested
   1. ordered
 
-| name | value |
-| --- | ---: |
-| Jack | 1 |
+| name | status | value | long note |
+| :--- | :---: | ---: | --- |
+| Jack | ready | 1 | Long cell wraps inside the bounded preview instead of widening the workspace. |
 
 ~~strike~~ and <https://example.com>.
