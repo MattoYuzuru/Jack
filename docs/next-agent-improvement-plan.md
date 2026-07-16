@@ -1,6 +1,6 @@
 # Jack: подробный план улучшений и передачи следующему агенту
 
-Дата актуализации: 15 июля 2026 года.
+Дата актуализации: 16 июля 2026 года.
 
 ## 1. Назначение документа
 
@@ -21,16 +21,14 @@
 
 ### 2.1. Состояние ветки
 
-- Рабочая ветка: `feat/quality-hardening-program`.
+- Рабочая ветка: `feat/viewer-markdown-hardening`.
 - На момент передачи незакоммиченных файлов нет.
-- `main` совпадает с `origin/main` (`774bdf2`).
-- Ветка опубликована и содержит, в частности, следующие логические этапы:
-  - `839b1ab refactor(ui): introduce responsive workspace primitives`;
-  - `5104a07 fix(viewer): cancel stale preview jobs`;
-  - `4accd78 fix(editor): keep viewer handoff in memory`;
-  - `d7ffcaf fix(viewer): bound sqlite preview queries`;
-  - `36f3210 refactor(viewer): isolate preview presentation mapping`;
-  - `b01903e docs(roadmap): record viewer hardening progress`.
+- Ветка создана от `origin/main` (`184a324`) после merge предыдущего цикла и содержит следующие
+  логические этапы:
+  - `e588d7a test(e2e): stabilize visual snapshot environment`;
+  - `8f1b39c refactor(viewer): isolate preview session lifecycle`;
+  - `2c06f5f fix(e2e): isolate container build output`;
+  - `ccc1796 feat(markdown): render accessible GFM tables`.
 
 Не переписывать историю этой ветки и не смешивать следующие независимые этапы в один commit.
 
@@ -39,11 +37,18 @@
 - Пройдены начальные этапы hardening: безопаснее обработка файлов, контракт Markdown, основа CodeMirror и часть тестов.
 - Введены адаптивные UI-примитивы и локальные шрифты; стиль не заменён на generic SaaS-интерфейс.
 - Viewer отменяет устаревшие preview-запросы, хранит передачу editor → viewer в памяти, ограничивает SQLite preview и вынес преобразование preview-модели в отдельный модуль.
+- Viewer session lifecycle вынесен из Vue в тестируемый controller: revision, abort, освобождение
+  поздних и заменённых Blob URL и dispose теперь имеют единый контракт.
+- Markdown RenderContract `jack-markdown-1.1.0` отдаёт один безопасный `previewDocument` для Viewer
+  и Editor. GFM-таблицы получают семантические заголовки, доступную keyboard-scroll область,
+  выравнивание и адаптивное оформление.
+- Visual baseline закреплён на Playwright `1.61.1` в Linux-контейнере; CI сохраняет report,
+  screenshots и traces при падении, а локальная команда использует тот же образ.
 - Пройдены локально: frontend type-check, ESLint, Prettier, unit tests, build, `npm audit --omit=dev --audit-level=high`, Playwright; backend Gradle tests.
 
 ### 2.3. Состояние GitHub Actions, которое нельзя игнорировать
 
-Run [29449018690](https://github.com/MattoYuzuru/Jack/actions/runs/29449018690) завершился ошибкой в `Verify → Run accessibility and responsive E2E tests`.
+Run [29449018690](https://github.com/MattoYuzuru/Jack/actions/runs/29449018690) был исходным сигналом и завершился ошибкой в `Verify → Run accessibility and responsive E2E tests`.
 
 Факты из лога:
 
@@ -54,7 +59,11 @@ Run [29449018690](https://github.com/MattoYuzuru/Jack/actions/runs/29449018690) 
 - setup, lint, format, unit tests и Playwright installation в CI завершились успешно;
 - у ветки нет PR, поэтому GitHub-контекст PR и комментарии не создавались.
 
-Наиболее вероятная причина — осознанное изменение UI foundation в сочетании с отличающимися Linux/Chromium-метриками self-hosted шрифтов и baseline, созданным в другой среде. Это рабочая гипотеза, а не повод без проверки перезаписывать снимки.
+Локальное воспроизведение в официальном Linux/Playwright image подтвердило различие метрик и
+растеризации шрифта между macOS и Linux. Все пять desktop/mobile результатов были просмотрены
+вручную; отдельно исправлен реальный перенос точки в mobile hero. Baselines обновлены только в
+закреплённой Linux-среде. Следующее подтверждение должно прийти от CI после публикации ветки;
+при новом падении workflow уже сохранит диагностические artifacts.
 
 ## 3. Обязательные правила выполнения
 
@@ -642,13 +651,17 @@ draft settings → validate → submit revision N → queued/running → artifac
 
 ## 15. Конкретный первый рабочий цикл для следующего агента
 
-1. Прочитать `AGENTS.md`, этот документ и `docs/quality-hardening-roadmap.md`.
-2. Выполнить `git fetch origin --prune`, сверить `main` с `origin/main`, проверить `git status` и историю ветки. Не начинать новую работу поверх чужих незакоммиченных изменений.
-3. Закрыть Этап 0: скачать CI screenshot artifacts/logs, воспроизвести в Linux Playwright environment, визуально оценить все пять diff и сделать отдельный небольшой commit с корректной baseline strategy. Не использовать слепой update snapshots.
-4. Запустить полный frontend quality gate и backend tests. Зафиксировать фактические команды/результаты в roadmap, если обнаружится новая специфика окружения.
-5. Инвентаризировать текущий `ViewerWorkspaceView` и `EditorWorkspaceView`; на основе реальных imports составить issue-sized list переносов, не угадывая имена компонентов.
-6. Выполнить сначала один безопасный refactor Viewer session lifecycle, покрыть race/abort/object URL тестами и закоммитить.
-7. Реализовать GFM tables как ближайший пользовательский результат: parser contract → semantic renderer → CSS в существующих tokens → fixture/E2E/visual tests.
+Статус цикла на 16 июля 2026 года: пункты 1–7 выполнены. Инвентаризация и следующие границы
+модулей записаны в [workspace-module-inventory.md](workspace-module-inventory.md). Перед новым
+feature-блоком остаётся подтвердить текущую ветку в GitHub Actions.
+
+1. [x] Прочитать `AGENTS.md`, этот документ и `docs/quality-hardening-roadmap.md`.
+2. [x] Выполнить `git fetch origin --prune`, сверить `main` с `origin/main`, проверить `git status` и историю ветки. Не начинать новую работу поверх чужих незакоммиченных изменений.
+3. [x] Закрыть Этап 0: воспроизвести screenshots в Linux Playwright environment, визуально оценить все пять diff и закрепить baseline strategy. Не использовать слепой update snapshots.
+4. [x] Запустить полный frontend quality gate и backend tests. Зафиксировать фактические команды/результаты в roadmap, если обнаружится новая специфика окружения.
+5. [x] Инвентаризировать текущий `ViewerWorkspaceView` и `EditorWorkspaceView`; на основе реальных imports составить issue-sized list переносов, не угадывая имена компонентов.
+6. [x] Выполнить один безопасный refactor Viewer session lifecycle, покрыть race/abort/object URL тестами и закоммитить.
+7. [x] Реализовать GFM tables: parser contract → semantic renderer → CSS в существующих tokens → fixture/E2E/visual tests.
 8. Только затем переходить к backend paging/ownership. Не выполнять тяжёлые CSV/XLSX/worker changes одновременно с UI split.
 
 ## 16. Финальный Definition of Done программы
