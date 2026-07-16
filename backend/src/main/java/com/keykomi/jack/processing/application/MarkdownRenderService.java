@@ -37,7 +37,7 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 public class MarkdownRenderService {
 
-	public static final String PROFILE_VERSION = "jack-markdown-1.0.0";
+	public static final String PROFILE_VERSION = "jack-markdown-1.1.0";
 	private static final int MAX_SOURCE_CHARACTERS = 1_000_000;
 	private static final Pattern FRONTMATTER_PATTERN = Pattern.compile("\\A---\\R([\\s\\S]*?)\\R---(?:\\R|\\z)");
 	private static final Pattern OBSIDIAN_REFERENCE_PATTERN = Pattern.compile("(!?)\\[\\[([^]#|]+)(?:#([^]|]+))?(?:\\|([^]]+))?]]");
@@ -110,6 +110,7 @@ public class MarkdownRenderService {
 			PROFILE_VERSION,
 			profile,
 			sanitized,
+			buildPreviewDocument(sanitized),
 			outline,
 			List.copyOf(unresolvedReferences),
 			List.copyOf(new LinkedHashSet<>(warnings)),
@@ -186,6 +187,13 @@ public class MarkdownRenderService {
 
 	private String sanitize(String rendered, List<String> warnings) {
 		var dirty = Jsoup.parseBodyFragment(rendered);
+		for (Element cell : dirty.select("th[align],td[align]")) {
+			var alignment = cell.attr("align").trim().toLowerCase(Locale.ROOT);
+			if (Set.of("left", "center", "right").contains(alignment)) {
+				cell.addClass("markdown-align-" + alignment);
+			}
+			cell.removeAttr("align");
+		}
 		var images = dirty.select("img");
 		for (Element image : images) {
 			var label = image.attr("alt").isBlank() ? "без подписи" : image.attr("alt");
@@ -196,8 +204,70 @@ public class MarkdownRenderService {
 		}
 
 		var clean = this.sanitizer.clean(dirty);
+		for (Element table : clean.select("table")) {
+			table.addClass("markdown-table");
+			for (Element heading : table.select("thead th")) {
+				heading.attr("scope", "col");
+			}
+
+			// Wrapper добавляется только после sanitizer и содержит константные атрибуты:
+			// он делает широкую GFM-таблицу доступной с клавиатуры, не доверяя source HTML.
+			var scrollRegion = new Element("div")
+				.addClass("markdown-table-scroll")
+				.attr("role", "region")
+				.attr("aria-label", "Таблица Markdown")
+				.attr("tabindex", "0");
+			table.replaceWith(scrollRegion);
+			scrollRegion.appendChild(table);
+		}
 		clean.outputSettings(new Document.OutputSettings().prettyPrint(false));
 		return clean.body().html();
+	}
+
+	private String buildPreviewDocument(String sanitizedHtml) {
+		return """
+			<!doctype html>
+			<html lang="ru">
+			  <head>
+			    <meta charset="utf-8">
+			    <meta name="viewport" content="width=device-width, initial-scale=1">
+			    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'">
+			    <meta name="referrer" content="no-referrer">
+			    <style>
+			      :root{color-scheme:light;--text-strong:#102426;--text-main:#1f4140;--text-soft:#556967;--surface:#fffaf1;--surface-raised:#fffdf9;--surface-muted:#f4ece1;--accent:#1d5c55;--accent-warm:#f38a55;--line:rgba(23,52,54,.16);}
+			      *{box-sizing:border-box;}
+			      html,body{margin:0;padding:0;background:var(--surface);color:var(--text-main);font-family:Manrope,"Segoe UI",system-ui,sans-serif;line-height:1.65;}
+			      body{padding:28px;overflow-wrap:anywhere;}
+			      h1,h2,h3,h4,h5,h6{margin:1.1em 0 .45em;color:var(--text-strong);line-height:1.18;}
+			      p{margin:0 0 1em;}
+			      a{color:var(--accent);text-decoration-thickness:.12em;text-underline-offset:.16em;}
+			      ul,ol{padding-left:1.4rem;}
+			      blockquote{margin:1em 0;padding-left:1rem;border-left:3px solid rgba(23,52,54,.18);color:#355457;}
+			      code,pre{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;}
+			      pre{overflow:auto;white-space:pre;background:var(--surface-muted);padding:16px;border-radius:14px;}
+			      code{overflow-wrap:normal;}
+			      .markdown-table-scroll{max-width:100%;margin:1.2em 0;overflow-x:auto;border:1px solid var(--line);border-radius:16px;background:var(--surface-raised);box-shadow:0 12px 28px rgba(86,94,93,.12);scrollbar-gutter:stable;}
+			      .markdown-table-scroll:focus-visible{outline:3px solid rgba(29,92,85,.42);outline-offset:3px;}
+			      .markdown-table{width:max-content;min-width:100%;margin:0;border-collapse:separate;border-spacing:0;background:transparent;}
+			      .markdown-table th,.markdown-table td{max-width:34rem;padding:11px 14px;border:0;border-right:1px solid var(--line);border-bottom:1px solid var(--line);text-align:left;vertical-align:top;white-space:normal;overflow-wrap:anywhere;}
+			      .markdown-table th:last-child,.markdown-table td:last-child{border-right:0;}
+			      .markdown-table tbody tr:last-child td{border-bottom:0;}
+			      .markdown-table th{background:rgba(29,92,85,.09);color:var(--text-strong);font-weight:800;}
+			      .markdown-table tbody tr:nth-child(even){background:rgba(229,221,206,.32);}
+			      .markdown-table tbody tr:hover{background:rgba(255,207,143,.2);}
+			      .markdown-table .markdown-align-center{text-align:center;}
+			      .markdown-table .markdown-align-right{text-align:right;}
+			      .markdown-table .markdown-align-left{text-align:left;}
+			      .task-list-item input{margin-right:.5rem;accent-color:var(--accent);}
+			      .markdown-empty{color:var(--text-soft);font-style:italic;}
+			      @media(max-width:640px){body{padding:16px;}.markdown-table th,.markdown-table td{max-width:18rem;padding:9px 11px;}.markdown-table-scroll{border-radius:13px;}}
+			    </style>
+			  </head>
+			  <body>
+			""" + sanitizedHtml + """
+			  </body>
+			</html>
+			""";
 	}
 
 	private List<MarkdownRenderContract.OutlineItem> extractOutline(String html) {
@@ -283,6 +353,8 @@ public class MarkdownRenderService {
 			.addAttributes("input", "type", "checked", "disabled")
 			.addAttributes("li", "class")
 			.addAttributes("table", "class")
+			.addAttributes("th", "class")
+			.addAttributes("td", "class")
 			.addEnforcedAttribute("a", "rel", "noreferrer noopener")
 			.preserveRelativeLinks(false);
 	}

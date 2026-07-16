@@ -12,6 +12,7 @@ export interface MarkdownRenderContract {
   profileVersion: string
   profile: 'commonmark-gfm' | 'obsidian-safe'
   sanitizedHtml: string
+  previewDocument: string
   outline: MarkdownOutlineItem[]
   unresolvedReferences: Array<{ kind: string; target: string; label: string }>
   warnings: string[]
@@ -50,20 +51,8 @@ export async function renderMarkdownPreview(
 
   return {
     mode: 'sandbox',
-    html: buildSandboxDocument(contract.sanitizedHtml),
+    html: contract.previewDocument,
     outline: contract.outline,
     note: notes.join(' · '),
   }
-}
-
-function buildSandboxDocument(sanitizedHtml: string): string {
-  return `<!doctype html>
-<html lang="ru">
-  <head>
-    <meta charset="utf-8">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'">
-    <meta name="referrer" content="no-referrer">
-  </head>
-  <body>${sanitizedHtml}</body>
-</html>`
 }

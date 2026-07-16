@@ -137,6 +137,10 @@ class DocumentPreviewApiTests {
 			## Checklist
 			- Verify billing
 			- Publish changelog
+
+			| Item | Owner | Progress |
+			| :--- | :---: | ---: |
+			| Release | Jack | 100% |
 			""".getBytes(StandardCharsets.UTF_8)
 		);
 		var completedJob = awaitJobCompletion(createDocumentJob(uploadId));
@@ -149,6 +153,8 @@ class DocumentPreviewApiTests {
 
 		assertThat(manifest.path("layout").path("mode").asText()).isEqualTo("html");
 		assertThat(manifest.path("layout").path("srcDoc").asText()).contains("Launch plan");
+		assertThat(manifest.path("layout").path("srcDoc").asText())
+			.contains("markdown-table-scroll", "scope=\"col\"", "markdown-align-right");
 		assertThat(manifest.path("layout").path("outline").get(0).path("label").asText()).isEqualTo("Launch plan");
 		assertThat(manifest.path("layout").path("editableDraft").path("editorFormatId").asText()).isEqualTo("markdown");
 	}

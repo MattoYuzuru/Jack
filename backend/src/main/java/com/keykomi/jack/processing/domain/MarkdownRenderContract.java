@@ -7,6 +7,7 @@ public record MarkdownRenderContract(
 	String profileVersion,
 	String profile,
 	String sanitizedHtml,
+	String previewDocument,
 	List<OutlineItem> outline,
 	List<UnresolvedReference> unresolvedReferences,
 	List<String> warnings,
