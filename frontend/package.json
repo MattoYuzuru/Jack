@@ -12,6 +12,7 @@
     "test:e2e:linux": "bash ./scripts/test-e2e-linux.sh",
     "test:e2e:update": "playwright test --update-snapshots",
     "build-only": "vite build",
+    "budget:check": "node ./scripts/check-performance-budgets.mjs",
     "type-check": "vue-tsc --build",
     "lint": "run-s lint:*",
     "lint:check": "run-s lint:oxlint:check lint:eslint:check",
