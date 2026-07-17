@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import type { ViewerResolvedDocument } from '../../application/viewer-runtime'
+import type { ViewerDocumentTablePreview } from '../../application/viewer-document'
+import { requestProcessingJson } from '../../../processing/application/processing-client'
 
 const props = defineProps<{
   selection: ViewerResolvedDocument
@@ -30,14 +32,95 @@ const activeDatabaseTable = computed(() => {
     null
   )
 })
+
+const TABLE_DOM_ROW_LIMIT = 200
+const tableRows = ref<string[][]>([])
+const tableRowOffset = ref(0)
+const tableNextCursor = ref<string | null>(null)
+const tableLoading = ref(false)
+const tableError = ref('')
+const tableQuery = ref('')
+
+watch(
+  () => (props.selection.layout.mode === 'table' ? props.selection.layout.table : null),
+  (table) => {
+    tableRows.value = table?.rows.map((row) => [...row]) ?? []
+    tableRowOffset.value = table?.rowOffset ?? 0
+    tableNextCursor.value = table?.nextCursor ?? null
+    tableError.value = ''
+    tableQuery.value = ''
+  },
+  { immediate: true },
+)
+
+const filteredTableRows = computed(() => {
+  const query = tableQuery.value.trim().toLocaleLowerCase()
+  if (!query) return tableRows.value
+  return tableRows.value.filter((row) =>
+    row.some((cell) => cell.toLocaleLowerCase().includes(query)),
+  )
+})
+
+async function loadNextTableRange() {
+  if (!props.selection.sourceUploadId || !tableNextCursor.value || tableLoading.value) return
+  tableLoading.value = true
+  tableError.value = ''
+  try {
+    const response = await requestProcessingJson<{
+      table: ViewerDocumentTablePreview
+      warnings: string[]
+      exactRowCount: number | null
+    }>(
+      `/api/uploads/${props.selection.sourceUploadId}/table-range?cursor=${encodeURIComponent(tableNextCursor.value)}&limit=50`,
+    )
+    const combinedRows = [...tableRows.value, ...response.table.rows]
+    const overflow = Math.max(0, combinedRows.length - TABLE_DOM_ROW_LIMIT)
+    tableRows.value = combinedRows.slice(overflow)
+    tableRowOffset.value += overflow
+    tableNextCursor.value = response.table.nextCursor ?? null
+  } catch (error) {
+    tableError.value =
+      error instanceof Error ? error.message : 'Не удалось загрузить следующую часть таблицы.'
+  } finally {
+    tableLoading.value = false
+  }
+}
+
+async function copyVisibleTableSlice() {
+  if (props.selection.layout.mode !== 'table') return
+  const rows = [props.selection.layout.table.columns, ...filteredTableRows.value]
+  try {
+    await navigator.clipboard.writeText(rows.map((row) => row.join('\t')).join('\n'))
+    tableError.value = ''
+  } catch {
+    tableError.value = 'Браузер не разрешил скопировать текущий bounded slice.'
+  }
+}
 </script>
 
 <template>
   <div class="viewer-document-frame" data-testid="viewer-data-renderer">
     <div v-if="selection.layout.mode === 'table'" class="document-table">
       <div class="document-table__summary">
-        <strong>{{ selection.layout.table.totalRows }} строк</strong>
+        <strong>
+          {{
+            selection.layout.table.truncated
+              ? 'Строк: больше preview window'
+              : `${selection.layout.table.totalRows} строк`
+          }}
+        </strong>
         <span>{{ selection.layout.table.totalColumns }} колонок</span>
+      </div>
+      <div class="document-table__tools">
+        <label>
+          <span class="sr-only">Найти в загруженном диапазоне</span>
+          <input v-model="tableQuery" type="search" placeholder="Найти в диапазоне" />
+        </label>
+        <button type="button" @click="copyVisibleTableSlice">Копировать slice</button>
+        <span v-if="selection.layout.table.encoding">
+          {{ selection.layout.table.encoding }} ·
+          {{ selection.layout.table.hasHeader ? 'header' : 'без header' }}
+        </span>
       </div>
       <div
         class="document-table__scroll"
@@ -55,9 +138,9 @@ const activeDatabaseTable = computed(() => {
             </tr>
           </thead>
           <tbody>
-            <tr v-for="(row, rowIndex) in selection.layout.table.rows" :key="rowIndex">
+            <tr v-for="(row, rowIndex) in filteredTableRows" :key="tableRowOffset + rowIndex">
               <th scope="row" class="document-table__row-number">
-                {{ rowIndex + 1 }}
+                {{ tableRowOffset + rowIndex + 1 }}
               </th>
               <td v-for="(cell, columnIndex) in row" :key="`${rowIndex}-${columnIndex}`">
                 {{ cell || '—' }}
@@ -66,6 +149,16 @@ const activeDatabaseTable = computed(() => {
           </tbody>
         </table>
       </div>
+      <button
+        v-if="tableNextCursor"
+        class="document-table__load-more"
+        type="button"
+        :disabled="tableLoading"
+        @click="loadNextTableRange"
+      >
+        {{ tableLoading ? 'Загружаю…' : 'Следующие 50 строк' }}
+      </button>
+      <p v-if="tableError" class="document-table__error" role="status">{{ tableError }}</p>
     </div>
 
     <div v-else-if="selection.layout.mode === 'workbook'" class="document-workbook">
@@ -226,6 +319,40 @@ const activeDatabaseTable = computed(() => {
   justify-content: space-between;
   gap: 12px;
   color: var(--text-soft);
+}
+.document-table__tools {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  color: var(--text-soft);
+}
+.document-table__tools input,
+.document-table__tools button,
+.document-table__load-more {
+  min-height: 42px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 250, 242, 0.9);
+  box-shadow: var(--shadow-pressed);
+  color: var(--text-main);
+}
+.document-table__tools input {
+  min-width: min(260px, 72vw);
+  padding: 8px 14px;
+}
+.document-table__tools button,
+.document-table__load-more {
+  padding: 8px 16px;
+  font-weight: 750;
+  cursor: pointer;
+}
+.document-table__load-more {
+  justify-self: start;
+}
+.document-table__error {
+  margin: 0;
+  color: var(--accent-warm-strong);
 }
 .document-table__scroll {
   max-width: 100%;

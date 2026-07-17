@@ -94,18 +94,21 @@ public class DocumentPreviewService {
 	private final ObjectMapper objectMapper;
 	private final MarkdownRenderService markdownRenderService;
 	private final ProcessingResourceBudgetService resourceBudgets;
+	private final DelimitedTablePreviewService delimitedTablePreviewService;
 	private final Yaml yaml;
 
 	public DocumentPreviewService(
 		ArtifactStorageService artifactStorageService,
 		ObjectMapper objectMapper,
 		MarkdownRenderService markdownRenderService,
-		ProcessingResourceBudgetService resourceBudgets
+		ProcessingResourceBudgetService resourceBudgets,
+		DelimitedTablePreviewService delimitedTablePreviewService
 	) {
 		this.artifactStorageService = artifactStorageService;
 		this.objectMapper = objectMapper;
 		this.markdownRenderService = markdownRenderService;
 		this.resourceBudgets = resourceBudgets;
+		this.delimitedTablePreviewService = delimitedTablePreviewService;
 		this.yaml = new Yaml();
 	}
 
@@ -255,22 +258,23 @@ public class DocumentPreviewService {
 		String label,
 		String previewLabel
 	) {
-		var text = readDocumentText(upload.storagePath());
-		var table = parseDelimitedTextDocument(text, preferredDelimiter);
-		var warnings = new ArrayList<String>();
-
-		if (table.totalRows() > table.rows().size()) {
-			warnings.add(
-				"%s показывает первые %s строк. Полное содержимое по-прежнему доступно для поиска и проверки."
-					.formatted(label, CSV_PREVIEW_ROW_LIMIT)
-			);
+		var window = this.delimitedTablePreviewService.preview(
+			upload,
+			null,
+			DelimitedTablePreviewService.HeaderMode.AUTO
+		);
+		var table = window.table();
+		var text = renderTableRowsForSearch(table);
+		var warnings = new ArrayList<>(window.warnings());
+		if (table.truncated()) {
+			warnings.add("%s показывает bounded window; остальные строки загружаются через stable cursor API.".formatted(label));
 		}
 
 		return new DocumentPreviewPayload(
 			List.of(
 				new DocumentPreviewPayload.DocumentFact("Тип документа", label),
 				new DocumentPreviewPayload.DocumentFact("Колонки", String.valueOf(table.totalColumns())),
-				new DocumentPreviewPayload.DocumentFact("Строки", String.valueOf(table.totalRows())),
+				new DocumentPreviewPayload.DocumentFact("Строки", window.exactRowCount() == null ? "неизвестно" : String.valueOf(window.exactRowCount())),
 				new DocumentPreviewPayload.DocumentFact("Delimiter", describeDelimiter(table.delimiter()))
 			),
 			text,
@@ -288,7 +292,7 @@ public class DocumentPreviewService {
 				null,
 				null,
 				null,
-				buildEditableDraft(upload, text, "txt", null)
+				null
 			),
 			previewLabel
 		);

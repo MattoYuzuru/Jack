@@ -44,6 +44,7 @@ export interface ViewerResolvedDocument {
   warnings: string[]
   layout: ViewerDocumentLayout
   previewLabel: string
+  sourceUploadId?: string | null
 }
 
 export interface ViewerResolvedVideo {
@@ -295,16 +296,19 @@ function buildServerSelection(
         previewLabel: payload.previewLabel,
       }
     case 'document':
-      return buildDocumentSelection(
-        {
-          summary: payload.summary,
-          searchableText: payload.searchableText,
-          warnings: payload.warnings,
-          layout: payload.layout,
-          previewLabel: payload.previewLabel,
-        },
-        context,
-      )
+      return {
+        ...buildDocumentSelection(
+          {
+            summary: payload.summary,
+            searchableText: payload.searchableText,
+            warnings: payload.warnings,
+            layout: payload.layout,
+            previewLabel: payload.previewLabel,
+          },
+          context,
+        ),
+        sourceUploadId: payload.sourceUploadId ?? null,
+      }
     case 'video':
       return buildVideoSelection(
         {
