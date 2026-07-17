@@ -72,6 +72,7 @@ public class DocumentPreviewService {
 	private static final int CSV_PREVIEW_ROW_LIMIT = 24;
 	private static final int WORKBOOK_PREVIEW_COLUMN_LIMIT = 12;
 	private static final int WORKBOOK_PREVIEW_ROW_LIMIT = 28;
+	private static final int WORKBOOK_SHEET_LIMIT = 50;
 	private static final int SQLITE_SAMPLE_ROW_LIMIT = 24;
 	private static final int SQLITE_SAMPLE_COLUMN_LIMIT = 12;
 	private static final int SQLITE_MAX_PREVIEW_TABLES = 12;
@@ -95,6 +96,7 @@ public class DocumentPreviewService {
 	private final MarkdownRenderService markdownRenderService;
 	private final ProcessingResourceBudgetService resourceBudgets;
 	private final DelimitedTablePreviewService delimitedTablePreviewService;
+	private final WorkbookRangeService workbookRangeService;
 	private final Yaml yaml;
 
 	public DocumentPreviewService(
@@ -102,13 +104,15 @@ public class DocumentPreviewService {
 		ObjectMapper objectMapper,
 		MarkdownRenderService markdownRenderService,
 		ProcessingResourceBudgetService resourceBudgets,
-		DelimitedTablePreviewService delimitedTablePreviewService
+		DelimitedTablePreviewService delimitedTablePreviewService,
+		WorkbookRangeService workbookRangeService
 	) {
 		this.artifactStorageService = artifactStorageService;
 		this.objectMapper = objectMapper;
 		this.markdownRenderService = markdownRenderService;
 		this.resourceBudgets = resourceBudgets;
 		this.delimitedTablePreviewService = delimitedTablePreviewService;
+		this.workbookRangeService = workbookRangeService;
 		this.yaml = new Yaml();
 	}
 
@@ -159,7 +163,8 @@ public class DocumentPreviewService {
 			case "docx" -> buildDocxPreview(upload);
 			case "odt" -> buildOdtPreview(upload);
 			case "xls" -> buildWorkbookPreview(upload, "XLS", "XLS legacy workbook adapter", true);
-			case "xlsx" -> buildWorkbookPreview(upload, "XLSX", "XLSX workbook adapter", false);
+			case "xlsx", "xlsm" -> buildWorkbookPreview(upload, "XLSX", "XLSX workbook adapter", false);
+			case "ods" -> buildOdsWorkbookPreview(upload);
 			case "pptx" -> buildPptxPreview(upload);
 			case "epub" -> buildEpubPreview(upload);
 			case "json" -> buildJsonPreview(upload);
@@ -752,10 +757,17 @@ public class DocumentPreviewService {
 			Workbook workbook = WorkbookFactory.create(inputStream)) {
 			var formatter = new DataFormatter(Locale.ROOT);
 			var sheets = new ArrayList<DocumentPreviewPayload.DocumentSheetPreview>();
+			if (workbook.getNumberOfSheets() > WORKBOOK_SHEET_LIMIT) {
+				throw new com.keykomi.jack.processing.domain.ProcessingException(
+					HttpStatus.PAYLOAD_TOO_LARGE,
+					"RESOURCE_LIMIT_EXCEEDED",
+					"Workbook превышает допустимое число sheets."
+				);
+			}
 
 			for (int sheetIndex = 0; sheetIndex < workbook.getNumberOfSheets(); sheetIndex += 1) {
 				var sheet = workbook.getSheetAt(sheetIndex);
-				var table = buildWorkbookTable(formatter, sheet);
+				var table = buildWorkbookTable(formatter, sheet, sheetIndex == 0);
 				if (table.totalColumns() == 0 && table.totalRows() == 0 && table.rows().isEmpty()) {
 					continue;
 				}
@@ -810,6 +822,59 @@ public class DocumentPreviewService {
 		catch (IOException exception) {
 			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Не удалось разобрать %s workbook.".formatted(label), exception);
 		}
+	}
+
+	private DocumentPreviewPayload buildOdsWorkbookPreview(StoredUpload upload) {
+		var descriptors = this.workbookRangeService.listOdsSheets(upload);
+		if (descriptors.isEmpty()) {
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "ODS document не содержит sheets.");
+		}
+		var sheets = new ArrayList<DocumentPreviewPayload.DocumentSheetPreview>();
+		for (var descriptor : descriptors) {
+			if (descriptor.index() == 0) {
+				var range = this.workbookRangeService.readRange(
+					upload,
+					0,
+					0,
+					0,
+					Math.max(1, Math.min(WORKBOOK_PREVIEW_ROW_LIMIT + 1, descriptor.rowCount())),
+					WORKBOOK_PREVIEW_COLUMN_LIMIT
+				);
+				var values = range.rows().stream()
+					.map(row -> row.stream().map(cell -> cell.formattedValue() == null ? "" : cell.formattedValue()).toList())
+					.toList();
+				var headers = values.isEmpty() ? List.<String>of() : java.util.stream.IntStream.range(0, values.getFirst().size())
+					.mapToObj(index -> values.getFirst().get(index).isBlank() ? toSpreadsheetColumnLabel(index) : values.getFirst().get(index))
+					.toList();
+				var rows = values.size() <= 1 ? List.<List<String>>of() : values.subList(1, values.size());
+				sheets.add(new DocumentPreviewPayload.DocumentSheetPreview(
+					"ods-sheet-1",
+					descriptor.name(),
+					new DocumentPreviewPayload.DocumentTablePreview(headers, rows, Math.max(0, descriptor.rowCount() - 1), headers.size(), "")
+				));
+			}
+			else {
+				sheets.add(new DocumentPreviewPayload.DocumentSheetPreview(
+					"ods-sheet-" + (descriptor.index() + 1),
+					descriptor.name(),
+					new DocumentPreviewPayload.DocumentTablePreview(List.of(), List.of(), Math.max(0, descriptor.rowCount() - 1), 0, "")
+				));
+			}
+		}
+		var searchableText = renderTableRowsForSearch(sheets.getFirst().table());
+		return new DocumentPreviewPayload(
+			List.of(
+				new DocumentPreviewPayload.DocumentFact("Тип документа", "ODS"),
+				new DocumentPreviewPayload.DocumentFact("Sheets", String.valueOf(sheets.size())),
+				new DocumentPreviewPayload.DocumentFact("Режим", "Lazy semantic ranges")
+			),
+			searchableText,
+			List.of("ODS preview материализует только bounded range активного sheet; formulas и external links не исполняются."),
+			new DocumentPreviewPayload.DocumentLayoutPayload(
+				"workbook", null, searchableText, null, null, null, null, sheets, 0, null, null, null, null
+			),
+			"ODS workbook adapter"
+		);
 	}
 
 	private DocumentPreviewPayload buildPptxPreview(StoredUpload upload) {
@@ -1237,13 +1302,31 @@ public class DocumentPreviewService {
 			.toList();
 	}
 
-	private DocumentPreviewPayload.DocumentTablePreview buildWorkbookTable(DataFormatter formatter, Sheet sheet) {
+	private DocumentPreviewPayload.DocumentTablePreview buildWorkbookTable(
+		DataFormatter formatter,
+		Sheet sheet,
+		boolean materializePreview
+	) {
 		var normalizedRows = new ArrayList<List<String>>();
 		int maxColumns = 0;
+		var lastRowIndex = Math.max(0, sheet.getLastRowNum());
+		this.resourceBudgets.verifyTableShape(lastRowIndex + 1L, 1);
+		if (!materializePreview) {
+			var firstRow = sheet.getRow(0);
+			var columnCount = firstRow == null ? 0 : Math.min(Math.max(firstRow.getLastCellNum(), 0), WORKBOOK_PREVIEW_COLUMN_LIMIT);
+			var columns = java.util.stream.IntStream.range(0, columnCount).mapToObj(this::toSpreadsheetColumnLabel).toList();
+			return new DocumentPreviewPayload.DocumentTablePreview(columns, List.of(), lastRowIndex, columnCount, "");
+		}
 
-		for (Row row : sheet) {
+		for (int rowIndex = 0; rowIndex <= Math.min(lastRowIndex, WORKBOOK_PREVIEW_ROW_LIMIT); rowIndex += 1) {
+			var row = sheet.getRow(rowIndex);
+			if (row == null) {
+				continue;
+			}
 			List<String> values = new ArrayList<>();
-			for (int cellIndex = 0; cellIndex < Math.max(row.getLastCellNum(), 0); cellIndex += 1) {
+			var rowColumns = Math.max(row.getLastCellNum(), 0);
+			this.resourceBudgets.verifyTableShape(1, rowColumns);
+			for (int cellIndex = 0; cellIndex < Math.min(rowColumns, WORKBOOK_PREVIEW_COLUMN_LIMIT); cellIndex += 1) {
 				Cell cell = row.getCell(cellIndex, Row.MissingCellPolicy.RETURN_BLANK_AS_NULL);
 				values.add(cell == null ? "" : normalizeTableCell(formatter.formatCellValue(cell)));
 			}
@@ -1277,7 +1360,7 @@ public class DocumentPreviewService {
 		return new DocumentPreviewPayload.DocumentTablePreview(
 			columns.subList(0, previewColumnCount),
 			previewRows,
-			Math.max(normalizedRows.size() - 1, 0),
+			Math.max(lastRowIndex, 0),
 			maxColumns,
 			""
 		);

@@ -103,6 +103,38 @@ describe('Viewer renderers', () => {
     expect(wrapper.text()).toContain('нет доступных листов')
   })
 
+  it('ограничивает table DOM текущим virtual window', () => {
+    const selection: ViewerResolvedDocument = {
+      kind: 'document',
+      file,
+      extension: 'csv',
+      format,
+      summary: [],
+      searchableText: '',
+      warnings: [],
+      layout: {
+        mode: 'table',
+        text: '',
+        table: {
+          columns: ['Value'],
+          rows: Array.from({ length: 250 }, (_, index) => [`row-${index + 1}`]),
+          totalRows: 250,
+          totalColumns: 1,
+          delimiter: ',',
+          rowOffset: 0,
+        },
+        editableDraft: null,
+      },
+      previewLabel: 'Bounded preview',
+    }
+    const wrapper = mount(ViewerDataRenderer, {
+      props: { selection, sheetIndex: 0, databaseTableIndex: 0 },
+    })
+
+    expect(wrapper.findAll('tbody tr')).toHaveLength(200)
+    expect(wrapper.get('tbody th').text()).toBe('51')
+  })
+
   it('монтирует bounded video controls и отдаёт media element', () => {
     const selection: ViewerResolvedVideo = {
       kind: 'video',

@@ -2,6 +2,8 @@ package com.keykomi.jack.processing.web;
 
 import com.keykomi.jack.processing.application.UploadStorageService;
 import com.keykomi.jack.processing.application.DelimitedTablePreviewService;
+import com.keykomi.jack.processing.application.WorkbookRangeService;
+import com.keykomi.jack.processing.application.SqliteRangeService;
 import com.keykomi.jack.processing.domain.ProcessingException;
 import com.keykomi.jack.processing.domain.StoredUpload;
 import java.time.Instant;
@@ -23,13 +25,55 @@ public class UploadController {
 
 	private final UploadStorageService uploadStorageService;
 	private final DelimitedTablePreviewService delimitedTablePreviewService;
+	private final WorkbookRangeService workbookRangeService;
+	private final SqliteRangeService sqliteRangeService;
 
 	public UploadController(
 		UploadStorageService uploadStorageService,
-		DelimitedTablePreviewService delimitedTablePreviewService
+		DelimitedTablePreviewService delimitedTablePreviewService,
+		WorkbookRangeService workbookRangeService,
+		SqliteRangeService sqliteRangeService
 	) {
 		this.uploadStorageService = uploadStorageService;
 		this.delimitedTablePreviewService = delimitedTablePreviewService;
+		this.workbookRangeService = workbookRangeService;
+		this.sqliteRangeService = sqliteRangeService;
+	}
+
+	@GetMapping("/{uploadId}/database-range")
+	public SqliteRangeService.DatabaseRange getDatabaseRange(
+		@PathVariable UUID uploadId,
+		@RequestParam String table,
+		@RequestParam(required = false) String cursor,
+		@RequestParam(required = false) Integer offset,
+		@RequestParam(defaultValue = "50") int limit
+	) {
+		return this.sqliteRangeService.readRange(
+			this.uploadStorageService.getRequiredUpload(uploadId),
+			table,
+			cursor,
+			offset,
+			limit
+		);
+	}
+
+	@GetMapping("/{uploadId}/workbook-range")
+	public WorkbookRangeService.WorkbookRange getWorkbookRange(
+		@PathVariable UUID uploadId,
+		@RequestParam(defaultValue = "0") int sheetIndex,
+		@RequestParam(defaultValue = "0") int startRow,
+		@RequestParam(defaultValue = "0") int startColumn,
+		@RequestParam(defaultValue = "50") int rows,
+		@RequestParam(defaultValue = "20") int columns
+	) {
+		return this.workbookRangeService.readRange(
+			this.uploadStorageService.getRequiredUpload(uploadId),
+			sheetIndex,
+			startRow,
+			startColumn,
+			rows,
+			columns
+		);
 	}
 
 	@PostMapping

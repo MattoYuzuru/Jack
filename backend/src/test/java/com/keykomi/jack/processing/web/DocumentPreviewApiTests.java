@@ -18,6 +18,8 @@ import java.sql.DriverManager;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
@@ -244,6 +246,42 @@ class DocumentPreviewApiTests {
 		assertThat(manifest.path("layout").path("sheets")).hasSize(1);
 		assertThat(manifest.path("layout").path("sheets").get(0).path("table").path("columns").get(0).asText()).isEqualTo("Name");
 		assertThat(manifest.path("layout").path("sheets").get(0).path("table").path("rows").get(0).get(0).asText()).isEqualTo("Jack");
+
+		var range = parseJson(
+			this.mockMvc.perform(
+				get("/api/uploads/{uploadId}/workbook-range", uploadId)
+					.param("rows", "4")
+					.param("columns", "3")
+			).andExpect(status().isOk()).andReturn()
+		);
+		assertThat(range.path("rows").get(2).get(1).path("formula").asText()).isEqualTo("1+1");
+		assertThat(range.path("rows").get(2).get(1).path("cachedResult").asText()).isEqualTo("2.0");
+		assertThat(range.path("mergedRanges").get(0).asText()).isEqualTo("A4:B4");
+		assertThat(range.path("frozenRows").asInt()).isEqualTo(1);
+	}
+
+	@Test
+	void odsPreviewUsesLazySemanticSheetRanges() throws Exception {
+		var uploadId = upload("sheet.ods", "application/vnd.oasis.opendocument.spreadsheet", createOdsBytes());
+		var completedJob = awaitJobCompletion(createDocumentJob(uploadId));
+		var artifacts = artifactIndex(completedJob);
+		var manifest = parseJson(
+			this.mockMvc.perform(get(artifacts.get("document-preview-manifest").path("downloadPath").asText()))
+				.andExpect(status().isOk()).andReturn()
+		);
+		assertThat(manifest.path("layout").path("mode").asText()).isEqualTo("workbook");
+		assertThat(manifest.path("layout").path("sheets")).hasSize(2);
+		assertThat(manifest.path("layout").path("sheets").get(1).path("table").path("rows")).isEmpty();
+
+		var secondSheet = parseJson(
+			this.mockMvc.perform(
+				get("/api/uploads/{uploadId}/workbook-range", uploadId)
+					.param("sheetIndex", "1")
+					.param("rows", "2")
+					.param("columns", "2")
+			).andExpect(status().isOk()).andReturn()
+		);
+		assertThat(secondSheet.path("rows").get(1).get(0).path("formattedValue").asText()).isEqualTo("Beta");
 	}
 
 	@Test
@@ -285,6 +323,20 @@ class DocumentPreviewApiTests {
 		assertThat(manifest.path("layout").path("tables").get(0).path("rowCount").isNull()).isTrue();
 		assertThat(manifest.path("layout").path("tables").get(0).path("sample").path("rows").get(0).get(1).asText()).isEqualTo("viewer payload");
 		assertThat(manifest.path("warnings").toString()).contains("COUNT(*)");
+
+		var range = parseJson(
+			this.mockMvc.perform(
+				get("/api/uploads/{uploadId}/database-range", uploadId)
+					.param("table", "notes")
+					.param("limit", "1")
+			).andExpect(status().isOk()).andReturn()
+		);
+		assertThat(range.path("rows").get(0).get(2).asText()).isEqualTo("<BLOB 1048576 bytes>");
+		assertThat(range.path("nextCursor").isTextual()).isTrue();
+
+		this.mockMvc.perform(
+			get("/api/uploads/{uploadId}/database-range", uploadId).param("table", "notes; DROP TABLE notes")
+		).andExpect(status().isNotFound());
 	}
 
 	private String upload(String fileName, String mediaType, byte[] bytes) throws Exception {
@@ -385,7 +437,13 @@ class DocumentPreviewApiTests {
 			sheet.createRow(0).createCell(0).setCellValue("Name");
 			sheet.getRow(0).createCell(1).setCellValue("Value");
 			sheet.createRow(1).createCell(0).setCellValue("Jack");
-			sheet.getRow(1).createCell(1).setCellValue("42");
+				sheet.getRow(1).createCell(1).setCellValue("42");
+				sheet.createFreezePane(0, 1);
+				var formula = sheet.createRow(2).createCell(1);
+				formula.setCellFormula("1+1");
+				workbook.getCreationHelper().createFormulaEvaluator().evaluateFormulaCell(formula);
+				sheet.createRow(3).createCell(0).setCellValue("Merged");
+				sheet.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(3, 3, 0, 1));
 			workbook.write(outputStream);
 			return outputStream.toByteArray();
 		}
@@ -402,13 +460,48 @@ class DocumentPreviewApiTests {
 		}
 	}
 
+	private static byte[] createOdsBytes() throws IOException {
+		var content = """
+			<?xml version="1.0" encoding="UTF-8"?>
+			<office:document-content
+			 xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+			 xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0"
+			 xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0">
+			 <office:body><office:spreadsheet>
+			  <table:table table:name="First">
+			   <table:table-row><table:table-cell office:value-type="string"><text:p>Name</text:p></table:table-cell></table:table-row>
+			   <table:table-row><table:table-cell office:value-type="string"><text:p>Alpha</text:p></table:table-cell></table:table-row>
+			  </table:table>
+			  <table:table table:name="Second">
+			   <table:table-row><table:table-cell office:value-type="string"><text:p>Name</text:p></table:table-cell></table:table-row>
+			   <table:table-row><table:table-cell office:value-type="string"><text:p>Beta</text:p></table:table-cell></table:table-row>
+			  </table:table>
+			 </office:spreadsheet></office:body>
+			</office:document-content>
+			""";
+		try (var output = new ByteArrayOutputStream(); var zip = new ZipOutputStream(output)) {
+			zip.putNextEntry(new ZipEntry("content.xml"));
+			zip.write(content.getBytes(StandardCharsets.UTF_8));
+			zip.closeEntry();
+			zip.finish();
+			return output.toByteArray();
+		}
+	}
+
 	private static void createSampleSqliteDatabase(Path databasePath) throws Exception {
 		Files.deleteIfExists(databasePath);
 		try (var connection = DriverManager.getConnection("jdbc:sqlite:" + databasePath.toAbsolutePath())) {
 			try (var statement = connection.createStatement()) {
-				statement.execute("CREATE TABLE notes (id INTEGER PRIMARY KEY, body TEXT)");
-				statement.execute("INSERT INTO notes(body) VALUES ('viewer payload')");
-			}
+					statement.execute("CREATE TABLE notes (id INTEGER PRIMARY KEY, body TEXT, payload BLOB)");
+				}
+				try (var statement = connection.prepareStatement("INSERT INTO notes(body, payload) VALUES (?, ?)")) {
+					statement.setString(1, "viewer payload");
+					statement.setBytes(2, new byte[1_048_576]);
+					statement.executeUpdate();
+					statement.setString(1, "second row");
+					statement.setBytes(2, new byte[8]);
+					statement.executeUpdate();
+				}
 		}
 	}
 

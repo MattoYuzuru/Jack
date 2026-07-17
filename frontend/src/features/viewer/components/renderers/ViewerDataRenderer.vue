@@ -40,12 +40,25 @@ const tableNextCursor = ref<string | null>(null)
 const tableLoading = ref(false)
 const tableError = ref('')
 const tableQuery = ref('')
+const workbookColumns = ref<string[]>([])
+const workbookRows = ref<string[][]>([])
+const workbookNextRow = ref(0)
+const workbookLoading = ref(false)
+const workbookError = ref('')
+const databaseRows = ref<string[][]>([])
+const databaseNextCursor = ref<string | null>(null)
+const databaseNextOffset = ref(0)
+const databaseHasMore = ref(true)
+const databaseLoading = ref(false)
+const databaseError = ref('')
 
 watch(
   () => (props.selection.layout.mode === 'table' ? props.selection.layout.table : null),
   (table) => {
-    tableRows.value = table?.rows.map((row) => [...row]) ?? []
-    tableRowOffset.value = table?.rowOffset ?? 0
+    const sourceRows = table?.rows.map((row) => [...row]) ?? []
+    const overflow = Math.max(0, sourceRows.length - TABLE_DOM_ROW_LIMIT)
+    tableRows.value = sourceRows.slice(overflow)
+    tableRowOffset.value = (table?.rowOffset ?? 0) + overflow
     tableNextCursor.value = table?.nextCursor ?? null
     tableError.value = ''
     tableQuery.value = ''
@@ -60,6 +73,36 @@ const filteredTableRows = computed(() => {
     row.some((cell) => cell.toLocaleLowerCase().includes(query)),
   )
 })
+
+watch(
+  activeSheet,
+  (sheet) => {
+    workbookColumns.value = sheet?.table.columns ?? []
+    workbookRows.value = (sheet?.table.rows.map((row) => [...row]) ?? []).slice(
+      -TABLE_DOM_ROW_LIMIT,
+    )
+    workbookNextRow.value = workbookRows.value.length + (workbookColumns.value.length > 0 ? 1 : 0)
+    workbookError.value = ''
+    if (sheet && workbookRows.value.length === 0 && props.selection.sourceUploadId) {
+      void loadWorkbookRange(true)
+    }
+  },
+  { immediate: true },
+)
+
+watch(
+  activeDatabaseTable,
+  (table) => {
+    databaseRows.value = (table?.sample.rows.map((row) => [...row]) ?? []).slice(
+      -TABLE_DOM_ROW_LIMIT,
+    )
+    databaseNextOffset.value = databaseRows.value.length
+    databaseNextCursor.value = null
+    databaseHasMore.value = true
+    databaseError.value = ''
+  },
+  { immediate: true },
+)
 
 async function loadNextTableRange() {
   if (!props.selection.sourceUploadId || !tableNextCursor.value || tableLoading.value) return
@@ -94,6 +137,64 @@ async function copyVisibleTableSlice() {
     tableError.value = ''
   } catch {
     tableError.value = 'Браузер не разрешил скопировать текущий bounded slice.'
+  }
+}
+
+async function loadWorkbookRange(replace = false) {
+  if (!props.selection.sourceUploadId || !activeSheet.value || workbookLoading.value) return
+  workbookLoading.value = true
+  workbookError.value = ''
+  try {
+    const startRow = replace ? 0 : workbookNextRow.value
+    const response = await requestProcessingJson<{
+      rowCount: number
+      rows: Array<Array<{ formattedValue: string; rawValue: string }>>
+    }>(
+      `/api/uploads/${props.selection.sourceUploadId}/workbook-range?sheetIndex=${props.sheetIndex}&startRow=${startRow}&rows=50&columns=${Math.max(1, Math.min(50, activeSheet.value.table.totalColumns || 12))}`,
+    )
+    const values = response.rows.map((row) =>
+      row.map((cell) => cell.formattedValue || cell.rawValue),
+    )
+    if (replace) {
+      workbookColumns.value =
+        values.shift()?.map((value, index) => value || `Column ${index + 1}`) ?? []
+      workbookRows.value = values
+    } else {
+      workbookRows.value = [...workbookRows.value, ...values].slice(-TABLE_DOM_ROW_LIMIT)
+    }
+    workbookNextRow.value = startRow + response.rowCount
+  } catch (error) {
+    workbookError.value =
+      error instanceof Error ? error.message : 'Не удалось загрузить workbook range.'
+  } finally {
+    workbookLoading.value = false
+  }
+}
+
+async function loadDatabaseRange() {
+  if (!props.selection.sourceUploadId || !activeDatabaseTable.value || databaseLoading.value) return
+  databaseLoading.value = true
+  databaseError.value = ''
+  try {
+    const cursor = databaseNextCursor.value
+      ? `&cursor=${encodeURIComponent(databaseNextCursor.value)}`
+      : `&offset=${databaseNextOffset.value}`
+    const response = await requestProcessingJson<{
+      rows: string[][]
+      nextCursor: string | null
+      truncated: boolean
+    }>(
+      `/api/uploads/${props.selection.sourceUploadId}/database-range?table=${encodeURIComponent(activeDatabaseTable.value.name)}&limit=50${cursor}`,
+    )
+    databaseRows.value = [...databaseRows.value, ...response.rows].slice(-TABLE_DOM_ROW_LIMIT)
+    databaseNextOffset.value += response.rows.length
+    databaseNextCursor.value = response.nextCursor
+    databaseHasMore.value = response.truncated
+  } catch (error) {
+    databaseError.value =
+      error instanceof Error ? error.message : 'Не удалось загрузить database range.'
+  } finally {
+    databaseLoading.value = false
   }
 }
 </script>
@@ -190,16 +291,13 @@ async function copyVisibleTableSlice() {
           <table>
             <thead>
               <tr>
-                <th v-for="column in activeSheet.table.columns" :key="column" scope="col">
+                <th v-for="column in workbookColumns" :key="column" scope="col">
                   {{ column }}
                 </th>
               </tr>
             </thead>
             <tbody>
-              <tr
-                v-for="(row, rowIndex) in activeSheet.table.rows"
-                :key="`${activeSheet.id}-${rowIndex}`"
-              >
+              <tr v-for="(row, rowIndex) in workbookRows" :key="`${activeSheet.id}-${rowIndex}`">
                 <td v-for="(cell, columnIndex) in row" :key="`${rowIndex}-${columnIndex}`">
                   {{ cell || '—' }}
                 </td>
@@ -207,6 +305,16 @@ async function copyVisibleTableSlice() {
             </tbody>
           </table>
         </div>
+        <button
+          v-if="workbookNextRow <= activeSheet.table.totalRows"
+          class="document-table__load-more"
+          type="button"
+          :disabled="workbookLoading"
+          @click="loadWorkbookRange(false)"
+        >
+          {{ workbookLoading ? 'Загружаю…' : 'Следующий workbook range' }}
+        </button>
+        <p v-if="workbookError" class="document-table__error" role="status">{{ workbookError }}</p>
       </div>
       <p v-else class="viewer-panel__empty">В книге нет доступных листов.</p>
     </div>
@@ -261,7 +369,7 @@ async function copyVisibleTableSlice() {
               </thead>
               <tbody>
                 <tr
-                  v-for="(row, rowIndex) in activeDatabaseTable.sample.rows"
+                  v-for="(row, rowIndex) in databaseRows"
                   :key="`${activeDatabaseTable.id}-${rowIndex}`"
                 >
                   <td v-for="(cell, columnIndex) in row" :key="`${rowIndex}-${columnIndex}`">
@@ -271,6 +379,18 @@ async function copyVisibleTableSlice() {
               </tbody>
             </table>
           </div>
+          <button
+            v-if="databaseHasMore"
+            class="document-table__load-more"
+            type="button"
+            :disabled="databaseLoading"
+            @click="loadDatabaseRange"
+          >
+            {{ databaseLoading ? 'Загружаю…' : 'Следующий database range' }}
+          </button>
+          <p v-if="databaseError" class="document-table__error" role="status">
+            {{ databaseError }}
+          </p>
         </div>
       </template>
       <p v-else class="viewer-panel__empty">В этой базе не найдено таблиц для просмотра.</p>

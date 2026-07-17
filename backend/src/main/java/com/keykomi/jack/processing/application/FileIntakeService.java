@@ -27,7 +27,7 @@ public class FileIntakeService {
 	);
 	private static final Map<String, String> EXTENSION_ROUTES = Map.ofEntries(
 		Map.entry("csv", "table"), Map.entry("tsv", "table"),
-		Map.entry("xls", "workbook"), Map.entry("xlsx", "workbook"), Map.entry("ods", "workbook"),
+		Map.entry("xls", "workbook"), Map.entry("xlsx", "workbook"), Map.entry("xlsm", "workbook"), Map.entry("ods", "workbook"),
 		Map.entry("sqlite", "database"), Map.entry("db", "database"),
 		Map.entry("pdf", "pdf"), Map.entry("epub", "epub"), Map.entry("svg", "svg"),
 		Map.entry("doc", "office"), Map.entry("docx", "office"), Map.entry("odt", "office"),
@@ -178,6 +178,7 @@ public class FileIntakeService {
 			return true;
 		}
 		return (Set.of("jpg", "jpeg").contains(declared) && Set.of("jpg", "jpeg").contains(detected))
+			|| (Set.of("xlsx", "xlsm").contains(declared) && "xlsx".equals(detected))
 			|| (route.equals("text") && TEXT_EXTENSIONS.contains(declared));
 	}
 
