@@ -79,7 +79,9 @@ export interface ProcessingArtifact {
   fileName: string
   mediaType: string
   sizeBytes: number
+  sha256?: string
   createdAt: string
+  expiresAt?: string
   downloadPath: string
 }
 
@@ -90,10 +92,14 @@ export interface ProcessingJobResponse {
   status: ProcessingJobStatus
   progressPercent: number
   message: string
+  errorCode?: string | null
   errorMessage: string | null
+  correlationId?: string
   createdAt: string
   startedAt: string | null
   completedAt: string | null
+  expiresAt?: string
+  policyVersion?: string
   artifacts: ProcessingArtifact[]
 }
 
@@ -394,7 +400,10 @@ async function processingFetch(path: string, init: RequestInit): Promise<Respons
   throwIfProcessingAborted(init.signal)
 
   try {
-    return await fetch(resolveProcessingApiUrl(path), init)
+    return await fetch(resolveProcessingApiUrl(path), {
+      credentials: 'include',
+      ...init,
+    })
   } catch (error) {
     if (isProcessingAbort(error, init.signal)) {
       throw new ProcessingJobAbortedError()

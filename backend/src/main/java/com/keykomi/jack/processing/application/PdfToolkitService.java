@@ -110,12 +110,12 @@ public class PdfToolkitService {
 		try {
 			workingDirectory = Files.createTempDirectory(this.processingProperties.getStorageRoot(), "pdf-toolkit-");
 			var output = switch (request.operation()) {
-				case MERGE -> merge(upload, request, workingDirectory, progressCallback);
+				case MERGE -> merge(jobId, upload, request, workingDirectory, progressCallback);
 				case SPLIT -> split(upload, request, workingDirectory, progressCallback);
 				case ROTATE -> rotate(upload, request, workingDirectory, progressCallback);
 				case REORDER -> reorder(upload, request, workingDirectory, progressCallback);
 				case OCR -> ocr(upload, request, workingDirectory, progressCallback);
-				case SIGN -> sign(upload, request, workingDirectory, progressCallback);
+				case SIGN -> sign(jobId, upload, request, workingDirectory, progressCallback);
 				case REDACT -> redact(upload, request, workingDirectory, progressCallback);
 				case PROTECT -> protect(upload, request, workingDirectory, progressCallback);
 				case UNLOCK -> unlock(upload, request, workingDirectory, progressCallback);
@@ -132,12 +132,13 @@ public class PdfToolkitService {
 	}
 
 	private PdfToolkitOutput merge(
+		UUID jobId,
 		StoredUpload upload,
 		PdfToolkitRequest request,
 		Path workingDirectory,
 		ProgressCallback progressCallback
 	) {
-		var additionalUploads = resolveAdditionalPdfUploads(request.additionalUploadIds());
+		var additionalUploads = resolveAdditionalPdfUploads(jobId, request.additionalUploadIds());
 		if (additionalUploads.isEmpty()) {
 			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Merge требует хотя бы один дополнительный PDF upload.");
 		}
@@ -562,13 +563,14 @@ public class PdfToolkitService {
 	}
 
 	private PdfToolkitOutput sign(
+		UUID jobId,
 		StoredUpload upload,
 		PdfToolkitRequest request,
 		Path workingDirectory,
 		ProgressCallback progressCallback
 	) {
 		progressCallback.report(34, "Подготавливаю visible signature/stamp placement.");
-		var signatureImage = resolveSignatureImage(request.signatureImageUploadId());
+		var signatureImage = resolveSignatureImage(jobId, request.signatureImageUploadId());
 		var signatureText = request.signatureText() == null ? "" : request.signatureText().trim();
 		if ((signatureImage == null) && signatureText.isBlank()) {
 			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "E-sign требует signatureText или signatureImageUploadId.");
@@ -866,14 +868,14 @@ public class PdfToolkitService {
 		return List.copyOf(artifacts);
 	}
 
-	private List<StoredUpload> resolveAdditionalPdfUploads(List<UUID> uploadIds) {
+	private List<StoredUpload> resolveAdditionalPdfUploads(UUID jobId, List<UUID> uploadIds) {
 		if (uploadIds == null || uploadIds.isEmpty()) {
 			return List.of();
 		}
 
 		var uploads = new ArrayList<StoredUpload>();
 		for (UUID uploadId : uploadIds) {
-			var upload = this.uploadStorageService.getRequiredUpload(uploadId);
+			var upload = this.uploadStorageService.getRequiredUploadForJob(uploadId, jobId);
 			if (!isPdfUpload(upload)) {
 				throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Merge принимает только дополнительные PDF uploads.");
 			}
@@ -882,12 +884,12 @@ public class PdfToolkitService {
 		return List.copyOf(uploads);
 	}
 
-	private BufferedImage resolveSignatureImage(UUID signatureImageUploadId) {
+	private BufferedImage resolveSignatureImage(UUID jobId, UUID signatureImageUploadId) {
 		if (signatureImageUploadId == null) {
 			return null;
 		}
 
-		var upload = this.uploadStorageService.getRequiredUpload(signatureImageUploadId);
+		var upload = this.uploadStorageService.getRequiredUploadForJob(signatureImageUploadId, jobId);
 		if (!"image".equals(ProcessingFileFamilyResolver.detectFamily(upload))) {
 			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "signatureImageUploadId должен указывать на image upload.");
 		}

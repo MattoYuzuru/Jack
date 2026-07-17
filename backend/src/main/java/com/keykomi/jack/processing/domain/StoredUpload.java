@@ -12,6 +12,8 @@ public record StoredUpload(
 	long sizeBytes,
 	String sha256,
 	Instant createdAt,
+	Instant expiresAt,
+	String policyVersion,
 	Path storagePath
 ) {
 }

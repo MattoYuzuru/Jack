@@ -490,6 +490,7 @@ public class EditorProcessingService {
 		try {
 			tempPath = Files.createTempFile("jack-editor-", ".html");
 			Files.writeString(tempPath, content, StandardCharsets.UTF_8);
+			var createdAt = Instant.now();
 			var upload = new StoredUpload(
 				java.util.UUID.randomUUID(),
 				"editor.html",
@@ -497,7 +498,9 @@ public class EditorProcessingService {
 				"html",
 				Files.size(tempPath),
 				"",
-				Instant.now(),
+				createdAt,
+				createdAt.plusSeconds(300),
+				"editor-virtual-preview",
 				tempPath
 			);
 			return this.documentPreviewService.analyze(upload);

@@ -10,12 +10,11 @@ import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.HexFormat;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -26,10 +25,17 @@ import org.springframework.web.server.ResponseStatusException;
 public class UploadStorageService {
 
 	private final ProcessingProperties processingProperties;
-	private final Map<UUID, StoredUpload> uploads = new ConcurrentHashMap<>();
+	private final ProcessingStateStore stateStore;
+	private final ProcessingOwnerContext ownerContext;
 
-	public UploadStorageService(ProcessingProperties processingProperties) throws IOException {
+	public UploadStorageService(
+		ProcessingProperties processingProperties,
+		ProcessingStateStore stateStore,
+		ProcessingOwnerContext ownerContext
+	) throws IOException {
 		this.processingProperties = processingProperties;
+		this.stateStore = stateStore;
+		this.ownerContext = ownerContext;
 		Files.createDirectories(processingProperties.uploadsDirectory());
 	}
 
@@ -44,6 +50,14 @@ public class UploadStorageService {
 				"Файл превышает допустимый размер загрузки для текущего сервиса."
 			);
 		}
+		var ownerId = this.ownerContext.ownerId();
+		var usedBytes = this.stateStore.ownerStorageBytes(ownerId, Instant.now());
+		if (usedBytes + file.getSize() > this.processingProperties.getMaxStorageBytesPerSession()) {
+			throw new ResponseStatusException(
+				HttpStatus.PAYLOAD_TOO_LARGE,
+				"Session storage quota исчерпана. Удали старые результаты или повтори после TTL cleanup."
+			);
+		}
 
 		var uploadId = UUID.randomUUID();
 		var originalFileName = sanitizeFileName(file.getOriginalFilename());
@@ -51,6 +65,7 @@ public class UploadStorageService {
 		var mediaType = StringUtils.hasText(file.getContentType()) ? file.getContentType() : "application/octet-stream";
 		var storagePath = this.processingProperties.uploadsDirectory().resolve(uploadId + "-" + originalFileName);
 		var createdAt = Instant.now();
+		var expiresAt = createdAt.plus(this.processingProperties.getUploadRetentionHours(), ChronoUnit.HOURS);
 
 		try {
 			var digest = MessageDigest.getInstance("SHA-256");
@@ -71,9 +86,11 @@ public class UploadStorageService {
 				Files.size(storagePath),
 				HexFormat.of().formatHex(digest.digest()),
 				createdAt,
+				expiresAt,
+				this.processingProperties.getPolicyVersion(),
 				storagePath
 			);
-			this.uploads.put(uploadId, storedUpload);
+			this.stateStore.saveUpload(ownerId, storedUpload);
 			return storedUpload;
 		}
 		catch (IOException exception) {
@@ -85,29 +102,37 @@ public class UploadStorageService {
 	}
 
 	public StoredUpload getRequiredUpload(UUID uploadId) {
-		return findUpload(uploadId)
+		return this.stateStore.findOwnedUpload(uploadId, this.ownerContext.ownerId(), Instant.now())
 			.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Файл загрузки не найден."));
 	}
 
 	public Optional<StoredUpload> findUpload(UUID uploadId) {
-		return Optional.ofNullable(this.uploads.get(uploadId));
+		return this.stateStore.findUpload(uploadId);
+	}
+
+	public StoredUpload getRequiredUploadInternal(UUID uploadId) {
+		return findUpload(uploadId)
+			.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Файл загрузки не найден."));
+	}
+
+	public StoredUpload getRequiredUploadForJob(UUID uploadId, UUID jobId) {
+		return this.stateStore.findUploadOwnedByJobOwner(uploadId, jobId, Instant.now())
+			.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Связанный upload не найден."));
 	}
 
 	public int purgeExpired(Instant cutoff, Set<UUID> retainedUploadIds) {
 		var retainedIds = retainedUploadIds == null ? Set.<UUID>of() : Set.copyOf(retainedUploadIds);
 		var deletedUploads = 0;
 
-		for (var entry : this.uploads.entrySet()) {
-			var upload = entry.getValue();
+		for (var upload : this.stateStore.listExpiredUploads(cutoff)) {
 			if (retainedIds.contains(upload.id()) || !upload.createdAt().isBefore(cutoff)) {
 				continue;
 			}
 			if (!deletePath(upload.storagePath())) {
 				continue;
 			}
-			if (this.uploads.remove(entry.getKey(), upload)) {
-				deletedUploads++;
-			}
+			this.stateStore.deleteUpload(upload.id());
+			deletedUploads++;
 		}
 
 		try (var storedFiles = Files.list(this.processingProperties.uploadsDirectory())) {
@@ -118,7 +143,7 @@ public class UploadStorageService {
 				}
 
 				var uploadId = extractUploadId(path);
-				if (uploadId != null && (retainedIds.contains(uploadId) || this.uploads.containsKey(uploadId))) {
+				if (uploadId != null && (retainedIds.contains(uploadId) || this.stateStore.findUpload(uploadId).isPresent())) {
 					continue;
 				}
 

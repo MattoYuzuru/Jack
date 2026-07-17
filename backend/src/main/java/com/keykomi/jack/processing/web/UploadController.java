@@ -42,8 +42,10 @@ public class UploadController {
 			upload.mediaType(),
 			upload.extension(),
 			upload.sizeBytes(),
-			upload.sha256(),
-			upload.createdAt()
+				upload.sha256(),
+				upload.createdAt(),
+				upload.expiresAt(),
+				upload.policyVersion()
 		);
 	}
 
@@ -54,7 +56,9 @@ public class UploadController {
 		String extension,
 		long sizeBytes,
 		String sha256,
-		Instant createdAt
+		Instant createdAt,
+		Instant expiresAt,
+		String policyVersion
 	) {
 	}
 

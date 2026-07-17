@@ -25,6 +25,13 @@ public class ProcessingProperties {
 	private long uploadRetentionHours = 24L;
 	private long artifactRetentionHours = 24L;
 	private long jobRetentionHours = 24L;
+	private int maxConcurrentJobsPerSession = 2;
+	private long maxStorageBytesPerSession = 268_435_456L;
+	private String sessionCookieName = "JACK_SESSION";
+	private String sessionSecret = "jack-local-development-secret-change-in-production";
+	private boolean sessionCookieSecure;
+	private String policyVersion = "jack-processing-2";
+	private String fixedSessionOwner = "";
 
 	public Path getStorageRoot() {
 		return this.storageRoot;
@@ -184,6 +191,62 @@ public class ProcessingProperties {
 
 	public void setJobRetentionHours(long jobRetentionHours) {
 		this.jobRetentionHours = jobRetentionHours;
+	}
+
+	public int getMaxConcurrentJobsPerSession() {
+		return this.maxConcurrentJobsPerSession;
+	}
+
+	public void setMaxConcurrentJobsPerSession(int maxConcurrentJobsPerSession) {
+		this.maxConcurrentJobsPerSession = maxConcurrentJobsPerSession;
+	}
+
+	public long getMaxStorageBytesPerSession() {
+		return this.maxStorageBytesPerSession;
+	}
+
+	public void setMaxStorageBytesPerSession(long maxStorageBytesPerSession) {
+		this.maxStorageBytesPerSession = maxStorageBytesPerSession;
+	}
+
+	public String getSessionCookieName() {
+		return this.sessionCookieName;
+	}
+
+	public void setSessionCookieName(String sessionCookieName) {
+		this.sessionCookieName = sessionCookieName;
+	}
+
+	public String getSessionSecret() {
+		return this.sessionSecret;
+	}
+
+	public void setSessionSecret(String sessionSecret) {
+		this.sessionSecret = sessionSecret;
+	}
+
+	public boolean isSessionCookieSecure() {
+		return this.sessionCookieSecure;
+	}
+
+	public void setSessionCookieSecure(boolean sessionCookieSecure) {
+		this.sessionCookieSecure = sessionCookieSecure;
+	}
+
+	public String getPolicyVersion() {
+		return this.policyVersion;
+	}
+
+	public void setPolicyVersion(String policyVersion) {
+		this.policyVersion = policyVersion;
+	}
+
+	public String getFixedSessionOwner() {
+		return this.fixedSessionOwner;
+	}
+
+	public void setFixedSessionOwner(String fixedSessionOwner) {
+		this.fixedSessionOwner = fixedSessionOwner;
 	}
 
 }

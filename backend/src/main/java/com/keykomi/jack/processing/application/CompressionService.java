@@ -234,7 +234,7 @@ public class CompressionService {
 		CompressionAttemptPlan plan
 	) {
 		var candidateJobId = UUID.randomUUID();
-		var result = this.imageProcessingService.process(
+		var result = this.imageProcessingService.processTransient(
 			candidateJobId,
 			upload,
 			new ImageProcessingRequest(
@@ -278,7 +278,7 @@ public class CompressionService {
 		CompressionAttemptPlan plan
 	) {
 		var candidateJobId = UUID.randomUUID();
-		var result = this.mediaConversionService.process(
+		var result = this.mediaConversionService.processTransient(
 			candidateJobId,
 			upload,
 			new MediaConversionRequest(

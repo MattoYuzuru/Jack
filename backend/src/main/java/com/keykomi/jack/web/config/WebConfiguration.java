@@ -27,7 +27,8 @@ public class WebConfiguration {
 				registry.addMapping("/api/**")
 					.allowedOrigins(allowedOrigins)
 					.allowedMethods("GET", "POST", "DELETE", "OPTIONS")
-					.allowedHeaders("*");
+					.allowedHeaders("*")
+					.allowCredentials(true);
 			}
 		};
 	}

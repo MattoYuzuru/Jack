@@ -54,6 +54,14 @@ public class MediaConversionService {
 	}
 
 	public MediaConversionResult process(UUID jobId, StoredUpload upload, MediaConversionRequest request) {
+		return process(jobId, upload, request, true);
+	}
+
+	MediaConversionResult processTransient(UUID jobId, StoredUpload upload, MediaConversionRequest request) {
+		return process(jobId, upload, request, false);
+	}
+
+	private MediaConversionResult process(UUID jobId, StoredUpload upload, MediaConversionRequest request, boolean durableArtifacts) {
 		var family = ProcessingFileFamilyResolver.detectFamily(upload);
 		if (!"media".equals(family) && !"audio".equals(family)) {
 			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "MEDIA_CONVERT job принимает только audio/video uploads.");
@@ -70,7 +78,7 @@ public class MediaConversionService {
 		try {
 			workingDirectory = Files.createTempDirectory(this.processingProperties.getStorageRoot(), "media-convert-");
 			var output = convert(upload, request, targetExtension, family, workingDirectory);
-			var artifacts = storeArtifacts(jobId, upload, targetExtension, output);
+			var artifacts = storeArtifacts(jobId, upload, targetExtension, output, durableArtifacts);
 			return new MediaConversionResult(artifacts, output.runtimeLabel(), output.warnings());
 		}
 		catch (IOException exception) {
@@ -551,7 +559,8 @@ public class MediaConversionService {
 		UUID jobId,
 		StoredUpload upload,
 		String targetExtension,
-		MediaConversionOutput output
+		MediaConversionOutput output,
+		boolean durableArtifacts
 	) {
 		var manifest = new MediaConvertManifest(
 			upload.id(),
@@ -569,10 +578,17 @@ public class MediaConversionService {
 			output.warnings()
 		);
 
+		if (durableArtifacts) {
+			return List.of(
+				this.artifactStorageService.storeJsonArtifact(jobId, "media-convert-manifest", "media-convert-manifest.json", manifest),
+				this.artifactStorageService.storeFileArtifact(jobId, "media-convert-binary", output.resultFileName(), output.resultMediaType(), output.resultPath()),
+				this.artifactStorageService.storeFileArtifact(jobId, "media-convert-preview", output.previewFileName(), output.previewMediaType(), output.previewPath())
+			);
+		}
 		return List.of(
-			this.artifactStorageService.storeJsonArtifact(jobId, "media-convert-manifest", "media-convert-manifest.json", manifest),
-			this.artifactStorageService.storeFileArtifact(jobId, "media-convert-binary", output.resultFileName(), output.resultMediaType(), output.resultPath()),
-			this.artifactStorageService.storeFileArtifact(jobId, "media-convert-preview", output.previewFileName(), output.previewMediaType(), output.previewPath())
+			this.artifactStorageService.storeTransientJsonArtifact(jobId, "media-convert-manifest", "media-convert-manifest.json", manifest),
+			this.artifactStorageService.storeTransientFileArtifact(jobId, "media-convert-binary", output.resultFileName(), output.resultMediaType(), output.resultPath()),
+			this.artifactStorageService.storeTransientFileArtifact(jobId, "media-convert-preview", output.previewFileName(), output.previewMediaType(), output.previewPath())
 		);
 	}
 

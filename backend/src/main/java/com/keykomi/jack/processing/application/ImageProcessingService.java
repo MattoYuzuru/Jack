@@ -63,6 +63,14 @@ public class ImageProcessingService {
 	}
 
 	public ImageProcessingResult process(UUID jobId, StoredUpload upload, ImageProcessingRequest request) {
+		return process(jobId, upload, request, true);
+	}
+
+	ImageProcessingResult processTransient(UUID jobId, StoredUpload upload, ImageProcessingRequest request) {
+		return process(jobId, upload, request, false);
+	}
+
+	private ImageProcessingResult process(UUID jobId, StoredUpload upload, ImageProcessingRequest request, boolean durableArtifacts) {
 		var family = ProcessingFileFamilyResolver.detectFamily(upload);
 		if (!"image".equals(family)) {
 			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "IMAGE_CONVERT job принимает только image uploads.");
@@ -90,7 +98,8 @@ public class ImageProcessingService {
 				transformedRaster,
 				encodedResult,
 				runtimeLabel,
-				warnings
+				warnings,
+				durableArtifacts
 			);
 			return new ImageProcessingResult(artifacts, runtimeLabel, warnings);
 		}
@@ -111,7 +120,8 @@ public class ImageProcessingService {
 		TransformedRaster transformedRaster,
 		EncodedImageResult encodedResult,
 		String runtimeLabel,
-		List<String> warnings
+		List<String> warnings,
+		boolean durableArtifacts
 	) {
 		var operationPrefix = "preview".equals(request.operation()) ? "image-preview" : "image-convert";
 		var manifestFileName = "%s-manifest.json".formatted(operationPrefix);
@@ -135,37 +145,56 @@ public class ImageProcessingService {
 			warnings
 		);
 
-		var manifestArtifact = this.artifactStorageService.storeJsonArtifact(
+		var manifestArtifact = durableArtifacts
+			? this.artifactStorageService.storeJsonArtifact(
 			jobId,
 			operationPrefix + "-manifest",
 			manifestFileName,
 			manifest
-		);
+		)
+			: this.artifactStorageService.storeTransientJsonArtifact(
+				jobId, operationPrefix + "-manifest", manifestFileName, manifest
+			);
 		if ("preview".equals(request.operation())) {
-			var previewArtifact = this.artifactStorageService.storeFileArtifact(
+			var previewArtifact = durableArtifacts
+				? this.artifactStorageService.storeFileArtifact(
 				jobId,
 				"image-preview-binary",
 				encodedResult.previewFileName(),
 				encodedResult.previewMediaType(),
 				encodedResult.previewPath()
-			);
+			)
+				: this.artifactStorageService.storeTransientFileArtifact(
+					jobId, "image-preview-binary", encodedResult.previewFileName(),
+					encodedResult.previewMediaType(), encodedResult.previewPath()
+				);
 			return List.of(manifestArtifact, previewArtifact);
 		}
 
-		var resultArtifact = this.artifactStorageService.storeFileArtifact(
+		var resultArtifact = durableArtifacts
+			? this.artifactStorageService.storeFileArtifact(
 			jobId,
 			"image-convert-binary",
 			encodedResult.resultFileName(),
 			encodedResult.resultMediaType(),
 			encodedResult.resultPath()
-		);
-		var previewArtifact = this.artifactStorageService.storeFileArtifact(
+		)
+			: this.artifactStorageService.storeTransientFileArtifact(
+				jobId, "image-convert-binary", encodedResult.resultFileName(),
+				encodedResult.resultMediaType(), encodedResult.resultPath()
+			);
+		var previewArtifact = durableArtifacts
+			? this.artifactStorageService.storeFileArtifact(
 			jobId,
 			"image-convert-preview",
 			encodedResult.previewFileName(),
 			encodedResult.previewMediaType(),
 			encodedResult.previewPath()
-		);
+		)
+			: this.artifactStorageService.storeTransientFileArtifact(
+				jobId, "image-convert-preview", encodedResult.previewFileName(),
+				encodedResult.previewMediaType(), encodedResult.previewPath()
+			);
 		return List.of(manifestArtifact, resultArtifact, previewArtifact);
 	}
 

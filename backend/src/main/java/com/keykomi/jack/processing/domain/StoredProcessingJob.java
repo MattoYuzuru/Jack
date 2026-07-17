@@ -13,10 +13,14 @@ public record StoredProcessingJob(
 	ProcessingJobStatus status,
 	int progressPercent,
 	String message,
+	String errorCode,
 	String errorMessage,
+	UUID correlationId,
 	Instant createdAt,
 	Instant startedAt,
 	Instant completedAt,
+	Instant expiresAt,
+	String policyVersion,
 	List<StoredArtifact> artifacts
 ) {
 
@@ -25,7 +29,10 @@ public record StoredProcessingJob(
 		UUID uploadId,
 		ProcessingJobType type,
 		Map<String, Object> parameters,
-		Instant createdAt
+		Instant createdAt,
+		Instant expiresAt,
+		String policyVersion,
+		UUID correlationId
 	) {
 		return new StoredProcessingJob(
 			id,
@@ -36,9 +43,13 @@ public record StoredProcessingJob(
 			0,
 			"Job поставлен в очередь.",
 			null,
+			null,
+			correlationId,
 			createdAt,
 			null,
 			null,
+			expiresAt,
+			policyVersion,
 			List.of()
 		);
 	}
@@ -53,9 +64,13 @@ public record StoredProcessingJob(
 			10,
 			message,
 			null,
+			null,
+			this.correlationId,
 			this.createdAt,
 			startedAt,
 			null,
+			this.expiresAt,
+			this.policyVersion,
 			List.of()
 		);
 	}
@@ -69,10 +84,14 @@ public record StoredProcessingJob(
 			this.status,
 			Math.max(0, Math.min(progressPercent, 100)),
 			message,
+			this.errorCode,
 			this.errorMessage,
+			this.correlationId,
 			this.createdAt,
 			this.startedAt,
 			this.completedAt,
+			this.expiresAt,
+			this.policyVersion,
 			this.artifacts
 		);
 	}
@@ -87,14 +106,18 @@ public record StoredProcessingJob(
 			100,
 			message,
 			null,
+			null,
+			this.correlationId,
 			this.createdAt,
 			this.startedAt,
 			completedAt,
+			this.expiresAt,
+			this.policyVersion,
 			List.copyOf(artifacts)
 		);
 	}
 
-	public StoredProcessingJob fail(Instant completedAt, String errorMessage) {
+	public StoredProcessingJob fail(Instant completedAt, String errorCode, String errorMessage) {
 		return new StoredProcessingJob(
 			this.id,
 			this.uploadId,
@@ -103,10 +126,14 @@ public record StoredProcessingJob(
 			ProcessingJobStatus.FAILED,
 			this.progressPercent,
 			"Job завершился с ошибкой.",
+			errorCode,
 			errorMessage,
+			this.correlationId,
 			this.createdAt,
 			this.startedAt,
 			completedAt,
+			this.expiresAt,
+			this.policyVersion,
 			this.artifacts
 		);
 	}
@@ -121,9 +148,13 @@ public record StoredProcessingJob(
 			this.progressPercent,
 			message,
 			null,
+			null,
+			this.correlationId,
 			this.createdAt,
 			this.startedAt,
 			completedAt,
+			this.expiresAt,
+			this.policyVersion,
 			this.artifacts
 		);
 	}

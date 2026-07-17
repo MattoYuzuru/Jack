@@ -50,16 +50,16 @@ public class ProcessingStorageCleanupService {
 		var activeJobIds = this.processingJobService.listActiveJobIds();
 		var activeUploadIds = this.processingJobService.listActiveUploadIds();
 
-		var deletedUploads = this.uploadStorageService.purgeExpired(
-			now.minus(this.processingProperties.getUploadRetentionHours(), ChronoUnit.HOURS),
-			activeUploadIds
+		var deletedJobs = this.processingJobService.purgeExpiredTerminalJobs(
+			now.minus(this.processingProperties.getJobRetentionHours(), ChronoUnit.HOURS)
 		);
 		var deletedArtifactDirectories = this.artifactStorageService.purgeExpired(
 			now.minus(this.processingProperties.getArtifactRetentionHours(), ChronoUnit.HOURS),
 			activeJobIds
 		);
-		var deletedJobs = this.processingJobService.purgeExpiredTerminalJobs(
-			now.minus(this.processingProperties.getJobRetentionHours(), ChronoUnit.HOURS)
+		var deletedUploads = this.uploadStorageService.purgeExpired(
+			now.minus(this.processingProperties.getUploadRetentionHours(), ChronoUnit.HOURS),
+			activeUploadIds
 		);
 
 		if (deletedUploads > 0) {
