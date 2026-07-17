@@ -23,6 +23,9 @@ import java.util.zip.ZipOutputStream;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
+import org.apache.pdfbox.pdmodel.common.PDRectangle;
+import org.apache.pdfbox.pdmodel.encryption.AccessPermission;
+import org.apache.pdfbox.pdmodel.encryption.StandardProtectionPolicy;
 import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
 import org.apache.pdfbox.pdmodel.font.PDType1Font;
 import org.apache.poi.xslf.usermodel.XMLSlideShow;
@@ -99,6 +102,28 @@ class DocumentPreviewApiTests {
 	}
 
 	@Test
+	void pdfPreviewReportsRotationCropAndTypedFailures() throws Exception {
+		var uploadId = upload("rotated.pdf", "application/pdf", createRotatedPdfBytes());
+		var completedJob = awaitJobCompletion(createDocumentJob(uploadId));
+		var manifest = parseJson(
+			this.mockMvc.perform(get(artifactIndex(completedJob).get("document-preview-manifest").path("downloadPath").asText()))
+				.andExpect(status().isOk())
+				.andReturn()
+		);
+
+		assertThat(manifest.path("summary").toString()).contains("90°", "Crop boxes", "Media boxes");
+		assertThat(manifest.path("warnings").toString()).contains("повёрнутые", "Crop box");
+
+		var encryptedJob = awaitJobCompletion(createDocumentJob(upload("locked.pdf", "application/pdf", createEncryptedPdfBytes())));
+		assertThat(encryptedJob.path("status").asText()).isEqualTo("FAILED");
+		assertThat(encryptedJob.path("errorCode").asText()).isEqualTo("PDF_PASSWORD_REQUIRED");
+
+		var corruptJob = awaitJobCompletion(createDocumentJob(upload("broken.pdf", "application/pdf", "%PDF-1.7\nnot-a-pdf".getBytes(StandardCharsets.US_ASCII))));
+		assertThat(corruptJob.path("status").asText()).isEqualTo("FAILED");
+		assertThat(corruptJob.path("errorCode").asText()).isEqualTo("CORRUPT_PDF");
+	}
+
+	@Test
 	void htmlPreviewFlowSanitizesMarkupAndBuildsOutline() throws Exception {
 		var uploadId = upload(
 			"index.html",
@@ -108,7 +133,11 @@ class DocumentPreviewApiTests {
 			<html>
 			  <body>
 			    <h1>Viewer Docs</h1>
-			    <p>Document intelligence is active.</p>
+			    <p onclick="fetch('https://example.test/track')">Document intelligence is active.</p>
+			    <form action="https://example.test/submit"><input name="secret"></form>
+			    <iframe src="https://example.test/frame"></iframe>
+			    <img src="https://example.test/pixel.png">
+			    <a href="javascript:alert(2)" style="background:url(https://example.test/css)">unsafe</a>
 			    <script>alert('x')</script>
 			  </body>
 			</html>
@@ -123,9 +152,27 @@ class DocumentPreviewApiTests {
 		);
 
 		assertThat(manifest.path("layout").path("mode").asText()).isEqualTo("html");
-		assertThat(manifest.path("layout").path("srcDoc").asText()).doesNotContain("<script>");
+		assertThat(manifest.path("layout").path("srcDoc").asText())
+			.contains("Content-Security-Policy")
+			.doesNotContain("<script>", "<form", "<iframe", "onclick", "javascript:", "example.test", "style=\"");
 		assertThat(manifest.path("layout").path("outline").get(0).path("label").asText()).isEqualTo("Viewer Docs");
 		assertThat(manifest.path("warnings")).hasSize(1);
+	}
+
+	@Test
+	void epubPreviewRemovesActiveContentAndExternalResources() throws Exception {
+		var uploadId = upload("unsafe.epub", "application/epub+zip", createEpubBytes());
+		var completedJob = awaitJobCompletion(createDocumentJob(uploadId));
+		var manifest = parseJson(
+			this.mockMvc.perform(get(artifactIndex(completedJob).get("document-preview-manifest").path("downloadPath").asText()))
+				.andExpect(status().isOk())
+				.andReturn()
+		);
+
+		assertThat(manifest.path("layout").path("srcDoc").asText())
+			.contains("Safe chapter", "Content-Security-Policy")
+			.doesNotContain("script", "iframe", "example.test", "onload");
+		assertThat(manifest.path("warnings").toString()).contains("Активный контент");
 	}
 
 	@Test
@@ -413,6 +460,57 @@ class DocumentPreviewApiTests {
 			document.save(outputStream);
 			return outputStream.toByteArray();
 		}
+	}
+
+	private static byte[] createRotatedPdfBytes() throws IOException {
+		try (var document = new PDDocument(); var outputStream = new ByteArrayOutputStream()) {
+			var page = new PDPage(PDRectangle.A4);
+			page.setRotation(90);
+			page.setCropBox(new PDRectangle(20, 30, 500, 700));
+			document.addPage(page);
+			document.save(outputStream);
+			return outputStream.toByteArray();
+		}
+	}
+
+	private static byte[] createEncryptedPdfBytes() throws IOException {
+		try (var document = new PDDocument(); var outputStream = new ByteArrayOutputStream()) {
+			document.addPage(new PDPage());
+			var policy = new StandardProtectionPolicy("owner-secret", "viewer-secret", new AccessPermission());
+			policy.setEncryptionKeyLength(128);
+			document.protect(policy);
+			document.save(outputStream);
+			return outputStream.toByteArray();
+		}
+	}
+
+	private static byte[] createEpubBytes() throws IOException {
+		try (var outputStream = new ByteArrayOutputStream(); var zip = new ZipOutputStream(outputStream)) {
+			writeZipEntry(zip, "META-INF/container.xml", """
+				<container xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+				  <rootfiles><rootfile full-path="OEBPS/content.opf"/></rootfiles>
+				</container>
+				""");
+			writeZipEntry(zip, "OEBPS/content.opf", """
+				<package xmlns="http://www.idpf.org/2007/opf">
+				  <metadata><title>Unsafe book</title></metadata>
+				  <manifest><item id="chapter" href="chapter.xhtml" media-type="application/xhtml+xml"/></manifest>
+				  <spine><itemref idref="chapter"/></spine>
+				</package>
+				""");
+			writeZipEntry(zip, "OEBPS/chapter.xhtml", """
+				<html><body onload="alert(1)"><h1>Safe chapter</h1><script>alert(2)</script>
+				<iframe src="https://example.test/frame"></iframe><img src="https://example.test/pixel.png"></body></html>
+				""");
+			zip.finish();
+			return outputStream.toByteArray();
+		}
+	}
+
+	private static void writeZipEntry(ZipOutputStream zip, String name, String content) throws IOException {
+		zip.putNextEntry(new ZipEntry(name));
+		zip.write(content.getBytes(StandardCharsets.UTF_8));
+		zip.closeEntry();
 	}
 
 	private static byte[] createDocxBytes() throws IOException {

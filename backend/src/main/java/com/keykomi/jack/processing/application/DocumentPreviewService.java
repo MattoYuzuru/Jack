@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.keykomi.jack.processing.domain.DocumentPreviewPayload;
+import com.keykomi.jack.processing.domain.ProcessingException;
 import com.keykomi.jack.processing.domain.StoredArtifact;
 import com.keykomi.jack.processing.domain.StoredUpload;
 import java.io.ByteArrayInputStream;
@@ -35,6 +36,7 @@ import javax.swing.text.rtf.RTFEditorKit;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
 import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.pdmodel.encryption.InvalidPasswordException;
 import org.apache.pdfbox.text.PDFTextStripper;
 import org.apache.poi.hwpf.HWPFDocument;
 import org.apache.poi.hwpf.extractor.WordExtractor;
@@ -57,8 +59,6 @@ import org.apache.poi.xwpf.usermodel.XWPFTable;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
-import org.jsoup.safety.Cleaner;
-import org.jsoup.safety.Safelist;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -97,6 +97,7 @@ public class DocumentPreviewService {
 	private final ProcessingResourceBudgetService resourceBudgets;
 	private final DelimitedTablePreviewService delimitedTablePreviewService;
 	private final WorkbookRangeService workbookRangeService;
+	private final ActiveContentPolicyService activeContentPolicy;
 	private final Yaml yaml;
 
 	public DocumentPreviewService(
@@ -105,7 +106,8 @@ public class DocumentPreviewService {
 		MarkdownRenderService markdownRenderService,
 		ProcessingResourceBudgetService resourceBudgets,
 		DelimitedTablePreviewService delimitedTablePreviewService,
-		WorkbookRangeService workbookRangeService
+		WorkbookRangeService workbookRangeService,
+		ActiveContentPolicyService activeContentPolicy
 	) {
 		this.artifactStorageService = artifactStorageService;
 		this.objectMapper = objectMapper;
@@ -113,6 +115,7 @@ public class DocumentPreviewService {
 		this.resourceBudgets = resourceBudgets;
 		this.delimitedTablePreviewService = delimitedTablePreviewService;
 		this.workbookRangeService = workbookRangeService;
+		this.activeContentPolicy = activeContentPolicy;
 		this.yaml = new Yaml();
 	}
 
@@ -196,19 +199,47 @@ public class DocumentPreviewService {
 		try (var document = Loader.loadPDF(upload.storagePath().toFile())) {
 			this.resourceBudgets.verifyDocumentPages(document.getNumberOfPages());
 			var searchableText = normalizeExtractedText(new PDFTextStripper().getText(document));
+			var rotations = new LinkedHashSet<Integer>();
+			var mediaBoxes = new LinkedHashSet<String>();
+			int croppedPages = 0;
+			for (var page : document.getPages()) {
+				rotations.add(Math.floorMod(page.getRotation(), 360));
+				var mediaBox = page.getMediaBox();
+				var cropBox = page.getCropBox();
+				mediaBoxes.add("%.0f×%.0f pt".formatted(mediaBox.getWidth(), mediaBox.getHeight()));
+				if (!mediaBox.equals(cropBox)) {
+					croppedPages += 1;
+				}
+			}
 			var summary = List.of(
 				new DocumentPreviewPayload.DocumentFact("Тип документа", "PDF"),
 				new DocumentPreviewPayload.DocumentFact("Страниц", String.valueOf(document.getNumberOfPages())),
+				new DocumentPreviewPayload.DocumentFact(
+					"Rotation",
+					rotations.stream().map(rotation -> rotation + "°").collect(java.util.stream.Collectors.joining(", "))
+				),
+				new DocumentPreviewPayload.DocumentFact("Media boxes", String.join(", ", mediaBoxes)),
+				new DocumentPreviewPayload.DocumentFact(
+					"Crop boxes",
+					croppedPages == 0 ? "Совпадают с media box" : "Отличаются на страницах: " + croppedPages
+				),
 				new DocumentPreviewPayload.DocumentFact(
 					"Search layer",
 					searchableText.isBlank() ? "Browser preview only" : "Backend PDF text extraction"
 				)
 			);
+			var warnings = new ArrayList<String>();
+			if (rotations.stream().anyMatch(rotation -> rotation != 0)) {
+				warnings.add("PDF содержит повёрнутые страницы; browser renderer учитывает page rotation.");
+			}
+			if (croppedPages > 0) {
+				warnings.add("Crop box отличается от media box; preview показывает видимую область страницы.");
+			}
 
 			return new DocumentPreviewPayload(
 				summary,
 				searchableText,
-				List.of(),
+				warnings,
 				new DocumentPreviewPayload.DocumentLayoutPayload(
 					"pdf",
 					document.getNumberOfPages(),
@@ -227,8 +258,21 @@ public class DocumentPreviewService {
 				"PDF server preview"
 			);
 		}
+		catch (InvalidPasswordException exception) {
+			throw new ProcessingException(
+				HttpStatus.UNPROCESSABLE_ENTITY,
+				"PDF_PASSWORD_REQUIRED",
+				"PDF зашифрован и требует пароль.",
+				exception
+			);
+		}
 		catch (IOException exception) {
-			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Не удалось разобрать PDF document.", exception);
+			throw new ProcessingException(
+				HttpStatus.UNPROCESSABLE_ENTITY,
+				"CORRUPT_PDF",
+				"Не удалось безопасно разобрать PDF document.",
+				exception
+			);
 		}
 	}
 
@@ -1011,6 +1055,7 @@ public class DocumentPreviewService {
 			var sectionHtml = new ArrayList<String>();
 			var sectionTexts = new ArrayList<String>();
 			int chapterCount = 0;
+			boolean removedUnsafeContent = false;
 
 			for (int spineIndex = 0; spineIndex < spineItems.size(); spineIndex += 1) {
 				var itemRef = spineItems.get(spineIndex);
@@ -1033,6 +1078,7 @@ public class DocumentPreviewService {
 				}
 
 				chapterCount += 1;
+				removedUnsafeContent |= chapter.removedUnsafeContent();
 				sectionTexts.add(chapter.text());
 				sectionHtml.add("<section class=\"epub-chapter\">" + chapter.html() + "</section>");
 				outline.addAll(chapter.outline());
@@ -1056,7 +1102,12 @@ public class DocumentPreviewService {
 					new DocumentPreviewPayload.DocumentFact("Главы", String.valueOf(chapterCount))
 				),
 				searchableText,
-				List.of("Показано содержимое книги в режиме чтения, но тема оформления, заметки и медиа-слои не воспроизводятся полностью."),
+				removedUnsafeContent
+					? List.of(
+						"Показано содержимое книги в режиме чтения, но тема оформления, заметки и медиа-слои не воспроизводятся полностью.",
+						"Активный контент, формы, CSS и внешние EPUB-ресурсы удалены перед preview."
+					)
+					: List.of("Показано содержимое книги в режиме чтения, но тема оформления, заметки и медиа-слои не воспроизводятся полностью."),
 				new DocumentPreviewPayload.DocumentLayoutPayload(
 					"html",
 					null,
@@ -1223,22 +1274,15 @@ public class DocumentPreviewService {
 	}
 
 	private HtmlPreview sanitizeHtmlDocument(String rawHtml) {
-		var dirtyDocument = Jsoup.parse(rawHtml);
-		var hadUnsafeNodes = !dirtyDocument.select("script,style,iframe,object,embed").isEmpty();
-		var cleaner = new Cleaner(
-			Safelist.relaxed()
-				.addTags("table", "thead", "tbody", "tfoot", "tr", "td", "th", "section", "article")
-				.addAttributes("td", "colspan", "rowspan")
-				.addAttributes("th", "colspan", "rowspan")
-		);
-		var cleanedDocument = cleaner.clean(dirtyDocument);
+		var sanitization = this.activeContentPolicy.sanitizeDocumentMarkup(rawHtml);
+		var cleanedDocument = sanitization.document();
 		var outline = cleanedDocument.select("h1, h2, h3, h4, h5, h6").stream()
 			.map(this::toOutlineItem)
 			.filter(Objects::nonNull)
 			.toList();
 		var textContent = normalizeExtractedText(cleanedDocument.text());
-		var warnings = hadUnsafeNodes
-			? List.of("Потенциально опасные HTML-узлы удалены для безопасного просмотра.")
+		var warnings = sanitization.removedUnsafeContent()
+			? List.of("Активные HTML-узлы, обработчики, формы, CSS и внешние ресурсы удалены для безопасного просмотра.")
 			: List.<String>of();
 
 		return new HtmlPreview(
@@ -1507,16 +1551,8 @@ public class DocumentPreviewService {
 	}
 
 	private EpubChapter parseEpubChapter(String chapterContent, int chapterIndex, EpubManifestItem manifestItem) {
-		var document = Jsoup.parse(chapterContent);
-		document.select("script,style,noscript").remove();
-		var body = document.body();
-		var cleaner = new Cleaner(
-			Safelist.relaxed()
-				.addTags("section", "article")
-				.addAttributes("td", "colspan", "rowspan")
-				.addAttributes("th", "colspan", "rowspan")
-		);
-		var sanitizedDocument = cleaner.clean(Jsoup.parseBodyFragment(body.html()));
+		var sanitization = this.activeContentPolicy.sanitizeDocumentMarkup(chapterContent);
+		var sanitizedDocument = sanitization.document();
 		var sanitizedBody = sanitizedDocument.body();
 		var bodyHtml = sanitizedBody.html();
 		var outline = sanitizedBody.select("h1, h2, h3, h4, h5, h6").stream()
@@ -1533,11 +1569,11 @@ public class DocumentPreviewService {
 			})
 			.filter(Objects::nonNull)
 			.toList();
-		var text = normalizeExtractedText(body.text());
+		var text = normalizeExtractedText(sanitizedBody.text());
 		var html = bodyHtml.isBlank()
 			? "<p>" + escapeHtml(Optional.ofNullable(manifestItem.id()).orElse("Chapter " + (chapterIndex + 1))) + "</p>"
 			: bodyHtml;
-		return new EpubChapter(text, html, outline);
+		return new EpubChapter(text, html, outline, sanitization.removedUnsafeContent());
 	}
 
 	private Optional<String> readFirstMetadataValue(org.w3c.dom.Element root, String localName) {
@@ -2088,6 +2124,7 @@ public class DocumentPreviewService {
 			  <head>
 			    <meta charset="utf-8">
 			    <meta name="viewport" content="width=device-width, initial-scale=1">
+			    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-src 'none'; connect-src 'none'">
 			    <style>
 			      html,body{margin:0;padding:0;background:#fffaf1;color:#102426;font-family:Manrope,Segoe UI,sans-serif;line-height:1.65;}
 			      body{padding:28px;}
@@ -2243,7 +2280,8 @@ public class DocumentPreviewService {
 	private record EpubChapter(
 		String text,
 		String html,
-		List<DocumentPreviewPayload.DocumentOutlineItem> outline
+		List<DocumentPreviewPayload.DocumentOutlineItem> outline,
+		boolean removedUnsafeContent
 	) {
 	}
 

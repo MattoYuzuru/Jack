@@ -30,6 +30,9 @@ const COMMON_ASPECT_RATIOS = [
   { value: 9 / 16, label: '9:16' },
 ]
 
+const MAX_SUBTITLE_BYTES = 2 * 1024 * 1024
+const MAX_SUBTITLE_CUES = 10_000
+
 export function formatViewerAspectRatio(width: number, height: number): string {
   if (width <= 0 || height <= 0) {
     return 'Unknown'
@@ -173,14 +176,22 @@ export async function prepareViewerSubtitleFile(file: File): Promise<ViewerPrepa
     throw new Error('Поддерживаются только `.vtt` и `.srt` subtitle sidecar файлы.')
   }
 
+  if (file.size > MAX_SUBTITLE_BYTES) {
+    throw new Error('Subtitle sidecar превышает лимит 2 MiB.')
+  }
+
   const rawText = await file.text()
+  const cueCount = countViewerSubtitleCues(rawText, format)
+  if (cueCount > MAX_SUBTITLE_CUES) {
+    throw new Error('Subtitle sidecar превышает лимит 10 000 cues.')
+  }
   const text = format === 'srt' ? convertViewerSrtToVtt(rawText) : ensureViewerWebVtt(rawText)
 
   return {
     format,
     label: sanitizeViewerSubtitleLabel(file.name),
     language: inferViewerSubtitleLanguage(file.name),
-    cueCount: countViewerSubtitleCues(rawText, format),
+    cueCount,
     text,
     blob: new Blob([text], { type: 'text/vtt;charset=utf-8' }),
   }

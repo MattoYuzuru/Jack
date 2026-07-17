@@ -43,11 +43,17 @@ describe('viewer registry', () => {
       (definition) => definition.previewPipeline === 'server-assisted',
     )
 
-    expect(formats.map((definition) => definition.extension)).toEqual(['heic', 'tiff', 'raw'])
+    expect(formats.map((definition) => definition.extension)).toEqual([
+      'svg',
+      'heic',
+      'tiff',
+      'raw',
+    ])
 
     expect((await resolveViewerFormat('shoot.NEF'))?.extension).toBe('raw')
     expect((await resolveViewerFormat('scan.tif'))?.extension).toBe('tiff')
     expect((await resolveViewerFormat('capture.heic'))?.previewPipeline).toBe('server-assisted')
+    expect((await resolveViewerFormat('drawing.svg'))?.previewStrategyId).toBe('server-viewer')
   })
 
   it('exposes document formats as server-assisted document intelligence routes', async () => {

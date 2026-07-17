@@ -45,9 +45,11 @@ public class FileIntakeService {
 		"env", "html", "htm", "css", "js", "ts"
 	);
 	private final ProcessingResourceBudgetService budgets;
+	private final ActiveContentPolicyService activeContentPolicy;
 
-	public FileIntakeService(ProcessingResourceBudgetService budgets) {
+	public FileIntakeService(ProcessingResourceBudgetService budgets, ActiveContentPolicyService activeContentPolicy) {
 		this.budgets = budgets;
+		this.activeContentPolicy = activeContentPolicy;
 	}
 
 	public IntakeResult inspect(Path path, String submittedFileName, String declaredMediaType) throws IOException {
@@ -61,6 +63,9 @@ public class FileIntakeService {
 
 		var detected = detect(prefix, path, extension);
 		validateMismatch(extension, declaredType, detected);
+		if ("svg".equals(detected.parserRoute())) {
+			this.activeContentPolicy.verifyInertSvg(path);
+		}
 		var effectiveExtension = extension.isBlank() ? detected.primaryExtension() : extension;
 		var normalizedName = extension.isBlank() && !detected.primaryExtension().isBlank()
 			? fileName + "." + detected.primaryExtension()

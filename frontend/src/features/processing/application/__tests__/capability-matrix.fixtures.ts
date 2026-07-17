@@ -31,8 +31,9 @@ export function createViewerCapabilityScopeFixture(): ProcessingCapabilityScope 
           'SVG',
           'image',
           ['image/svg+xml'],
-          'browser-native',
-          'native-image',
+          'server-assisted',
+          'server-viewer',
+          ['VIEWER_RESOLVE', 'IMAGE_CONVERT', 'METADATA_EXPORT'],
         ),
         viewerFormat('ico', [], 'ICO', 'image', ['image/x-icon'], 'browser-native', 'native-image'),
         viewerFormat(

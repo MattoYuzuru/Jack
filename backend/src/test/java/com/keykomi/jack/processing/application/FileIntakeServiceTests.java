@@ -16,7 +16,7 @@ class FileIntakeServiceTests {
 
 	private final ProcessingProperties properties = new ProcessingProperties();
 	private final ProcessingResourceBudgetService budgets = new ProcessingResourceBudgetService(this.properties);
-	private final FileIntakeService intake = new FileIntakeService(this.budgets);
+	private final FileIntakeService intake = new FileIntakeService(this.budgets, new ActiveContentPolicyService());
 
 	@Test
 	void rejectsMagicExtensionMismatchAndUnsafeFilename() throws Exception {
@@ -56,6 +56,25 @@ class FileIntakeServiceTests {
 		assertThatThrownBy(() -> this.intake.inspect(bomb, "bomb.zip", "application/zip"))
 			.isInstanceOfSatisfying(ProcessingException.class, exception ->
 				assertThat(exception.code()).isEqualTo("RESOURCE_LIMIT_EXCEEDED"));
+	}
+
+	@Test
+	void rejectsActiveSvgAndExternalResourcesButAcceptsInertVector() throws Exception {
+		var activeSvg = Files.createTempFile("jack-intake-active-", ".svg");
+		Files.writeString(activeSvg, "<svg xmlns=\"http://www.w3.org/2000/svg\"><script>alert(1)</script></svg>");
+		assertThatThrownBy(() -> this.intake.inspect(activeSvg, "active.svg", "image/svg+xml"))
+			.isInstanceOfSatisfying(ProcessingException.class, exception ->
+				assertThat(exception.code()).isEqualTo("UNSAFE_ACTIVE_CONTENT"));
+
+		var externalSvg = Files.createTempFile("jack-intake-external-", ".svg");
+		Files.writeString(externalSvg, "<svg xmlns=\"http://www.w3.org/2000/svg\"><image href=\"https://example.test/pixel.png\"/></svg>");
+		assertThatThrownBy(() -> this.intake.inspect(externalSvg, "external.svg", "image/svg+xml"))
+			.isInstanceOfSatisfying(ProcessingException.class, exception ->
+				assertThat(exception.code()).isEqualTo("UNSAFE_ACTIVE_CONTENT"));
+
+		var inertSvg = Files.createTempFile("jack-intake-inert-", ".svg");
+		Files.writeString(inertSvg, "<svg xmlns=\"http://www.w3.org/2000/svg\"><rect width=\"10\" height=\"10\" fill=\"#173436\"/></svg>");
+		assertThat(this.intake.inspect(inertSvg, "inert.svg", "image/svg+xml").parserRoute()).isEqualTo("svg");
 	}
 
 	private Path zip(String entryName, String content) throws Exception {
