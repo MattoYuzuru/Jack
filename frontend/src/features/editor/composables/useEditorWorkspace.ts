@@ -1,6 +1,4 @@
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
-import { buildEditorLocalPreview, type EditorLocalPreview } from '../application/editor-preview'
-import { renderMarkdownPreview } from '../application/markdown-preview-runtime'
 import { decodeEditorFile, encodeEditorFile } from '../application/editor-file-codec'
 import {
   clearEditorDraft,
@@ -28,6 +26,7 @@ import {
   ProcessingJobCancelledError,
   type ProcessingJobStatus,
 } from '../../processing/application/processing-client'
+import { useEditorPreview } from './useEditorPreview'
 
 interface EditorTemplateDefinition {
   id: string
@@ -276,23 +275,13 @@ export function useEditorWorkspace() {
   const lastValidatedResult = shallowRef<ServerEditorResult | null>(null)
   let capabilityRequest: Promise<void> | null = null
   let persistTimeoutId = 0
-  let markdownPreviewTimeoutId = 0
-  let markdownPreviewRevision = 0
   let validationRevision = 0
-  let markdownPreviewController: AbortController | null = null
   let lastAppliedTemplateId = selectedTemplateId.value
-  const serverMarkdownPreview = shallowRef<EditorLocalPreview | null>(null)
 
   const activeFormat = computed(
     () => availableFormats.value.find((format) => format.id === selectedFormatId.value) ?? null,
   )
-  const preview = computed<EditorLocalPreview>(() => {
-    if (selectedFormatId.value === 'markdown' && serverMarkdownPreview.value) {
-      return serverMarkdownPreview.value
-    }
-
-    return buildEditorLocalPreview(selectedFormatId.value, content.value)
-  })
+  const { preview } = useEditorPreview(selectedFormatId, content)
   const lineCount = computed(() => (content.value ? content.value.split('\n').length : 1))
   const lineNumberGutter = computed(() =>
     Array.from({ length: lineCount.value }, (_unused, index) => String(index + 1)).join('\n'),
@@ -658,42 +647,6 @@ export function useEditorWorkspace() {
     queueDraftPersistence()
   })
 
-  watch(
-    [selectedFormatId, content],
-    ([formatId, source]) => {
-      window.clearTimeout(markdownPreviewTimeoutId)
-      markdownPreviewController?.abort()
-      markdownPreviewController = null
-      const revision = ++markdownPreviewRevision
-
-      if (formatId !== 'markdown') {
-        serverMarkdownPreview.value = null
-        return
-      }
-
-      markdownPreviewTimeoutId = window.setTimeout(() => {
-        const controller = new AbortController()
-        markdownPreviewController = controller
-
-        void renderMarkdownPreview(source, controller.signal)
-          .then((nextPreview) => {
-            if (revision === markdownPreviewRevision) {
-              serverMarkdownPreview.value = nextPreview
-            }
-          })
-          .catch(() => {
-            // При offline/stale request сохраняем inert fallback и не заменяем новый draft.
-          })
-          .finally(() => {
-            if (revision === markdownPreviewRevision) {
-              markdownPreviewController = null
-            }
-          })
-      }, 280)
-    },
-    { immediate: true },
-  )
-
   watch(selectedFormatId, (nextFormatId) => {
     const currentFormat = availableFormats.value.find((format) => format.id === nextFormatId)
     if (!currentFormat) {
@@ -725,8 +678,6 @@ export function useEditorWorkspace() {
 
   onBeforeUnmount(() => {
     window.clearTimeout(persistTimeoutId)
-    window.clearTimeout(markdownPreviewTimeoutId)
-    markdownPreviewController?.abort()
   })
 
   return {
