@@ -494,8 +494,9 @@ public class EditorProcessingService {
 			var upload = new StoredUpload(
 				java.util.UUID.randomUUID(),
 				"editor.html",
-				"text/html",
-				"html",
+					"text/html",
+					"html",
+					"text",
 				Files.size(tempPath),
 				"",
 				createdAt,

@@ -39,6 +39,7 @@ public class ViewerResolveService {
 	private final MetadataProcessingService metadataProcessingService;
 	private final ProcessingProperties processingProperties;
 	private final ObjectMapper objectMapper;
+	private final NativeProcessExecutor nativeProcessExecutor;
 
 	public ViewerResolveService(
 		ArtifactStorageService artifactStorageService,
@@ -47,7 +48,8 @@ public class ViewerResolveService {
 		DocumentPreviewService documentPreviewService,
 		MetadataProcessingService metadataProcessingService,
 		ProcessingProperties processingProperties,
-		ObjectMapper objectMapper
+		ObjectMapper objectMapper,
+		NativeProcessExecutor nativeProcessExecutor
 	) {
 		this.artifactStorageService = artifactStorageService;
 		this.imageProcessingService = imageProcessingService;
@@ -56,6 +58,7 @@ public class ViewerResolveService {
 		this.metadataProcessingService = metadataProcessingService;
 		this.processingProperties = processingProperties;
 		this.objectMapper = objectMapper;
+		this.nativeProcessExecutor = nativeProcessExecutor;
 	}
 
 	public boolean isAvailable() {
@@ -401,17 +404,14 @@ public class ViewerResolveService {
 			"-"
 		);
 
-		Process process;
+		byte[] pcm;
 		try {
-			process = new ProcessBuilder(command)
-				.directory(previewPath.getParent().toFile())
-				.redirectError(ProcessBuilder.Redirect.DISCARD)
-				.start();
+			pcm = this.nativeProcessExecutor.execute(command, previewPath.getParent(), timeout()).output();
 		}
-		catch (IOException exception) {
+		catch (ResponseStatusException exception) {
 			return new AudioWaveformResult(
 				List.of(),
-				List.of("Waveform не удалось подготовить server-side: ffmpeg waveform helper не стартовал.")
+				List.of("Waveform не удалось подготовить server-side в пределах process budget.")
 			);
 		}
 
@@ -421,18 +421,9 @@ public class ViewerResolveService {
 		int bucketIndex = 0;
 		long samplesInBucket = 0L;
 
-		try (InputStream inputStream = process.getInputStream()) {
-			while (bucketIndex < AUDIO_WAVEFORM_BUCKET_COUNT) {
-				int low = inputStream.read();
-				if (low == -1) {
-					break;
-				}
-
-				int high = inputStream.read();
-				if (high == -1) {
-					break;
-				}
-
+		for (int offset = 0; offset + 1 < pcm.length && bucketIndex < AUDIO_WAVEFORM_BUCKET_COUNT; offset += 2) {
+				int low = pcm[offset] & 0xff;
+				int high = pcm[offset + 1] & 0xff;
 				short sample = (short) (((high & 0xff) << 8) | (low & 0xff));
 				double amplitude = Math.abs(sample / 32768d);
 				if (amplitude > bucketPeaks[bucketIndex]) {
@@ -444,39 +435,6 @@ public class ViewerResolveService {
 					bucketIndex += 1;
 					samplesInBucket = 0L;
 				}
-			}
-		}
-		catch (IOException exception) {
-			process.destroyForcibly();
-			return new AudioWaveformResult(
-				List.of(),
-				List.of("Waveform не удалось подготовить server-side: ffmpeg PCM stream оборвался с ошибкой.")
-			);
-		}
-
-		try {
-			if (!process.waitFor(timeout().toMillis(), TimeUnit.MILLISECONDS)) {
-				process.destroyForcibly();
-				return new AudioWaveformResult(
-					List.of(),
-					List.of("Waveform не удалось подготовить server-side: ffmpeg waveform helper превысил timeout.")
-				);
-			}
-		}
-		catch (InterruptedException exception) {
-			Thread.currentThread().interrupt();
-			process.destroyForcibly();
-			return new AudioWaveformResult(
-				List.of(),
-				List.of("Waveform не удалось подготовить server-side: job был прерван.")
-			);
-		}
-
-		if (process.exitValue() != 0) {
-			return new AudioWaveformResult(
-				List.of(),
-				List.of("Waveform не удалось подготовить server-side: ffmpeg waveform helper завершился с ошибкой.")
-			);
 		}
 
 		double peak = 0d;

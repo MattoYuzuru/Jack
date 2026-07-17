@@ -4,8 +4,10 @@ import com.keykomi.jack.processing.config.ProcessingProperties;
 import com.keykomi.jack.processing.domain.StoredUpload;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -17,7 +19,6 @@ import java.util.Set;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -27,15 +28,18 @@ public class UploadStorageService {
 	private final ProcessingProperties processingProperties;
 	private final ProcessingStateStore stateStore;
 	private final ProcessingOwnerContext ownerContext;
+	private final FileIntakeService fileIntakeService;
 
 	public UploadStorageService(
 		ProcessingProperties processingProperties,
 		ProcessingStateStore stateStore,
-		ProcessingOwnerContext ownerContext
+		ProcessingOwnerContext ownerContext,
+		FileIntakeService fileIntakeService
 	) throws IOException {
 		this.processingProperties = processingProperties;
 		this.stateStore = stateStore;
 		this.ownerContext = ownerContext;
+		this.fileIntakeService = fileIntakeService;
 		Files.createDirectories(processingProperties.uploadsDirectory());
 	}
 
@@ -60,30 +64,45 @@ public class UploadStorageService {
 		}
 
 		var uploadId = UUID.randomUUID();
-		var originalFileName = sanitizeFileName(file.getOriginalFilename());
-		var extension = detectExtension(originalFileName);
-		var mediaType = StringUtils.hasText(file.getContentType()) ? file.getContentType() : "application/octet-stream";
-		var storagePath = this.processingProperties.uploadsDirectory().resolve(uploadId + "-" + originalFileName);
+		var temporaryPath = this.processingProperties.uploadsDirectory().resolve(uploadId + ".uploading");
+		Path storagePath = null;
 		var createdAt = Instant.now();
 		var expiresAt = createdAt.plus(this.processingProperties.getUploadRetentionHours(), ChronoUnit.HOURS);
+		var stored = false;
 
 		try {
 			var digest = MessageDigest.getInstance("SHA-256");
 			try (
 				InputStream inputStream = file.getInputStream();
-				DigestInputStream digestInputStream = new DigestInputStream(inputStream, digest)
+				DigestInputStream digestInputStream = new DigestInputStream(inputStream, digest);
+				OutputStream outputStream = Files.newOutputStream(temporaryPath)
 			) {
 				// Хеш считаем в тот же проход, что и запись на диск, чтобы foundation
 				// сразу умел строить dedup/cache-friendly идентификатор без второго чтения файла.
-				Files.copy(digestInputStream, storagePath);
+				copyBounded(digestInputStream, outputStream, this.processingProperties.getMaxUploadSizeBytes());
 			}
+			var actualSize = Files.size(temporaryPath);
+			if (usedBytes + actualSize > this.processingProperties.getMaxStorageBytesPerSession()) {
+				throw new ResponseStatusException(
+					HttpStatus.PAYLOAD_TOO_LARGE,
+					"Session storage quota исчерпана. Удали старые результаты или повтори после TTL cleanup."
+				);
+			}
+			var intake = this.fileIntakeService.inspect(
+				temporaryPath,
+				file.getOriginalFilename(),
+				file.getContentType()
+			);
+			storagePath = this.processingProperties.uploadsDirectory().resolve(uploadId + "-" + intake.fileName());
+			Files.move(temporaryPath, storagePath, StandardCopyOption.ATOMIC_MOVE);
 
 			var storedUpload = new StoredUpload(
 				uploadId,
-				originalFileName,
-				mediaType,
-				extension,
-				Files.size(storagePath),
+				intake.fileName(),
+				intake.mediaType(),
+				intake.extension(),
+				intake.parserRoute(),
+				actualSize,
 				HexFormat.of().formatHex(digest.digest()),
 				createdAt,
 				expiresAt,
@@ -91,6 +110,7 @@ public class UploadStorageService {
 				storagePath
 			);
 			this.stateStore.saveUpload(ownerId, storedUpload);
+			stored = true;
 			return storedUpload;
 		}
 		catch (IOException exception) {
@@ -99,7 +119,15 @@ public class UploadStorageService {
 		catch (NoSuchAlgorithmException exception) {
 			throw new IllegalStateException("SHA-256 должен быть доступен в стандартной JDK.", exception);
 		}
-	}
+		finally {
+			if (!stored) {
+				deletePath(temporaryPath);
+				if (storagePath != null) {
+					deletePath(storagePath);
+				}
+				}
+			}
+		}
 
 	public StoredUpload getRequiredUpload(UUID uploadId) {
 		return this.stateStore.findOwnedUpload(uploadId, this.ownerContext.ownerId(), Instant.now())
@@ -159,21 +187,17 @@ public class UploadStorageService {
 		return deletedUploads;
 	}
 
-	private String sanitizeFileName(String originalFileName) {
-		var candidate = StringUtils.hasText(originalFileName) ? originalFileName : "upload.bin";
-		var normalized = candidate.replace("\\", "/");
-		var slashIndex = normalized.lastIndexOf('/');
-		var fileName = slashIndex >= 0 ? normalized.substring(slashIndex + 1) : normalized;
-		return fileName.replaceAll("[^A-Za-z0-9._-]", "_");
-	}
-
-	private String detectExtension(String fileName) {
-		var dotIndex = fileName.lastIndexOf('.');
-		if (dotIndex < 0 || dotIndex == fileName.length() - 1) {
-			return "";
+	private void copyBounded(InputStream input, OutputStream output, long maxBytes) throws IOException {
+		var buffer = new byte[8_192];
+		long total = 0;
+		int read;
+		while ((read = input.read(buffer)) != -1) {
+			total += read;
+			if (total > maxBytes) {
+				throw new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE, "Upload превысил допустимый byte budget.");
+			}
+			output.write(buffer, 0, read);
 		}
-
-		return fileName.substring(dotIndex + 1).toLowerCase();
 	}
 
 	private boolean isExpired(Path path, Instant cutoff) {

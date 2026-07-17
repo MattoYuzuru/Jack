@@ -24,15 +24,18 @@ public class ArtifactStorageService {
 	private final ProcessingProperties processingProperties;
 	private final ObjectMapper objectMapper;
 	private final ProcessingStateStore stateStore;
+	private final ProcessingResourceBudgetService resourceBudgets;
 
 	public ArtifactStorageService(
 		ProcessingProperties processingProperties,
 		ObjectMapper objectMapper,
-		ProcessingStateStore stateStore
+		ProcessingStateStore stateStore,
+		ProcessingResourceBudgetService resourceBudgets
 	) throws IOException {
 		this.processingProperties = processingProperties;
 		this.objectMapper = objectMapper;
 		this.stateStore = stateStore;
+		this.resourceBudgets = resourceBudgets;
 		Files.createDirectories(processingProperties.artifactsDirectory());
 	}
 
@@ -117,13 +120,21 @@ public class ArtifactStorageService {
 		boolean durable
 	) throws IOException {
 		var createdAt = Instant.now();
+		var sizeBytes = Files.size(storagePath);
+		try {
+			this.resourceBudgets.verifyResultSize(sizeBytes);
+		}
+		catch (RuntimeException exception) {
+			Files.deleteIfExists(storagePath);
+			throw exception;
+		}
 		var artifact = new StoredArtifact(
 			artifactId,
 			jobId,
 			kind,
 			fileName,
 			mediaType,
-			Files.size(storagePath),
+			sizeBytes,
 			sha256(storagePath),
 			createdAt,
 			createdAt.plus(this.processingProperties.getArtifactRetentionHours(), ChronoUnit.HOURS),

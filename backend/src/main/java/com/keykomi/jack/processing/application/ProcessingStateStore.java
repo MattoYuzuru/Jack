@@ -39,11 +39,11 @@ public class ProcessingStateStore {
 		this.jdbcTemplate.update(
 			"""
 			INSERT INTO processing_uploads (
-			  id, owner_id, original_file_name, media_type, extension, size_bytes, sha256,
+			  id, owner_id, original_file_name, media_type, extension, parser_route, size_bytes, sha256,
 			  storage_path, created_at, expires_at, policy_version
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			""",
-			upload.id(), ownerId, upload.originalFileName(), upload.mediaType(), upload.extension(),
+			upload.id(), ownerId, upload.originalFileName(), upload.mediaType(), upload.extension(), upload.parserRoute(),
 			upload.sizeBytes(), upload.sha256(), upload.storagePath().toString(),
 			atOffset(upload.createdAt()), atOffset(upload.expiresAt()), upload.policyVersion()
 		);
@@ -269,6 +269,7 @@ public class ProcessingStateStore {
 			resultSet.getString("original_file_name"),
 			resultSet.getString("media_type"),
 			resultSet.getString("extension"),
+			resultSet.getString("parser_route"),
 			resultSet.getLong("size_bytes"),
 			resultSet.getString("sha256"),
 			readInstant(resultSet, "created_at"),

@@ -93,16 +93,19 @@ public class DocumentPreviewService {
 	private final ArtifactStorageService artifactStorageService;
 	private final ObjectMapper objectMapper;
 	private final MarkdownRenderService markdownRenderService;
+	private final ProcessingResourceBudgetService resourceBudgets;
 	private final Yaml yaml;
 
 	public DocumentPreviewService(
 		ArtifactStorageService artifactStorageService,
 		ObjectMapper objectMapper,
-		MarkdownRenderService markdownRenderService
+		MarkdownRenderService markdownRenderService,
+		ProcessingResourceBudgetService resourceBudgets
 	) {
 		this.artifactStorageService = artifactStorageService;
 		this.objectMapper = objectMapper;
 		this.markdownRenderService = markdownRenderService;
+		this.resourceBudgets = resourceBudgets;
 		this.yaml = new Yaml();
 	}
 
@@ -183,6 +186,7 @@ public class DocumentPreviewService {
 
 	private DocumentPreviewPayload buildPdfPreview(StoredUpload upload) {
 		try (var document = Loader.loadPDF(upload.storagePath().toFile())) {
+			this.resourceBudgets.verifyDocumentPages(document.getNumberOfPages());
 			var searchableText = normalizeExtractedText(new PDFTextStripper().getText(document));
 			var summary = List.of(
 				new DocumentPreviewPayload.DocumentFact("Тип документа", "PDF"),
@@ -2036,13 +2040,7 @@ public class DocumentPreviewService {
 	}
 
 	private Optional<String> readZipEntryAsText(ZipFile zipFile, String entryName) throws IOException {
-		ZipEntry entry = zipFile.getEntry(entryName);
-		if (entry == null) {
-			return Optional.empty();
-		}
-		try (var inputStream = zipFile.getInputStream(entry)) {
-			return Optional.of(new String(inputStream.readAllBytes(), StandardCharsets.UTF_8));
-		}
+		return this.resourceBudgets.readZipEntryAsText(zipFile, entryName, 8_388_608L);
 	}
 
 	private Optional<org.w3c.dom.Element> findFirstElementByLocalName(Node root, String localName) {

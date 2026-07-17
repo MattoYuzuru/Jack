@@ -28,6 +28,19 @@ public final class ProcessingFileFamilyResolver {
 	}
 
 	public static String detectFamily(StoredUpload upload) {
+		var parserRoute = upload.parserRoute();
+		if ("image".equals(parserRoute) || "svg".equals(parserRoute)) {
+			return "image";
+		}
+		if ("media".equals(parserRoute)) {
+			return "media";
+		}
+		if ("audio".equals(parserRoute)) {
+			return "audio";
+		}
+		if (Set.of("pdf", "text", "table", "workbook", "database", "office", "epub").contains(parserRoute)) {
+			return "document";
+		}
 		var mediaType = upload.mediaType().toLowerCase();
 		var extension = upload.extension().toLowerCase();
 		if (mediaType.startsWith("image/")) {

@@ -9,6 +9,7 @@ public record StoredUpload(
 	String originalFileName,
 	String mediaType,
 	String extension,
+	String parserRoute,
 	long sizeBytes,
 	String sha256,
 	Instant createdAt,

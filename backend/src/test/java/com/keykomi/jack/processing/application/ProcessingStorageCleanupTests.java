@@ -82,7 +82,7 @@ class ProcessingStorageCleanupTests {
 		Files.createDirectories(path.getParent());
 		Files.writeString(path, "payload");
 		var upload = new StoredUpload(
-			id, fileName, "text/plain", "txt", Files.size(path), "a".repeat(64), createdAt,
+			id, fileName, "text/plain", "txt", "text", Files.size(path), "a".repeat(64), createdAt,
 			createdAt.plusSeconds(3_600), "test-policy", path
 		);
 		this.stateStore.saveUpload(ownerId, upload);

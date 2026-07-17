@@ -13,6 +13,7 @@ import com.keykomi.jack.processing.domain.OfficeConversionRequest;
 import com.keykomi.jack.processing.domain.PdfToolkitRequest;
 import com.keykomi.jack.processing.domain.StoredProcessingJob;
 import com.keykomi.jack.processing.domain.StoredUpload;
+import com.keykomi.jack.processing.domain.ProcessingException;
 import com.keykomi.jack.processing.config.ProcessingProperties;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -686,6 +687,9 @@ public class ProcessingJobService {
 	}
 
 	private String resolveErrorCode(Exception exception) {
+		if (exception instanceof ProcessingException processingException) {
+			return processingException.code();
+		}
 		if (exception instanceof ResponseStatusException responseStatusException) {
 			return switch (responseStatusException.getStatusCode().value()) {
 				case 400 -> "INVALID_FILE";

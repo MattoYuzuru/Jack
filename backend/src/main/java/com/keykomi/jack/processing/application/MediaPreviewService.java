@@ -28,15 +28,18 @@ public class MediaPreviewService {
 	private final ProcessingProperties processingProperties;
 	private final ArtifactStorageService artifactStorageService;
 	private final ObjectMapper objectMapper;
+	private final NativeProcessExecutor nativeProcessExecutor;
 
 	public MediaPreviewService(
 		ProcessingProperties processingProperties,
 		ArtifactStorageService artifactStorageService,
-		ObjectMapper objectMapper
+		ObjectMapper objectMapper,
+		NativeProcessExecutor nativeProcessExecutor
 	) {
 		this.processingProperties = processingProperties;
 		this.artifactStorageService = artifactStorageService;
 		this.objectMapper = objectMapper;
+		this.nativeProcessExecutor = nativeProcessExecutor;
 	}
 
 	public boolean isAvailable() {
@@ -344,73 +347,7 @@ public class MediaPreviewService {
 	}
 
 	private CommandResult execute(List<String> command, Path workingDirectory, Duration timeout) {
-		Process process = null;
-		Thread outputReader = null;
-		var output = new StringBuilder();
-		var outputFailure = new AtomicReference<IOException>();
-
-		try {
-			process = new ProcessBuilder(command)
-				.directory(workingDirectory.toFile())
-				.redirectErrorStream(true)
-				.start();
-
-			var runningProcess = process;
-			// stdout/stderr читаем в отдельном потоке, иначе blocking read сломает timeout
-			// и backend зависнет на проблемном ffmpeg/ffprobe процессе.
-			outputReader = Thread.ofVirtual()
-				.name("jack-media-preview-output")
-				.start(() -> {
-					try (var inputStream = runningProcess.getInputStream()) {
-						output.append(readFully(inputStream));
-					}
-					catch (IOException exception) {
-						outputFailure.set(exception);
-					}
-				});
-
-			var finished = process.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS);
-
-			if (!finished) {
-				process.destroyForcibly();
-				process.waitFor(5, TimeUnit.SECONDS);
-				throw new ResponseStatusException(HttpStatus.REQUEST_TIMEOUT, "Media processing превысил допустимый timeout.");
-			}
-
-			outputReader.join(1_000L);
-			if (outputFailure.get() != null) {
-				throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Не удалось прочитать вывод внешнего media processor.", outputFailure.get());
-			}
-
-			var normalizedOutput = normalizeNullable(output.toString()).orElse("без stderr/stdout");
-			if (process.exitValue() != 0) {
-				throw new ResponseStatusException(
-					HttpStatus.UNPROCESSABLE_ENTITY,
-					"Команда завершилась с кодом %s: %s".formatted(process.exitValue(), normalizedOutput)
-				);
-			}
-
-			return new CommandResult(output.toString());
-		}
-		catch (IOException exception) {
-			throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Не удалось запустить внешний media processor.", exception);
-		}
-		catch (InterruptedException exception) {
-			if (process != null) {
-				process.destroy();
-				try {
-					if (!process.waitFor(5, TimeUnit.SECONDS)) {
-						process.destroyForcibly();
-						process.waitFor(5, TimeUnit.SECONDS);
-					}
-				}
-				catch (InterruptedException ignored) {
-					Thread.currentThread().interrupt();
-				}
-			}
-			Thread.currentThread().interrupt();
-			throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Media processing был прерван.", exception);
-		}
+		return new CommandResult(this.nativeProcessExecutor.execute(command, workingDirectory, timeout).utf8Output());
 	}
 
 	private Duration timeout() {

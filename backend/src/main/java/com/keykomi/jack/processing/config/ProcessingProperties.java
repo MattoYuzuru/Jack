@@ -32,6 +32,16 @@ public class ProcessingProperties {
 	private boolean sessionCookieSecure;
 	private String policyVersion = "jack-processing-2";
 	private String fixedSessionOwner = "";
+	private long maxDecodedPixels = 40_000_000L;
+	private int maxDocumentPages = 500;
+	private int maxTableRows = 20_000;
+	private long maxTableCells = 400_000L;
+	private int maxArchiveEntries = 2_048;
+	private long maxArchiveExpandedBytes = 134_217_728L;
+	private int maxArchiveExpansionRatio = 100;
+	private int maxArchiveDepth = 1;
+	private long maxProcessOutputBytes = 1_048_576L;
+	private long maxResultBytes = 134_217_728L;
 
 	public Path getStorageRoot() {
 		return this.storageRoot;
@@ -247,6 +257,86 @@ public class ProcessingProperties {
 
 	public void setFixedSessionOwner(String fixedSessionOwner) {
 		this.fixedSessionOwner = fixedSessionOwner;
+	}
+
+	public long getMaxDecodedPixels() {
+		return this.maxDecodedPixels;
+	}
+
+	public void setMaxDecodedPixels(long maxDecodedPixels) {
+		this.maxDecodedPixels = maxDecodedPixels;
+	}
+
+	public int getMaxDocumentPages() {
+		return this.maxDocumentPages;
+	}
+
+	public void setMaxDocumentPages(int maxDocumentPages) {
+		this.maxDocumentPages = maxDocumentPages;
+	}
+
+	public int getMaxTableRows() {
+		return this.maxTableRows;
+	}
+
+	public void setMaxTableRows(int maxTableRows) {
+		this.maxTableRows = maxTableRows;
+	}
+
+	public long getMaxTableCells() {
+		return this.maxTableCells;
+	}
+
+	public void setMaxTableCells(long maxTableCells) {
+		this.maxTableCells = maxTableCells;
+	}
+
+	public int getMaxArchiveEntries() {
+		return this.maxArchiveEntries;
+	}
+
+	public void setMaxArchiveEntries(int maxArchiveEntries) {
+		this.maxArchiveEntries = maxArchiveEntries;
+	}
+
+	public long getMaxArchiveExpandedBytes() {
+		return this.maxArchiveExpandedBytes;
+	}
+
+	public void setMaxArchiveExpandedBytes(long maxArchiveExpandedBytes) {
+		this.maxArchiveExpandedBytes = maxArchiveExpandedBytes;
+	}
+
+	public int getMaxArchiveExpansionRatio() {
+		return this.maxArchiveExpansionRatio;
+	}
+
+	public void setMaxArchiveExpansionRatio(int maxArchiveExpansionRatio) {
+		this.maxArchiveExpansionRatio = maxArchiveExpansionRatio;
+	}
+
+	public int getMaxArchiveDepth() {
+		return this.maxArchiveDepth;
+	}
+
+	public void setMaxArchiveDepth(int maxArchiveDepth) {
+		this.maxArchiveDepth = maxArchiveDepth;
+	}
+
+	public long getMaxProcessOutputBytes() {
+		return this.maxProcessOutputBytes;
+	}
+
+	public void setMaxProcessOutputBytes(long maxProcessOutputBytes) {
+		this.maxProcessOutputBytes = maxProcessOutputBytes;
+	}
+
+	public long getMaxResultBytes() {
+		return this.maxResultBytes;
+	}
+
+	public void setMaxResultBytes(long maxResultBytes) {
+		this.maxResultBytes = maxResultBytes;
 	}
 
 }

@@ -1,6 +1,7 @@
 package com.keykomi.jack.processing.web;
 
 import java.util.UUID;
+import com.keykomi.jack.processing.domain.ProcessingException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -20,7 +21,11 @@ public class ProcessingApiExceptionHandler {
 			headers.set(HttpHeaders.RETRY_AFTER, "5");
 		}
 		return new ResponseEntity<>(
-			new ApiError(codeFor(safeStatus), safeMessage(safeStatus, exception.getReason()), UUID.randomUUID()),
+			new ApiError(
+				exception instanceof ProcessingException processingException ? processingException.code() : codeFor(safeStatus),
+				safeMessage(safeStatus, exception.getReason()),
+				UUID.randomUUID()
+			),
 			headers,
 			safeStatus
 		);
@@ -41,6 +46,10 @@ public class ProcessingApiExceptionHandler {
 		return switch (status.value()) {
 			case 400 -> "INVALID_FILE";
 			case 413 -> "FILE_TOO_LARGE";
+			case 408 -> "PROCESSING_TIMEOUT";
+			case 409 -> "PROCESSING_CANCELLED";
+			case 415 -> "UNSUPPORTED_FORMAT";
+			case 422 -> "CORRUPT_FILE";
 			case 416 -> "INVALID_RANGE";
 			case 429 -> "RATE_LIMITED";
 			case 404 -> "RESOURCE_NOT_FOUND";
