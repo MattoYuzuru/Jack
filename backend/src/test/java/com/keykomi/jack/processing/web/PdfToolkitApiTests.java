@@ -21,6 +21,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.zip.ZipInputStream;
 import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.text.PDFTextStripper;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
@@ -272,6 +273,9 @@ class PdfToolkitApiTests {
 		assertThat(redactedManifest.path("warnings").toString()).contains("raster PDF");
 		try (var redactedDocument = Loader.loadPDF(downloadArtifactBytes(artifactIndex(redactedJob).get("pdf-toolkit-binary")))) {
 			assertThat(redactedDocument.getNumberOfPages()).isEqualTo(1);
+			assertThat(new PDFTextStripper().getText(redactedDocument)).doesNotContain("Secret token 123");
+			assertThat(redactedDocument.getPage(0).getAnnotations()).isEmpty();
+			assertThat(redactedDocument.getDocumentInformation().getMetadataKeys()).isEmpty();
 		}
 	}
 

@@ -871,7 +871,7 @@ export function createPdfToolkitCapabilityScopeFixture(): ProcessingCapabilitySc
         pdfToolkitOperation('rotate', 'Rotate pages', false, true, false, true),
         pdfToolkitOperation('reorder', 'Extract / reorder', false, true, false, true),
         pdfToolkitOperation('ocr', 'OCR', false, false, false, true),
-        pdfToolkitOperation('sign', 'E-sign / stamp', false, true, false, true),
+        pdfToolkitOperation('sign', 'Visible stamp', false, true, false, true),
         pdfToolkitOperation('redact', 'Redact terms', false, true, false, true),
         pdfToolkitOperation('protect', 'Protect PDF', false, false, false, true),
         pdfToolkitOperation('unlock', 'Unlock PDF', false, false, false, true),

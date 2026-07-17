@@ -860,7 +860,7 @@ public class ProcessingJobService {
 		}
 		if (operation == PdfToolkitRequest.Operation.SIGN &&
 			((request.signatureText() == null || request.signatureText().isBlank()) && request.signatureImageUploadId() == null)) {
-			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "E-sign требует signatureText или signatureImageUploadId.");
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Visible stamp требует signatureText или signatureImageUploadId.");
 		}
 		if (operation == PdfToolkitRequest.Operation.REDACT && (request.redactTerms() == null || request.redactTerms().isEmpty())) {
 			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Redaction требует redactTerms.");

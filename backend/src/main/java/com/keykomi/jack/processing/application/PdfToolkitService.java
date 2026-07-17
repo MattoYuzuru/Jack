@@ -375,6 +375,27 @@ public class PdfToolkitService {
 		}
 	}
 
+	private void verifyRedactionPostconditions(Path outputPath, List<String> terms) throws IOException {
+		try (var verified = Loader.loadPDF(outputPath.toFile())) {
+			var extracted = new PDFTextStripper().getText(verified).toLowerCase(Locale.ROOT);
+			if (terms.stream().map(value -> value.toLowerCase(Locale.ROOT)).anyMatch(extracted::contains)) {
+				throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Redaction postcondition: скрытый текст остался в результате.");
+			}
+			for (var page : verified.getPages()) {
+				if (!page.getAnnotations().isEmpty()) {
+					throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Redaction postcondition: annotations остались в результате.");
+				}
+			}
+			var names = verified.getDocumentCatalog().getNames();
+			if (names != null && names.getEmbeddedFiles() != null) {
+				throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Redaction postcondition: attachments остались в результате.");
+			}
+			if (!verified.getDocumentInformation().getMetadataKeys().isEmpty()) {
+				throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Redaction postcondition: source metadata осталась в результате.");
+			}
+		}
+	}
+
 	private PdfToolkitOutput ocr(
 		StoredUpload upload,
 		PdfToolkitRequest request,
@@ -530,7 +551,7 @@ public class PdfToolkitService {
 		var signatureImage = resolveSignatureImage(jobId, request.signatureImageUploadId());
 		var signatureText = request.signatureText() == null ? "" : request.signatureText().trim();
 		if ((signatureImage == null) && signatureText.isBlank()) {
-			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "E-sign требует signatureText или signatureImageUploadId.");
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Visible stamp требует signatureText или signatureImageUploadId.");
 		}
 
 		try (var document = loadPdf(upload, request.currentPassword(), "sign source")) {
@@ -631,6 +652,7 @@ public class PdfToolkitService {
 			var outputPath = workingDirectory.resolve(baseFileName(upload.originalFileName()) + ".redacted.pdf");
 			var previewPath = workingDirectory.resolve(derivedPreviewFileName(upload.originalFileName(), "pdf"));
 			resultDocument.save(outputPath.toFile());
+			verifyRedactionPostconditions(outputPath, terms);
 			Files.copy(outputPath, previewPath);
 
 			return new PdfToolkitOutput(
