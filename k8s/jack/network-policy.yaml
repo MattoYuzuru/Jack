@@ -1,6 +1,37 @@
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
+  name: default-deny
+  namespace: jack
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: frontend-ingress
+  namespace: jack
+spec:
+  podSelector:
+    matchLabels:
+      app: jack-frontend
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: traefik
+      ports:
+        - protocol: TCP
+          port: 8080
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
   name: backend-isolation
   namespace: jack
 spec:
@@ -11,7 +42,14 @@ spec:
     - Ingress
     - Egress
   ingress:
-    - ports:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: jack-frontend
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: traefik
+      ports:
         - protocol: TCP
           port: 8080
   egress:
@@ -22,8 +60,32 @@ spec:
       ports:
         - protocol: TCP
           port: 5432
-    - ports:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
         - protocol: UDP
           port: 53
         - protocol: TCP
           port: 53
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: postgres-ingress
+  namespace: jack
+spec:
+  podSelector:
+    matchLabels:
+      app: jack-postgres
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: jack-backend
+      ports:
+        - protocol: TCP
+          port: 5432

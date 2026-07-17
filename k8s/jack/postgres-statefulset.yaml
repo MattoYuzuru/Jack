@@ -14,9 +14,16 @@ spec:
       labels:
         app: jack-postgres
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 70
+        runAsGroup: 70
+        fsGroup: 70
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: postgres
-          image: postgres:17-alpine
+          image: postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 5432
@@ -37,6 +44,12 @@ spec:
                 secretKeyRef:
                   name: jack-secrets
                   key: postgres-db
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
           readinessProbe:
             exec:
               command:
@@ -63,6 +76,17 @@ spec:
           volumeMounts:
             - name: postgres-data
               mountPath: /var/lib/postgresql/data
+            - name: postgres-run
+              mountPath: /run/postgresql
+            - name: postgres-tmp
+              mountPath: /tmp
+      volumes:
+        - name: postgres-run
+          emptyDir:
+            sizeLimit: 16Mi
+        - name: postgres-tmp
+          emptyDir:
+            sizeLimit: 64Mi
   volumeClaimTemplates:
     - metadata:
         name: postgres-data

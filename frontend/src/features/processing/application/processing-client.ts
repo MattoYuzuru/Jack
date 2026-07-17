@@ -405,10 +405,17 @@ export async function requestProcessingBlob(path: string, init: RequestInit = {}
 async function processingFetch(path: string, init: RequestInit): Promise<Response> {
   throwIfProcessingAborted(init.signal)
 
+  const method = (init.method || 'GET').toUpperCase()
+  const headers = new Headers(init.headers)
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+    headers.set('X-Jack-Request', 'processing')
+  }
+
   try {
     return await fetch(resolveProcessingApiUrl(path), {
       credentials: 'include',
       ...init,
+      headers,
     })
   } catch (error) {
     if (isProcessingAbort(error, init.signal)) {

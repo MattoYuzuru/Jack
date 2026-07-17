@@ -17,6 +17,8 @@ import javax.crypto.spec.SecretKeySpec;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseCookie;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -48,6 +50,11 @@ public class ProcessingSessionFilter extends OncePerRequestFilter {
 		HttpServletResponse response,
 		FilterChain filterChain
 	) throws ServletException, IOException {
+		applySecurityHeaders(response);
+		if (isCrossOriginMutationWithoutIntentHeader(request)) {
+			response.sendError(HttpStatus.FORBIDDEN.value(), "Cross-origin mutation требует X-Jack-Request header.");
+			return;
+		}
 		var ownerId = readOwner(request);
 		if (ownerId == null) {
 			ownerId = fixedOwner().orElseGet(UUID::randomUUID);
@@ -56,6 +63,22 @@ public class ProcessingSessionFilter extends OncePerRequestFilter {
 
 		request.setAttribute(OWNER_ATTRIBUTE, ownerId);
 		filterChain.doFilter(request, response);
+	}
+
+	private boolean isCrossOriginMutationWithoutIntentHeader(HttpServletRequest request) {
+		var method = request.getMethod();
+		var mutation = HttpMethod.POST.matches(method) || HttpMethod.PUT.matches(method)
+			|| HttpMethod.PATCH.matches(method) || HttpMethod.DELETE.matches(method);
+		return mutation && request.getHeader(HttpHeaders.ORIGIN) != null
+			&& !"processing".equals(request.getHeader("X-Jack-Request"));
+	}
+
+	private void applySecurityHeaders(HttpServletResponse response) {
+		response.setHeader("X-Content-Type-Options", "nosniff");
+		response.setHeader("X-Frame-Options", "DENY");
+		response.setHeader("Referrer-Policy", "no-referrer");
+		response.setHeader("Permissions-Policy", "camera=(), geolocation=(), microphone=(), payment=(), usb=()");
+		response.setHeader(HttpHeaders.CACHE_CONTROL, "no-store");
 	}
 
 	private java.util.Optional<UUID> fixedOwner() {

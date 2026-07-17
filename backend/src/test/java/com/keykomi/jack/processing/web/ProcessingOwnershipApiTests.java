@@ -122,6 +122,25 @@ class ProcessingOwnershipApiTests {
 		assertThat(completed.path("correlationId").asText()).isNotBlank();
 	}
 
+	@Test
+	void crossOriginMutationRequiresExplicitClientIntentHeader() throws Exception {
+		var file = new MockMultipartFile("file", "csrf.txt", "text/plain", "csrf".getBytes());
+		this.mockMvc.perform(
+			multipart("/api/uploads")
+				.file(file)
+				.header("Origin", "http://localhost:5173")
+		).andExpect(status().isForbidden())
+			.andExpect(header().string("Cache-Control", "no-store"))
+			.andExpect(header().string("X-Content-Type-Options", "nosniff"));
+
+		this.mockMvc.perform(
+			multipart("/api/uploads")
+				.file(file)
+				.header("Origin", "http://localhost:5173")
+				.header("X-Jack-Request", "processing")
+		).andExpect(status().isCreated());
+	}
+
 	private Cookie newSession(Cookie input) throws Exception {
 		var request = get("/api/capabilities/platform");
 		if (input != null) {
