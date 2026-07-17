@@ -82,6 +82,38 @@ describe('processing client', () => {
     )
   })
 
+  it('cancels the durable job when polling reaches its timeout', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            id: 'job-timeout',
+            status: 'RUNNING',
+            progressPercent: 50,
+            message: 'Выполняется',
+            artifacts: [],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ id: 'job-timeout', status: 'CANCELLED', artifacts: [] }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      )
+    globalThis.fetch = fetchMock as typeof fetch
+
+    await expect(
+      awaitProcessingJob('job-timeout', { maxAttempts: 1, pollIntervalMs: 0 }),
+    ).rejects.toThrow('больше времени')
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      'http://localhost:8080/api/jobs/job-timeout',
+      expect.objectContaining({ method: 'DELETE' }),
+    )
+  })
+
   it('cancels a created job when the caller aborts polling', async () => {
     const controller = new AbortController()
     const runningJob = {

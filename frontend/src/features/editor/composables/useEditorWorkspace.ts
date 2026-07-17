@@ -22,10 +22,10 @@ import {
   type EditorFormatDefinition,
 } from '../domain/editor-registry'
 import {
-  cancelProcessingJob,
   ProcessingJobCancelledError,
   type ProcessingJobStatus,
 } from '../../processing/application/processing-client'
+import { createProcessingTaskController } from '../../processing/application/processing-task-controller'
 import { useEditorPreview } from './useEditorPreview'
 
 interface EditorTemplateDefinition {
@@ -276,6 +276,11 @@ export function useEditorWorkspace() {
   let capabilityRequest: Promise<void> | null = null
   let persistTimeoutId = 0
   let validationRevision = 0
+  const taskController = createProcessingTaskController<{
+    fingerprint: string
+    formatId: string
+    downloadMode: 'ready' | 'plain' | null
+  }>({ cloneSnapshot: (snapshot) => ({ ...snapshot }) })
   let lastAppliedTemplateId = selectedTemplateId.value
 
   const activeFormat = computed(
@@ -518,6 +523,11 @@ export function useEditorWorkspace() {
 
     const requestRevision = ++validationRevision
     const requestFingerprint = currentFingerprint.value
+    const task = taskController.begin({
+      fingerprint: requestFingerprint,
+      formatId: activeFormat.value.id,
+      downloadMode,
+    })
     errorMessage.value = ''
     isValidating.value = true
     processingMessage.value = 'Проверяю документ и собираю итоговые файлы...'
@@ -526,15 +536,25 @@ export function useEditorWorkspace() {
       const result = await runServerEditorProcess({
         file: buildDraftFile(),
         formatId: activeFormat.value.id,
+        signal: task.signal,
         reportProgress: (message) => {
-          processingMessage.value = message
+          if (taskController.isCurrent(task)) {
+            processingMessage.value = message
+          }
         },
         onJobCreated: (job) => {
+          if (!taskController.isCurrent(task)) {
+            return
+          }
+          taskController.registerJob(task, job.id)
           activeJobId.value = job.id
           activeJobStatus.value = job.status
           activeJobProgressPercent.value = job.progressPercent
         },
         onJobUpdate: (job) => {
+          if (!taskController.isCurrent(task)) {
+            return
+          }
           activeJobStatus.value = job.status
           activeJobProgressPercent.value = job.progressPercent
         },
@@ -543,6 +563,7 @@ export function useEditorWorkspace() {
       // Ответ для уже изменённого draft не должен вытеснить актуальную локальную ревизию.
       if (
         requestRevision !== validationRevision ||
+        !taskController.isCurrent(task) ||
         requestFingerprint !== currentFingerprint.value
       ) {
         draftPersistenceStatus.value = 'Текст изменился во время проверки — результат отброшен'
@@ -562,6 +583,9 @@ export function useEditorWorkspace() {
         downloadBlob(result.plainTextBlob, result.plainTextArtifact.fileName)
       }
     } catch (error) {
+      if (!taskController.isCurrent(task)) {
+        return
+      }
       if (error instanceof ProcessingJobCancelledError) {
         errorMessage.value = 'Проверка документа была отменена.'
       } else {
@@ -571,13 +595,16 @@ export function useEditorWorkspace() {
             : 'Не удалось завершить проверку и подготовку файлов.'
       }
     } finally {
-      isValidating.value = false
-      isCancelling.value = false
-      activeJobId.value = ''
-      activeJobStatus.value = ''
-      activeJobProgressPercent.value = 0
-      if (!errorMessage.value) {
-        processingMessage.value = ''
+      if (taskController.isCurrent(task)) {
+        isValidating.value = false
+        isCancelling.value = false
+        activeJobId.value = ''
+        activeJobStatus.value = ''
+        activeJobProgressPercent.value = 0
+        taskController.complete(task)
+        if (!errorMessage.value) {
+          processingMessage.value = ''
+        }
       }
     }
   }
@@ -615,7 +642,8 @@ export function useEditorWorkspace() {
     processingMessage.value = 'Останавливаю текущую проверку...'
 
     try {
-      await cancelProcessingJob(activeJobId.value)
+      taskController.cancelActive()
+      isValidating.value = false
       processingMessage.value = ''
       errorMessage.value = 'Проверка документа отменена.'
     } catch (error) {
@@ -677,6 +705,7 @@ export function useEditorWorkspace() {
   })
 
   onBeforeUnmount(() => {
+    taskController.dispose()
     window.clearTimeout(persistTimeoutId)
   })
 

@@ -5,11 +5,11 @@ import {
   type ConverterResult,
 } from '../application/converter-runtime'
 import {
-  cancelProcessingJob,
   ProcessingJobCancelledError,
   type ProcessingJobResponse,
   type ProcessingJobStatus,
 } from '../../processing/application/processing-client'
+import { createProcessingTaskController } from '../../processing/application/processing-task-controller'
 import {
   getConverterCapabilityMatrix,
   type ConverterScenarioDefinition,
@@ -250,7 +250,9 @@ export function useConverterWorkspace() {
   const lastRequest = shallowRef<ConverterRunRequest | null>(null)
   let capabilityMatrixRequest: Promise<void> | null = null
   let selectionRevision = 0
-  let activeConversionToken = 0
+  const taskController = createProcessingTaskController<ConverterRunRequest>({
+    cloneSnapshot: (request) => ({ ...request, prepared: { ...request.prepared } }),
+  })
 
   const availableTargets = computed(() => prepared.value?.targets ?? [])
   const activeTarget = computed<ConverterTargetFormatDefinition | null>(
@@ -461,10 +463,6 @@ export function useConverterWorkspace() {
 
   // Если пользователь быстро меняет source или повторно запускает convert,
   // поздний ответ старого job не должен перезаписать уже актуальный workspace state.
-  function isCurrentConversion(token: number, revision: number): boolean {
-    return token === activeConversionToken && revision === selectionRevision
-  }
-
   function buildRunRequest(): ConverterRunRequest | null {
     if (!prepared.value || !selectedTargetExtension.value) {
       return null
@@ -601,7 +599,7 @@ export function useConverterWorkspace() {
       return
     }
 
-    const conversionToken = ++activeConversionToken
+    const task = taskController.begin(request)
     const revision = selectionRevision
     errorMessage.value = ''
     processingMessage.value = 'Запускаю конвертацию...'
@@ -624,21 +622,23 @@ export function useConverterWorkspace() {
         targetFps: request.targetFps,
         videoBitrateKbps: request.videoBitrateKbps,
         audioBitrateKbps: request.audioBitrateKbps,
+        signal: task.signal,
         onProgress(message) {
-          if (isCurrentConversion(conversionToken, revision)) {
+          if (taskController.isCurrent(task) && revision === selectionRevision) {
             processingMessage.value = message
           }
         },
         onJobCreated(jobId) {
-          if (!isCurrentConversion(conversionToken, revision)) {
+          if (!taskController.isCurrent(task) || revision !== selectionRevision) {
             return
           }
 
+          taskController.registerJob(task, jobId)
           activeJobId.value = jobId
           activeJobStatus.value = 'QUEUED'
         },
         onJobUpdate(job) {
-          if (!isCurrentConversion(conversionToken, revision)) {
+          if (!taskController.isCurrent(task) || revision !== selectionRevision) {
             return
           }
 
@@ -646,7 +646,7 @@ export function useConverterWorkspace() {
         },
       })
 
-      if (!isCurrentConversion(conversionToken, revision)) {
+      if (!taskController.isCurrent(task) || revision !== selectionRevision) {
         return
       }
 
@@ -655,7 +655,7 @@ export function useConverterWorkspace() {
       processingMessage.value =
         'Конвертация завершена. Результат сохранён в истории и готов к скачиванию.'
     } catch (error) {
-      if (!isCurrentConversion(conversionToken, revision)) {
+      if (!taskController.isCurrent(task) || revision !== selectionRevision) {
         return
       }
 
@@ -670,9 +670,10 @@ export function useConverterWorkspace() {
       errorMessage.value =
         error instanceof Error ? error.message : 'Не удалось выполнить конвертацию.'
     } finally {
-      if (isCurrentConversion(conversionToken, revision)) {
+      if (taskController.isCurrent(task) && revision === selectionRevision) {
         isConverting.value = false
         isCancelling.value = false
+        taskController.complete(task)
       }
     }
   }
@@ -724,14 +725,12 @@ export function useConverterWorkspace() {
     }
 
     try {
-      const cancelledJob = await cancelProcessingJob(activeJobId.value)
-      registerJobSnapshot(cancelledJob)
-    } catch (error) {
-      if (!options.silent) {
-        errorMessage.value =
-          error instanceof Error ? error.message : 'Не удалось отменить текущую конвертацию.'
-        isCancelling.value = false
-      }
+      taskController.cancelActive()
+      activeJobStatus.value = 'CANCELLED'
+      isConverting.value = false
+      processingMessage.value = options.silent
+        ? processingMessage.value
+        : 'Конвертация остановлена.'
     } finally {
       if (options.silent) {
         isCancelling.value = false
@@ -766,6 +765,7 @@ export function useConverterWorkspace() {
   }
 
   onBeforeUnmount(() => {
+    taskController.dispose()
     for (const entry of resultHistory.value) {
       releaseHistoryEntry(entry)
     }

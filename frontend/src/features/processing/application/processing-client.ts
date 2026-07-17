@@ -71,6 +71,7 @@ export interface ProcessingPlatformModuleCapability {
 
 export interface ProcessingUploadResponse {
   id: string
+  sha256?: string
 }
 
 export interface ProcessingArtifact {
@@ -132,6 +133,7 @@ export interface AwaitProcessingJobOptions {
   onUpdate?: (job: ProcessingJobResponse) => void
   signal?: AbortSignal
   cancelOnAbort?: boolean
+  cancelOnTimeout?: boolean
 }
 
 const DEFAULT_API_BASE_URL = 'http://localhost:8080'
@@ -274,6 +276,7 @@ export async function awaitProcessingJob(
     onUpdate,
     signal,
     cancelOnAbort = true,
+    cancelOnTimeout = true,
   } = options
   let lastMessage = ''
 
@@ -314,6 +317,9 @@ export async function awaitProcessingJob(
     throw error
   }
 
+  if (cancelOnTimeout) {
+    await cancelProcessingJob(jobId).catch(() => undefined)
+  }
   throw new Error(timeoutMessage)
 }
 

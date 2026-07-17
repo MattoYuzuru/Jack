@@ -81,6 +81,7 @@ export interface RunServerCompressionInput {
   reportProgress?: (message: string) => void
   onJobCreated?: (job: ProcessingJobResponse) => void
   onJobUpdate?: (job: ProcessingJobResponse) => void
+  signal?: AbortSignal
 }
 
 const FILE_COMPRESS_JOB_TYPE = 'FILE_COMPRESS'
@@ -92,26 +93,29 @@ export async function runServerCompression(
   await ensureProcessingCapability('compression', FILE_COMPRESS_JOB_TYPE)
 
   input.reportProgress?.('Загружаю исходный файл...')
-  const upload = await uploadProcessingFile(input.file)
+  const upload = await uploadProcessingFile(input.file, { signal: input.signal })
 
   input.reportProgress?.('Запускаю подбор оптимального результата...')
-  const createdJob = await createProcessingJob({
-    uploadId: upload.id,
-    jobType: FILE_COMPRESS_JOB_TYPE,
-    parameters: {
-      mode: input.mode,
-      targetSizeBytes: input.targetSizeBytes,
-      targetExtension: input.targetExtension,
-      maxWidth: input.maxWidth,
-      maxHeight: input.maxHeight,
-      quality: input.quality,
-      backgroundColor: input.backgroundColor,
-      targetFps: input.targetFps,
-      videoBitrateKbps: input.videoBitrateKbps,
-      audioBitrateKbps: input.audioBitrateKbps,
-      presetLabel: input.presetLabel,
+  const createdJob = await createProcessingJob(
+    {
+      uploadId: upload.id,
+      jobType: FILE_COMPRESS_JOB_TYPE,
+      parameters: {
+        mode: input.mode,
+        targetSizeBytes: input.targetSizeBytes,
+        targetExtension: input.targetExtension,
+        maxWidth: input.maxWidth,
+        maxHeight: input.maxHeight,
+        quality: input.quality,
+        backgroundColor: input.backgroundColor,
+        targetFps: input.targetFps,
+        videoBitrateKbps: input.videoBitrateKbps,
+        audioBitrateKbps: input.audioBitrateKbps,
+        presetLabel: input.presetLabel,
+      },
     },
-  })
+    { signal: input.signal },
+  )
   input.onJobCreated?.(createdJob)
 
   const completedJob = await awaitProcessingJob(createdJob.id, {
@@ -119,14 +123,16 @@ export async function runServerCompression(
     timeoutMessage:
       'Сжатие заняло слишком много времени. Попробуй смягчить ограничения или повтори позже.',
     onUpdate: input.onJobUpdate,
+    signal: input.signal,
   })
 
   input.reportProgress?.('Загружаю результат и предпросмотр...')
-  return downloadServerCompressionArtifacts(completedJob)
+  return downloadServerCompressionArtifacts(completedJob, input.signal)
 }
 
 export async function downloadServerCompressionArtifacts(
   job: ProcessingJobResponse,
+  signal?: AbortSignal,
 ): Promise<ServerCompressionResult> {
   const manifestArtifact = job.artifacts.find(
     (artifact) => artifact.kind === 'compression-manifest',
@@ -139,9 +145,9 @@ export async function downloadServerCompressionArtifacts(
   }
 
   const [manifest, resultBlob, previewBlob] = await Promise.all([
-    requestProcessingJson<ServerCompressionManifest>(manifestArtifact.downloadPath),
-    requestProcessingBlob(resultArtifact.downloadPath),
-    requestProcessingBlob(previewArtifact.downloadPath),
+    requestProcessingJson<ServerCompressionManifest>(manifestArtifact.downloadPath, { signal }),
+    requestProcessingBlob(resultArtifact.downloadPath, { signal }),
+    requestProcessingBlob(previewArtifact.downloadPath, { signal }),
   ])
 
   return {

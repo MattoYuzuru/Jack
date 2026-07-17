@@ -15,10 +15,10 @@ import {
   type PdfToolkitOperationDefinition,
 } from '../domain/pdf-toolkit-registry'
 import {
-  cancelProcessingJob,
   ProcessingJobCancelledError,
   type ProcessingJobStatus,
 } from '../../processing/application/processing-client'
+import { createProcessingTaskController } from '../../processing/application/processing-task-controller'
 
 interface PdfToolkitResultViewModel {
   id: string
@@ -91,6 +91,10 @@ export function usePdfToolkitWorkspace() {
   const activeJobStatus = ref<ProcessingJobStatus | ''>('')
   const activeJobProgressPercent = ref(0)
   let capabilityRequest: Promise<void> | null = null
+  const taskController = createProcessingTaskController<{
+    operation: PdfToolkitOperationDefinition['id']
+    sourceName: string
+  }>({ cloneSnapshot: (snapshot) => ({ ...snapshot }) })
 
   const activeOperation = computed(
     () =>
@@ -153,6 +157,8 @@ export function usePdfToolkitWorkspace() {
   }
 
   async function openSource(file: File): Promise<void> {
+    taskController.cancelActive()
+    isProcessing.value = false
     isLoading.value = true
     errorMessage.value = ''
     processingMessage.value = 'Подготавливаю документ к работе в PDF Toolkit...'
@@ -195,6 +201,10 @@ export function usePdfToolkitWorkspace() {
     errorMessage.value = ''
     isProcessing.value = true
     processingMessage.value = 'Запускаю операцию с PDF...'
+    const task = taskController.begin({
+      operation: activeOperation.value.id,
+      sourceName: currentFile.value.name,
+    })
 
     try {
       const response = await runServerPdfToolkitJob({
@@ -202,6 +212,7 @@ export function usePdfToolkitWorkspace() {
         operation: activeOperation.value.id,
         additionalPdfFiles: activeOperation.value.id === 'merge' ? mergeFiles.value : [],
         signatureImageFile: activeOperation.value.id === 'sign' ? signatureImageFile.value : null,
+        signal: task.signal,
         parameters: {
           splitRanges: activeOperation.value.id === 'split' ? splitRanges : undefined,
           pageSelection: supportsPageSelection(activeOperation.value.id)
@@ -235,28 +246,38 @@ export function usePdfToolkitWorkspace() {
           allowModifying: activeOperation.value.id === 'protect' ? allowModifying.value : undefined,
         },
         reportProgress: (message) => {
-          processingMessage.value = message
+          if (taskController.isCurrent(task)) {
+            processingMessage.value = message
+          }
         },
         onJobCreated: (job) => {
+          if (!taskController.isCurrent(task)) {
+            return
+          }
+          taskController.registerJob(task, job.id)
           activeJobId.value = job.id
           activeJobStatus.value = job.status
           activeJobProgressPercent.value = job.progressPercent
         },
         onJobUpdate: (job) => {
+          if (!taskController.isCurrent(task)) {
+            return
+          }
           activeJobStatus.value = job.status
           activeJobProgressPercent.value = job.progressPercent
         },
       })
 
-      const resultEntry = createResultEntry(response)
-      resultHistory.value = [resultEntry, ...resultHistory.value].slice(0, MAX_RESULT_HISTORY)
-      selectedResultId.value = resultEntry.id
-      while (resultHistory.value.length > MAX_RESULT_HISTORY) {
-        const removed = resultHistory.value.pop()
-        if (removed) {
-          revokeResultEntry(removed)
-        }
+      if (!taskController.isCurrent(task)) {
+        return
       }
+
+      const resultEntry = createResultEntry(response)
+      const nextEntries = [resultEntry, ...resultHistory.value]
+      const removedEntries = nextEntries.slice(MAX_RESULT_HISTORY)
+      resultHistory.value = nextEntries.slice(0, MAX_RESULT_HISTORY)
+      removedEntries.forEach(revokeResultEntry)
+      selectedResultId.value = resultEntry.id
 
       if (response.manifest.resultMediaType === 'application/pdf') {
         await replaceCurrentDocument(
@@ -277,6 +298,9 @@ export function usePdfToolkitWorkspace() {
           ? 'Разделение завершено: архив готов, а первый фрагмент уже доступен для просмотра.'
           : 'Операция с PDF завершена.'
     } catch (error) {
+      if (!taskController.isCurrent(task)) {
+        return
+      }
       if (error instanceof ProcessingJobCancelledError) {
         processingMessage.value = 'Операция с PDF остановлена.'
       } else {
@@ -285,7 +309,10 @@ export function usePdfToolkitWorkspace() {
         processingMessage.value = ''
       }
     } finally {
-      isProcessing.value = false
+      if (taskController.isCurrent(task)) {
+        isProcessing.value = false
+        taskController.complete(task)
+      }
     }
   }
 
@@ -297,13 +324,10 @@ export function usePdfToolkitWorkspace() {
     isCancelling.value = true
     errorMessage.value = ''
     try {
-      const cancelledJob = await cancelProcessingJob(activeJobId.value)
-      activeJobStatus.value = cancelledJob.status
-      activeJobProgressPercent.value = cancelledJob.progressPercent
-      processingMessage.value = cancelledJob.message || 'Операция с PDF отменена.'
-    } catch (error) {
-      errorMessage.value =
-        error instanceof Error ? error.message : 'Не удалось отменить операцию с PDF.'
+      taskController.cancelActive()
+      activeJobStatus.value = 'CANCELLED'
+      isProcessing.value = false
+      processingMessage.value = 'Операция с PDF отменена.'
     } finally {
       isCancelling.value = false
     }
@@ -377,6 +401,8 @@ export function usePdfToolkitWorkspace() {
   }
 
   function clearDocument(): void {
+    taskController.cancelActive()
+    isProcessing.value = false
     disposeCurrentDocument()
     lockedDocumentFile.value = null
     importedFromLabel.value = ''
@@ -385,6 +411,7 @@ export function usePdfToolkitWorkspace() {
   }
 
   onBeforeUnmount(() => {
+    taskController.dispose()
     disposeCurrentDocument()
     for (const entry of resultHistory.value) {
       revokeResultEntry(entry)

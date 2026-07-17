@@ -102,6 +102,7 @@ interface RunServerImageConvertInput {
   reportProgress?: (message: string) => void
   onJobCreated?: (job: ProcessingJobResponse) => void
   onJobUpdate?: (job: ProcessingJobResponse) => void
+  signal?: AbortSignal
 }
 
 interface RunServerMediaConvertInput extends RunServerImageConvertInput {
@@ -123,22 +124,25 @@ export async function runServerImageConvert(
   await ensureProcessingCapability('converter', IMAGE_CONVERT_JOB_TYPE)
 
   input.reportProgress?.('Загружаю исходный файл...')
-  const upload = await uploadProcessingFile(input.file)
+  const upload = await uploadProcessingFile(input.file, { signal: input.signal })
 
   input.reportProgress?.('Запускаю конвертацию...')
-  const createdJob = await createProcessingJob({
-    uploadId: upload.id,
-    jobType: IMAGE_CONVERT_JOB_TYPE,
-    parameters: {
-      operation: 'convert',
-      targetExtension: input.targetExtension,
-      maxWidth: input.maxWidth,
-      maxHeight: input.maxHeight,
-      quality: input.quality,
-      backgroundColor: input.backgroundColor,
-      presetLabel: input.presetLabel,
+  const createdJob = await createProcessingJob(
+    {
+      uploadId: upload.id,
+      jobType: IMAGE_CONVERT_JOB_TYPE,
+      parameters: {
+        operation: 'convert',
+        targetExtension: input.targetExtension,
+        maxWidth: input.maxWidth,
+        maxHeight: input.maxHeight,
+        quality: input.quality,
+        backgroundColor: input.backgroundColor,
+        presetLabel: input.presetLabel,
+      },
     },
-  })
+    { signal: input.signal },
+  )
   input.onJobCreated?.(createdJob)
 
   const completedJob = await awaitProcessingJob(createdJob.id, {
@@ -146,14 +150,16 @@ export async function runServerImageConvert(
     timeoutMessage:
       'Конвертация заняла слишком много времени. Попробуй более компактный профиль или повтори позже.',
     onUpdate: input.onJobUpdate,
+    signal: input.signal,
   })
 
   input.reportProgress?.('Загружаю готовый файл и предпросмотр...')
-  return downloadServerConvertArtifacts(completedJob)
+  return downloadServerConvertArtifacts(completedJob, input.signal)
 }
 
 export async function downloadServerConvertArtifacts(
   job: ProcessingJobResponse,
+  signal?: AbortSignal,
 ): Promise<ServerImageConvertResult> {
   const manifestArtifact = job.artifacts.find(
     (artifact) => artifact.kind === 'image-convert-manifest',
@@ -168,9 +174,9 @@ export async function downloadServerConvertArtifacts(
   }
 
   const [manifest, resultBlob, previewBlob] = await Promise.all([
-    requestProcessingJson<ServerImageConvertManifest>(manifestArtifact.downloadPath),
-    requestProcessingBlob(resultArtifact.downloadPath),
-    requestProcessingBlob(previewArtifact.downloadPath),
+    requestProcessingJson<ServerImageConvertManifest>(manifestArtifact.downloadPath, { signal }),
+    requestProcessingBlob(resultArtifact.downloadPath, { signal }),
+    requestProcessingBlob(previewArtifact.downloadPath, { signal }),
   ])
 
   return {
@@ -191,21 +197,24 @@ export async function runServerOfficeConvert(
   await ensureProcessingCapability('converter', OFFICE_CONVERT_JOB_TYPE)
 
   input.reportProgress?.('Загружаю исходный файл...')
-  const upload = await uploadProcessingFile(input.file)
+  const upload = await uploadProcessingFile(input.file, { signal: input.signal })
 
   input.reportProgress?.('Запускаю конвертацию документа...')
-  const createdJob = await createProcessingJob({
-    uploadId: upload.id,
-    jobType: OFFICE_CONVERT_JOB_TYPE,
-    parameters: {
-      targetExtension: input.targetExtension,
-      maxWidth: input.maxWidth,
-      maxHeight: input.maxHeight,
-      quality: input.quality,
-      backgroundColor: input.backgroundColor,
-      presetLabel: input.presetLabel,
+  const createdJob = await createProcessingJob(
+    {
+      uploadId: upload.id,
+      jobType: OFFICE_CONVERT_JOB_TYPE,
+      parameters: {
+        targetExtension: input.targetExtension,
+        maxWidth: input.maxWidth,
+        maxHeight: input.maxHeight,
+        quality: input.quality,
+        backgroundColor: input.backgroundColor,
+        presetLabel: input.presetLabel,
+      },
     },
-  })
+    { signal: input.signal },
+  )
   input.onJobCreated?.(createdJob)
 
   const completedJob = await awaitProcessingJob(createdJob.id, {
@@ -213,10 +222,11 @@ export async function runServerOfficeConvert(
     timeoutMessage:
       'Подготовка документа заняла слишком много времени. Попробуй другой формат результата или повтори позже.',
     onUpdate: input.onJobUpdate,
+    signal: input.signal,
   })
 
   input.reportProgress?.('Загружаю готовый файл и предпросмотр...')
-  return downloadServerOfficeConvertArtifacts(completedJob)
+  return downloadServerOfficeConvertArtifacts(completedJob, input.signal)
 }
 
 export async function runServerMediaConvert(
@@ -226,24 +236,27 @@ export async function runServerMediaConvert(
   await ensureProcessingCapability('converter', MEDIA_CONVERT_JOB_TYPE)
 
   input.reportProgress?.('Загружаю исходный файл...')
-  const upload = await uploadProcessingFile(input.file)
+  const upload = await uploadProcessingFile(input.file, { signal: input.signal })
 
   input.reportProgress?.('Запускаю конвертацию медиа...')
-  const createdJob = await createProcessingJob({
-    uploadId: upload.id,
-    jobType: MEDIA_CONVERT_JOB_TYPE,
-    parameters: {
-      targetExtension: input.targetExtension,
-      videoCodec: input.videoCodec,
-      audioCodec: input.audioCodec,
-      maxWidth: input.maxWidth,
-      maxHeight: input.maxHeight,
-      targetFps: input.targetFps,
-      videoBitrateKbps: input.videoBitrateKbps,
-      audioBitrateKbps: input.audioBitrateKbps,
-      presetLabel: input.presetLabel,
+  const createdJob = await createProcessingJob(
+    {
+      uploadId: upload.id,
+      jobType: MEDIA_CONVERT_JOB_TYPE,
+      parameters: {
+        targetExtension: input.targetExtension,
+        videoCodec: input.videoCodec,
+        audioCodec: input.audioCodec,
+        maxWidth: input.maxWidth,
+        maxHeight: input.maxHeight,
+        targetFps: input.targetFps,
+        videoBitrateKbps: input.videoBitrateKbps,
+        audioBitrateKbps: input.audioBitrateKbps,
+        presetLabel: input.presetLabel,
+      },
     },
-  })
+    { signal: input.signal },
+  )
   input.onJobCreated?.(createdJob)
 
   const completedJob = await awaitProcessingJob(createdJob.id, {
@@ -251,14 +264,16 @@ export async function runServerMediaConvert(
     timeoutMessage:
       'Обработка медиа заняла слишком много времени. Попробуй более компактный профиль или повтори позже.',
     onUpdate: input.onJobUpdate,
+    signal: input.signal,
   })
 
   input.reportProgress?.('Загружаю готовый файл и предпросмотр...')
-  return downloadServerMediaConvertArtifacts(completedJob)
+  return downloadServerMediaConvertArtifacts(completedJob, input.signal)
 }
 
 export async function downloadServerOfficeConvertArtifacts(
   job: ProcessingJobResponse,
+  signal?: AbortSignal,
 ): Promise<ServerOfficeConvertResult> {
   const manifestArtifact = job.artifacts.find(
     (artifact) => artifact.kind === 'office-convert-manifest',
@@ -273,9 +288,9 @@ export async function downloadServerOfficeConvertArtifacts(
   }
 
   const [manifest, resultBlob, previewBlob] = await Promise.all([
-    requestProcessingJson<ServerOfficeConvertManifest>(manifestArtifact.downloadPath),
-    requestProcessingBlob(resultArtifact.downloadPath),
-    requestProcessingBlob(previewArtifact.downloadPath),
+    requestProcessingJson<ServerOfficeConvertManifest>(manifestArtifact.downloadPath, { signal }),
+    requestProcessingBlob(resultArtifact.downloadPath, { signal }),
+    requestProcessingBlob(previewArtifact.downloadPath, { signal }),
   ])
 
   return {
@@ -291,6 +306,7 @@ export async function downloadServerOfficeConvertArtifacts(
 
 export async function downloadServerMediaConvertArtifacts(
   job: ProcessingJobResponse,
+  signal?: AbortSignal,
 ): Promise<ServerMediaConvertResult> {
   const manifestArtifact = job.artifacts.find(
     (artifact) => artifact.kind === 'media-convert-manifest',
@@ -305,9 +321,9 @@ export async function downloadServerMediaConvertArtifacts(
   }
 
   const [manifest, resultBlob, previewBlob] = await Promise.all([
-    requestProcessingJson<ServerMediaConvertManifest>(manifestArtifact.downloadPath),
-    requestProcessingBlob(resultArtifact.downloadPath),
-    requestProcessingBlob(previewArtifact.downloadPath),
+    requestProcessingJson<ServerMediaConvertManifest>(manifestArtifact.downloadPath, { signal }),
+    requestProcessingBlob(resultArtifact.downloadPath, { signal }),
+    requestProcessingBlob(previewArtifact.downloadPath, { signal }),
   ])
 
   return {

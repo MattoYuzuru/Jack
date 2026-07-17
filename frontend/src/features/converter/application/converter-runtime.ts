@@ -78,6 +78,7 @@ export interface ConverterRuntime {
     videoBitrateKbps?: number | null
     audioBitrateKbps?: number | null
     onProgress?: (message: string) => void
+    signal?: AbortSignal
     onJobCreated?: (jobId: string) => void
     onJobUpdate?: (job: {
       id: string
@@ -750,6 +751,7 @@ async function defaultConvertServerScenario(input: {
   videoBitrateKbps?: number | null
   audioBitrateKbps?: number | null
   onProgress?: (message: string) => void
+  signal?: AbortSignal
   onJobCreated?: (jobId: string) => void
   onJobUpdate?: (job: {
     id: string
@@ -779,6 +781,7 @@ async function defaultConvertServerScenario(input: {
       audioBitrateKbps: input.audioBitrateKbps,
       presetLabel: input.preset.label,
       reportProgress: input.onProgress,
+      signal: input.signal,
       onJobCreated(job) {
         input.onJobCreated?.(job.id)
       },
@@ -796,6 +799,7 @@ async function defaultConvertServerScenario(input: {
       backgroundColor: input.backgroundColor,
       presetLabel: input.preset.label,
       reportProgress: input.onProgress,
+      signal: input.signal,
       onJobCreated(job) {
         input.onJobCreated?.(job.id)
       },
@@ -812,6 +816,7 @@ async function defaultConvertServerScenario(input: {
     backgroundColor: input.backgroundColor,
     presetLabel: input.preset.label,
     reportProgress: input.onProgress,
+    signal: input.signal,
     onJobCreated(job) {
       input.onJobCreated?.(job.id)
     },

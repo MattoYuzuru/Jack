@@ -68,6 +68,7 @@ export interface RunServerEditorInput {
   reportProgress?: (message: string) => void
   onJobCreated?: (job: ProcessingJobResponse) => void
   onJobUpdate?: (job: ProcessingJobResponse) => void
+  signal?: AbortSignal
 }
 
 const EDITOR_PROCESS_JOB_TYPE = 'EDITOR_PROCESS'
@@ -79,16 +80,19 @@ export async function runServerEditorProcess(
   await ensureProcessingCapability('editor', EDITOR_PROCESS_JOB_TYPE)
 
   input.reportProgress?.('Отправляю текущий текст на проверку...')
-  const upload = await uploadProcessingFile(input.file)
+  const upload = await uploadProcessingFile(input.file, { signal: input.signal })
 
   input.reportProgress?.('Запускаю проверку и подготовку файлов...')
-  const createdJob = await createProcessingJob({
-    uploadId: upload.id,
-    jobType: EDITOR_PROCESS_JOB_TYPE,
-    parameters: {
-      formatId: input.formatId,
+  const createdJob = await createProcessingJob(
+    {
+      uploadId: upload.id,
+      jobType: EDITOR_PROCESS_JOB_TYPE,
+      parameters: {
+        formatId: input.formatId,
+      },
     },
-  })
+    { signal: input.signal },
+  )
   input.onJobCreated?.(createdJob)
 
   const completedJob = await awaitProcessingJob(createdJob.id, {
@@ -96,14 +100,16 @@ export async function runServerEditorProcess(
     timeoutMessage:
       'Проверка заняла слишком много времени. Попробуй документ поменьше или повтори запуск позже.',
     onUpdate: input.onJobUpdate,
+    signal: input.signal,
   })
 
   input.reportProgress?.('Загружаю подготовленные файлы...')
-  return downloadServerEditorArtifacts(completedJob)
+  return downloadServerEditorArtifacts(completedJob, input.signal)
 }
 
 export async function downloadServerEditorArtifacts(
   job: ProcessingJobResponse,
+  signal?: AbortSignal,
 ): Promise<ServerEditorResult> {
   const manifestArtifact = job.artifacts.find((artifact) => artifact.kind === 'editor-manifest')
   const readyArtifact = job.artifacts.find((artifact) => artifact.kind === 'editor-export-ready')
@@ -116,9 +122,9 @@ export async function downloadServerEditorArtifacts(
   }
 
   const [manifest, readyBlob, plainTextBlob] = await Promise.all([
-    requestProcessingJson<ServerEditorManifest>(manifestArtifact.downloadPath),
-    requestProcessingBlob(readyArtifact.downloadPath),
-    requestProcessingBlob(plainTextArtifact.downloadPath),
+    requestProcessingJson<ServerEditorManifest>(manifestArtifact.downloadPath, { signal }),
+    requestProcessingBlob(readyArtifact.downloadPath, { signal }),
+    requestProcessingBlob(plainTextArtifact.downloadPath, { signal }),
   ])
 
   return {

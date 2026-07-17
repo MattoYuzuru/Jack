@@ -525,7 +525,9 @@ function formatQueryEntryStatus(status: 'kept' | 'removed'): string {
         </div>
 
         <div v-else-if="workspace.activeToolId.value === 'hash'" class="devtools-stack">
-          <p v-if="workspace.isHashing.value" class="devtools-message">Считаю хэши...</p>
+          <p v-if="workspace.isHashing.value" class="devtools-message">
+            {{ workspace.hashProgressMessage.value || 'Считаю хэши...' }}
+          </p>
           <p
             v-else-if="workspace.hashErrorMessage.value"
             class="devtools-message devtools-message--error"
