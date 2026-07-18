@@ -1,6 +1,6 @@
 # Jack: подробный план улучшений и передачи следующему агенту
 
-Дата актуализации: 16 июля 2026 года.
+Дата актуализации: 17 июля 2026 года.
 
 ## 1. Назначение документа
 
@@ -17,20 +17,26 @@
 
 Документ дополняет [quality-hardening-roadmap.md](quality-hardening-roadmap.md), но намеренно детализирует порядок, контракты, критерии готовности и способ передачи работы.
 
+Статус: этапы 0–8 и финальный Definition of Done выполнены в
+`feat/complete-hardening-roadmap`. Детальные исходные требования ниже сохранены как contract и
+audit trail. Следующий агент не должен повторять completed refactors; новые работы следует
+начинать только из остаточных product/deployment ограничений:
+
+- account authentication/audit для настоящего multi-user deployment;
+- shared object storage + distributed queue/lease перед горизонтальным масштабированием;
+- certificate-based PDF signature вместо видимого stamp;
+- дополнительные OCR language packs и fidelity improvements как отдельные capabilities;
+- server-side schema apply и rollout smoke уже в целевом Kubernetes cluster.
+
 ## 2. Точка старта и проверенные факты
 
 ### 2.1. Состояние ветки
 
-- Рабочая ветка: `feat/viewer-markdown-hardening`.
-- На момент передачи незакоммиченных файлов нет.
-- Ветка создана от `origin/main` (`184a324`) после merge предыдущего цикла и содержит следующие
-  логические этапы:
-  - `e588d7a test(e2e): stabilize visual snapshot environment`;
-  - `8f1b39c refactor(viewer): isolate preview session lifecycle`;
-  - `2c06f5f fix(e2e): isolate container build output`;
-  - `ccc1796 feat(markdown): render accessible GFM tables`.
-
-Не переписывать историю этой ветки и не смешивать следующие независимые этапы в один commit.
+- Completion branch: `feat/complete-hardening-roadmap`, base `713e844` (`origin/main` на старте).
+- Этапы A–H execution plan выполнены логическими conventional commits без переписывания истории.
+- Актуальный список commits и remote SHA следует брать из Git/MR, а не копировать в этот
+  долгоживущий документ.
+- Перед новой задачей снова синхронизировать `main` и создать новую feature-ветку.
 
 ### 2.2. Что уже было сделано
 
@@ -47,6 +53,9 @@
 - Пройдены локально: frontend type-check, ESLint, Prettier, unit tests, build, `npm audit --omit=dev --audit-level=high`, Playwright; backend Gradle tests.
 
 ### 2.3. Состояние GitHub Actions, которое нельзя игнорировать
+
+Подраздел ниже — историческая диагностика исходного run. Completion branch должен подтвердить
+текущее состояние новым CI run после push; старый failure не является известным дефектом.
 
 Run [29449018690](https://github.com/MattoYuzuru/Jack/actions/runs/29449018690) был исходным сигналом и завершился ошибкой в `Verify → Run accessibility and responsive E2E tests`.
 
@@ -651,18 +660,17 @@ draft settings → validate → submit revision N → queued/running → artifac
 
 ## 15. Конкретный первый рабочий цикл для следующего агента
 
-Статус цикла на 16 июля 2026 года: пункты 1–7 выполнены. Инвентаризация и следующие границы
-модулей записаны в [workspace-module-inventory.md](workspace-module-inventory.md). Перед новым
-feature-блоком остаётся подтвердить текущую ветку в GitHub Actions.
+Статус цикла на 17 июля 2026 года: завершён. Инвентаризация актуализирована в
+[workspace-module-inventory.md](workspace-module-inventory.md), processing contract — в
+[processing-platform.md](processing-platform.md), security ownership — в
+[processing-threat-model.md](processing-threat-model.md). Перед следующей продуктовой задачей:
 
-1. [x] Прочитать `AGENTS.md`, этот документ и `docs/quality-hardening-roadmap.md`.
-2. [x] Выполнить `git fetch origin --prune`, сверить `main` с `origin/main`, проверить `git status` и историю ветки. Не начинать новую работу поверх чужих незакоммиченных изменений.
-3. [x] Закрыть Этап 0: воспроизвести screenshots в Linux Playwright environment, визуально оценить все пять diff и закрепить baseline strategy. Не использовать слепой update snapshots.
-4. [x] Запустить полный frontend quality gate и backend tests. Зафиксировать фактические команды/результаты в roadmap, если обнаружится новая специфика окружения.
-5. [x] Инвентаризировать текущий `ViewerWorkspaceView` и `EditorWorkspaceView`; на основе реальных imports составить issue-sized list переносов, не угадывая имена компонентов.
-6. [x] Выполнить один безопасный refactor Viewer session lifecycle, покрыть race/abort/object URL тестами и закоммитить.
-7. [x] Реализовать GFM tables: parser contract → semantic renderer → CSS в существующих tokens → fixture/E2E/visual tests.
-8. Только затем переходить к backend paging/ownership. Не выполнять тяжёлые CSV/XLSX/worker changes одновременно с UI split.
+1. Проверить успешность completion-branch CI и замечания MR, не ослабляя gates.
+2. Начинать новую feature-ветку от свежего `main` после merge, не продолжать старую ветку.
+3. Выбрать один residual capability/deployment prerequisite с отдельным acceptance contract.
+4. Для production rollout создать Kubernetes secret, подставить immutable `sha-<commit>` images,
+   применить Flyway migration и проверить PVC/NetworkPolicy/Ingress/health в целевом cluster.
+5. Не выполнять deployment или merge без отдельного разрешения владельца.
 
 ## 16. Финальный Definition of Done программы
 

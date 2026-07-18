@@ -7,6 +7,27 @@
 Основные источники: `docs/quality-hardening-roadmap.md`,
 `docs/next-agent-improvement-plan.md`, `docs/workspace-module-inventory.md` и `AGENTS.md`.
 
+## Статус Выполнения
+
+Implementation scope A–H завершён 17 июля 2026 года в `feat/complete-hardening-roadmap`.
+Section 14 остаётся обязательным повторным gate непосредственно перед push; точные результаты и
+remote SHA фиксируются в MR/handoff, а не подменяются checklist без фактического запуска.
+
+| Этап | Статус | Acceptance evidence                                                                                          |
+| ---- | ------ | ------------------------------------------------------------------------------------------------------------ |
+| A    | [x]    | Typed Viewer renderers; отдельный Editor preview lifecycle; renderer/session unit + E2E                      |
+| B    | [x]    | Signed owner cookie, PostgreSQL/Flyway state, owner predicates, quotas, TTL/restart/cleanup tests            |
+| C    | [x]    | Streaming magic-aware intake, archive/decode/page/cell/process/result budgets и hostile fixtures             |
+| D    | [x]    | Paged CSV/TSV, lazy workbook ranges, read-only bounded SQLite ranges; DOM window 200 rows                    |
+| E    | [x]    | HTML/EPUB sanitizer+CSP, SVG raster route, PDF/media/subtitle limits и corrupt/encrypted fixtures            |
+| F    | [x]    | Общий task controller, AbortSignal/cancel/timeout, immutable retry, streaming hash и PDF postconditions      |
+| G    | [x]    | Non-root/read-only images, hardened Kubernetes/nginx/API, pinned supply chain, Trivy/SBOM/provenance/signing |
+| H    | [x]    | Axe/responsive/visual gate, bundle+DOM budgets, fixture coverage, threat model и актуальная документация     |
+
+Логические commits перечисляются через `git log origin/main..HEAD`; архитектурный результат
+описан в [processing-platform.md](processing-platform.md), а модель угроз — в
+[processing-threat-model.md](processing-threat-model.md).
+
 ## 1. Цель задания
 
 Следующий агент должен не ограничиться одним безопасным refactor или одним форматом, а закрыть
