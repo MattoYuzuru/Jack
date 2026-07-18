@@ -12,6 +12,13 @@ spec:
     - host: jack.keykomi.com
       http:
         paths:
+          - path: /actuator/health
+            pathType: Prefix
+            backend:
+              service:
+                name: backend
+                port:
+                  number: 80
           - path: /api
             pathType: Prefix
             backend:
