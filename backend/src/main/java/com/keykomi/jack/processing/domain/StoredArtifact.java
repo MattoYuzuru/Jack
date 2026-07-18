@@ -11,7 +11,9 @@ public record StoredArtifact(
 	String fileName,
 	String mediaType,
 	long sizeBytes,
+	String sha256,
 	Instant createdAt,
+	Instant expiresAt,
 	Path storagePath
 ) {
 }

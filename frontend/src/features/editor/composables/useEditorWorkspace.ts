@@ -1,6 +1,4 @@
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
-import { buildEditorLocalPreview, type EditorLocalPreview } from '../application/editor-preview'
-import { renderMarkdownPreview } from '../application/markdown-preview-runtime'
 import { decodeEditorFile, encodeEditorFile } from '../application/editor-file-codec'
 import {
   clearEditorDraft,
@@ -24,10 +22,11 @@ import {
   type EditorFormatDefinition,
 } from '../domain/editor-registry'
 import {
-  cancelProcessingJob,
   ProcessingJobCancelledError,
   type ProcessingJobStatus,
 } from '../../processing/application/processing-client'
+import { createProcessingTaskController } from '../../processing/application/processing-task-controller'
+import { useEditorPreview } from './useEditorPreview'
 
 interface EditorTemplateDefinition {
   id: string
@@ -276,23 +275,18 @@ export function useEditorWorkspace() {
   const lastValidatedResult = shallowRef<ServerEditorResult | null>(null)
   let capabilityRequest: Promise<void> | null = null
   let persistTimeoutId = 0
-  let markdownPreviewTimeoutId = 0
-  let markdownPreviewRevision = 0
   let validationRevision = 0
-  let markdownPreviewController: AbortController | null = null
+  const taskController = createProcessingTaskController<{
+    fingerprint: string
+    formatId: string
+    downloadMode: 'ready' | 'plain' | null
+  }>({ cloneSnapshot: (snapshot) => ({ ...snapshot }) })
   let lastAppliedTemplateId = selectedTemplateId.value
-  const serverMarkdownPreview = shallowRef<EditorLocalPreview | null>(null)
 
   const activeFormat = computed(
     () => availableFormats.value.find((format) => format.id === selectedFormatId.value) ?? null,
   )
-  const preview = computed<EditorLocalPreview>(() => {
-    if (selectedFormatId.value === 'markdown' && serverMarkdownPreview.value) {
-      return serverMarkdownPreview.value
-    }
-
-    return buildEditorLocalPreview(selectedFormatId.value, content.value)
-  })
+  const { preview } = useEditorPreview(selectedFormatId, content)
   const lineCount = computed(() => (content.value ? content.value.split('\n').length : 1))
   const lineNumberGutter = computed(() =>
     Array.from({ length: lineCount.value }, (_unused, index) => String(index + 1)).join('\n'),
@@ -529,6 +523,11 @@ export function useEditorWorkspace() {
 
     const requestRevision = ++validationRevision
     const requestFingerprint = currentFingerprint.value
+    const task = taskController.begin({
+      fingerprint: requestFingerprint,
+      formatId: activeFormat.value.id,
+      downloadMode,
+    })
     errorMessage.value = ''
     isValidating.value = true
     processingMessage.value = 'Проверяю документ и собираю итоговые файлы...'
@@ -537,15 +536,25 @@ export function useEditorWorkspace() {
       const result = await runServerEditorProcess({
         file: buildDraftFile(),
         formatId: activeFormat.value.id,
+        signal: task.signal,
         reportProgress: (message) => {
-          processingMessage.value = message
+          if (taskController.isCurrent(task)) {
+            processingMessage.value = message
+          }
         },
         onJobCreated: (job) => {
+          if (!taskController.isCurrent(task)) {
+            return
+          }
+          taskController.registerJob(task, job.id)
           activeJobId.value = job.id
           activeJobStatus.value = job.status
           activeJobProgressPercent.value = job.progressPercent
         },
         onJobUpdate: (job) => {
+          if (!taskController.isCurrent(task)) {
+            return
+          }
           activeJobStatus.value = job.status
           activeJobProgressPercent.value = job.progressPercent
         },
@@ -554,6 +563,7 @@ export function useEditorWorkspace() {
       // Ответ для уже изменённого draft не должен вытеснить актуальную локальную ревизию.
       if (
         requestRevision !== validationRevision ||
+        !taskController.isCurrent(task) ||
         requestFingerprint !== currentFingerprint.value
       ) {
         draftPersistenceStatus.value = 'Текст изменился во время проверки — результат отброшен'
@@ -573,6 +583,9 @@ export function useEditorWorkspace() {
         downloadBlob(result.plainTextBlob, result.plainTextArtifact.fileName)
       }
     } catch (error) {
+      if (!taskController.isCurrent(task)) {
+        return
+      }
       if (error instanceof ProcessingJobCancelledError) {
         errorMessage.value = 'Проверка документа была отменена.'
       } else {
@@ -582,13 +595,16 @@ export function useEditorWorkspace() {
             : 'Не удалось завершить проверку и подготовку файлов.'
       }
     } finally {
-      isValidating.value = false
-      isCancelling.value = false
-      activeJobId.value = ''
-      activeJobStatus.value = ''
-      activeJobProgressPercent.value = 0
-      if (!errorMessage.value) {
-        processingMessage.value = ''
+      if (taskController.isCurrent(task)) {
+        isValidating.value = false
+        isCancelling.value = false
+        activeJobId.value = ''
+        activeJobStatus.value = ''
+        activeJobProgressPercent.value = 0
+        taskController.complete(task)
+        if (!errorMessage.value) {
+          processingMessage.value = ''
+        }
       }
     }
   }
@@ -626,7 +642,8 @@ export function useEditorWorkspace() {
     processingMessage.value = 'Останавливаю текущую проверку...'
 
     try {
-      await cancelProcessingJob(activeJobId.value)
+      taskController.cancelActive()
+      isValidating.value = false
       processingMessage.value = ''
       errorMessage.value = 'Проверка документа отменена.'
     } catch (error) {
@@ -658,42 +675,6 @@ export function useEditorWorkspace() {
     queueDraftPersistence()
   })
 
-  watch(
-    [selectedFormatId, content],
-    ([formatId, source]) => {
-      window.clearTimeout(markdownPreviewTimeoutId)
-      markdownPreviewController?.abort()
-      markdownPreviewController = null
-      const revision = ++markdownPreviewRevision
-
-      if (formatId !== 'markdown') {
-        serverMarkdownPreview.value = null
-        return
-      }
-
-      markdownPreviewTimeoutId = window.setTimeout(() => {
-        const controller = new AbortController()
-        markdownPreviewController = controller
-
-        void renderMarkdownPreview(source, controller.signal)
-          .then((nextPreview) => {
-            if (revision === markdownPreviewRevision) {
-              serverMarkdownPreview.value = nextPreview
-            }
-          })
-          .catch(() => {
-            // При offline/stale request сохраняем inert fallback и не заменяем новый draft.
-          })
-          .finally(() => {
-            if (revision === markdownPreviewRevision) {
-              markdownPreviewController = null
-            }
-          })
-      }, 280)
-    },
-    { immediate: true },
-  )
-
   watch(selectedFormatId, (nextFormatId) => {
     const currentFormat = availableFormats.value.find((format) => format.id === nextFormatId)
     if (!currentFormat) {
@@ -724,9 +705,8 @@ export function useEditorWorkspace() {
   })
 
   onBeforeUnmount(() => {
+    taskController.dispose()
     window.clearTimeout(persistTimeoutId)
-    window.clearTimeout(markdownPreviewTimeoutId)
-    markdownPreviewController?.abort()
   })
 
   return {

@@ -15,7 +15,7 @@ public final class ProcessingFileFamilyResolver {
 	private static final Set<String> DOCUMENT_EXTENSIONS = Set.of(
 		"pdf", "txt", "text", "log", "sql", "md", "markdown", "json", "yaml", "yml",
 		"xml", "env", "csv", "tsv", "html", "htm", "rtf", "doc", "docx",
-		"odt", "xls", "xlsx", "ods", "pptx", "epub", "sqlite", "db"
+		"odt", "xls", "xlsx", "xlsm", "ods", "pptx", "epub", "sqlite", "db"
 	);
 	private static final Set<String> VIDEO_EXTENSIONS = Set.of(
 		"mp4", "mov", "webm", "avi", "mkv", "wmv", "flv"
@@ -28,6 +28,19 @@ public final class ProcessingFileFamilyResolver {
 	}
 
 	public static String detectFamily(StoredUpload upload) {
+		var parserRoute = upload.parserRoute();
+		if ("image".equals(parserRoute) || "svg".equals(parserRoute)) {
+			return "image";
+		}
+		if ("media".equals(parserRoute)) {
+			return "media";
+		}
+		if ("audio".equals(parserRoute)) {
+			return "audio";
+		}
+		if (Set.of("pdf", "text", "table", "workbook", "database", "office", "epub").contains(parserRoute)) {
+			return "document";
+		}
 		var mediaType = upload.mediaType().toLowerCase();
 		var extension = upload.extension().toLowerCase();
 		if (mediaType.startsWith("image/")) {

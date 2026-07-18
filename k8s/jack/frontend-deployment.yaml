@@ -26,7 +26,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: frontend
-          image: ghcr.io/mattoyuzuru/jack/frontend:edge
+          image: ghcr.io/mattoyuzuru/jack/frontend:sha-RELEASE_SHA
           imagePullPolicy: Always
           ports:
             - containerPort: 8080
@@ -65,8 +65,11 @@ spec:
               mountPath: /tmp
       volumes:
         - name: nginx-cache
-          emptyDir: {}
+          emptyDir:
+            sizeLimit: 64Mi
         - name: nginx-run
-          emptyDir: {}
+          emptyDir:
+            sizeLimit: 16Mi
         - name: nginx-tmp
-          emptyDir: {}
+          emptyDir:
+            sizeLimit: 64Mi

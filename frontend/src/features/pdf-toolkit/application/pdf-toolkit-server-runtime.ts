@@ -102,6 +102,7 @@ export interface RunPdfToolkitJobInput {
   reportProgress?: (message: string) => void
   onJobCreated?: (job: ProcessingJobResponse) => void
   onJobUpdate?: (job: ProcessingJobResponse) => void
+  signal?: AbortSignal
 }
 
 const PDF_TOOLKIT_JOB_TYPE = 'PDF_TOOLKIT'
@@ -150,13 +151,13 @@ export async function runServerPdfToolkitJob(
   await ensureProcessingCapability('pdf-toolkit', PDF_TOOLKIT_JOB_TYPE)
 
   input.reportProgress?.('Загружаю основной PDF...')
-  const primaryUpload = await uploadProcessingFile(input.file)
+  const primaryUpload = await uploadProcessingFile(input.file, { signal: input.signal })
 
   let additionalUploadIds: string[] | undefined
   if (input.additionalPdfFiles?.length) {
     input.reportProgress?.('Загружаю дополнительные PDF...')
     const uploads = await Promise.all(
-      input.additionalPdfFiles.map((file) => uploadProcessingFile(file)),
+      input.additionalPdfFiles.map((file) => uploadProcessingFile(file, { signal: input.signal })),
     )
     additionalUploadIds = uploads.map((upload) => upload.id)
   }
@@ -164,21 +165,24 @@ export async function runServerPdfToolkitJob(
   let signatureImageUploadId: string | undefined
   if (input.signatureImageFile) {
     input.reportProgress?.('Загружаю изображение подписи...')
-    const upload = await uploadProcessingFile(input.signatureImageFile)
+    const upload = await uploadProcessingFile(input.signatureImageFile, { signal: input.signal })
     signatureImageUploadId = upload.id
   }
 
   input.reportProgress?.('Запускаю обработку PDF...')
-  const createdJob = await createProcessingJob({
-    uploadId: primaryUpload.id,
-    jobType: PDF_TOOLKIT_JOB_TYPE,
-    parameters: {
-      operation: input.operation,
-      additionalUploadIds,
-      signatureImageUploadId,
-      ...input.parameters,
+  const createdJob = await createProcessingJob(
+    {
+      uploadId: primaryUpload.id,
+      jobType: PDF_TOOLKIT_JOB_TYPE,
+      parameters: {
+        operation: input.operation,
+        additionalUploadIds,
+        signatureImageUploadId,
+        ...input.parameters,
+      },
     },
-  })
+    { signal: input.signal },
+  )
   input.onJobCreated?.(createdJob)
 
   const completedJob = await awaitProcessingJob(createdJob.id, {
@@ -186,14 +190,16 @@ export async function runServerPdfToolkitJob(
     timeoutMessage:
       'Обработка PDF заняла слишком много времени. Попробуй меньший файл или повтори позже.',
     onUpdate: input.onJobUpdate,
+    signal: input.signal,
   })
 
   input.reportProgress?.('Загружаю готовый PDF и материалы результата...')
-  return downloadServerPdfToolkitArtifacts(completedJob)
+  return downloadServerPdfToolkitArtifacts(completedJob, input.signal)
 }
 
 export async function downloadServerPdfToolkitArtifacts(
   job: ProcessingJobResponse,
+  signal?: AbortSignal,
 ): Promise<ServerPdfToolkitResult> {
   const manifestArtifact = job.artifacts.find(
     (artifact) => artifact.kind === 'pdf-toolkit-manifest',
@@ -208,10 +214,12 @@ export async function downloadServerPdfToolkitArtifacts(
   }
 
   const [manifest, resultBlob, previewBlob, textBlob] = await Promise.all([
-    requestProcessingJson<ServerPdfToolkitManifest>(manifestArtifact.downloadPath),
-    requestProcessingBlob(resultArtifact.downloadPath),
-    requestProcessingBlob(previewArtifact.downloadPath),
-    textArtifact ? requestProcessingBlob(textArtifact.downloadPath) : Promise.resolve(null),
+    requestProcessingJson<ServerPdfToolkitManifest>(manifestArtifact.downloadPath, { signal }),
+    requestProcessingBlob(resultArtifact.downloadPath, { signal }),
+    requestProcessingBlob(previewArtifact.downloadPath, { signal }),
+    textArtifact
+      ? requestProcessingBlob(textArtifact.downloadPath, { signal })
+      : Promise.resolve(null),
   ])
 
   return {

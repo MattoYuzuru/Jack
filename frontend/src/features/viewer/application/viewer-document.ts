@@ -15,6 +15,17 @@ export interface ViewerDocumentTablePreview {
   totalRows: number
   totalColumns: number
   delimiter: string
+  revision?: string | null
+  truncated?: boolean
+  encoding?: string | null
+  hasHeader?: boolean | null
+  columnMetadata?: Array<{
+    id: string
+    label: string
+    inferredType: 'text' | 'number' | 'date' | 'boolean'
+  }>
+  nextCursor?: string | null
+  rowOffset?: number
 }
 
 export interface ViewerDocumentSheetPreview {

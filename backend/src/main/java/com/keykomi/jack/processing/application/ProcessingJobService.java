@@ -13,17 +13,21 @@ import com.keykomi.jack.processing.domain.OfficeConversionRequest;
 import com.keykomi.jack.processing.domain.PdfToolkitRequest;
 import com.keykomi.jack.processing.domain.StoredProcessingJob;
 import com.keykomi.jack.processing.domain.StoredUpload;
+import com.keykomi.jack.processing.domain.ProcessingException;
+import com.keykomi.jack.processing.config.ProcessingProperties;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.FutureTask;
@@ -34,11 +38,17 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.http.HttpStatus;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import jakarta.annotation.PreDestroy;
 
 @Service
 public class ProcessingJobService {
+	private static final Logger LOGGER = LoggerFactory.getLogger(ProcessingJobService.class);
 
 	private final UploadStorageService uploadStorageService;
 	private final ArtifactStorageService artifactStorageService;
@@ -53,8 +63,12 @@ public class ProcessingJobService {
 	private final ViewerResolveService viewerResolveService;
 	private final EditorProcessingService editorProcessingService;
 	private final ExecutorService processingExecutor;
-	private final Map<UUID, StoredProcessingJob> jobs = new ConcurrentHashMap<>();
+	private final ProcessingStateStore stateStore;
+	private final ProcessingOwnerContext ownerContext;
+	private final ProcessingProperties processingProperties;
 	private final Map<UUID, Future<?>> submittedJobs = new ConcurrentHashMap<>();
+	private final Map<ProcessingJobType, Semaphore> toolSemaphores = new ConcurrentHashMap<>();
+	private final AtomicBoolean acceptingJobs = new AtomicBoolean(true);
 	private final Counter completedJobsCounter;
 	private final Counter failedJobsCounter;
 	private final Counter cancelledJobsCounter;
@@ -73,6 +87,9 @@ public class ProcessingJobService {
 		ViewerResolveService viewerResolveService,
 		EditorProcessingService editorProcessingService,
 		ExecutorService processingExecutor,
+		ProcessingStateStore stateStore,
+		ProcessingOwnerContext ownerContext,
+		ProcessingProperties processingProperties,
 		MeterRegistry meterRegistry
 	) {
 		this.uploadStorageService = uploadStorageService;
@@ -88,6 +105,9 @@ public class ProcessingJobService {
 		this.viewerResolveService = viewerResolveService;
 		this.editorProcessingService = editorProcessingService;
 		this.processingExecutor = processingExecutor;
+		this.stateStore = stateStore;
+		this.ownerContext = ownerContext;
+		this.processingProperties = processingProperties;
 		this.completedJobsCounter = Counter.builder("jack.processing.jobs.completed.total")
 			.description("Количество успешно завершённых processing jobs.")
 			.register(meterRegistry);
@@ -97,8 +117,8 @@ public class ProcessingJobService {
 		this.cancelledJobsCounter = Counter.builder("jack.processing.jobs.cancelled.total")
 			.description("Количество отменённых processing jobs.")
 			.register(meterRegistry);
-		Gauge.builder("jack.processing.jobs.total", this.jobs, jobs -> jobs.size())
-			.description("Текущее число job-записей в in-memory processing registry.")
+		Gauge.builder("jack.processing.jobs.total", this, service -> service.countAllJobs())
+			.description("Текущее число durable job-записей.")
 			.register(meterRegistry);
 		Gauge.builder("jack.processing.jobs.submitted", this.submittedJobs, jobs -> jobs.size())
 			.description("Число job-задач, отправленных в executor и ещё не снятых с исполнения.")
@@ -121,12 +141,29 @@ public class ProcessingJobService {
 	}
 
 	public StoredProcessingJob enqueue(UUID uploadId, ProcessingJobType jobType, Map<String, Object> parameters) {
+		if (!this.acceptingJobs.get()) {
+			throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Сервис завершает работу и временно не принимает jobs.");
+		}
 		var upload = this.uploadStorageService.getRequiredUpload(uploadId);
+		var ownerId = this.ownerContext.ownerId();
+		if (this.stateStore.countActiveJobs(ownerId) >= this.processingProperties.getMaxConcurrentJobsPerSession()) {
+			throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, "Лимит одновременных session jobs исчерпан.");
+		}
 		var normalizedParameters = sanitizeParameters(parameters);
 		ensureJobTypeSupported(upload, jobType, normalizedParameters);
 
-		var job = StoredProcessingJob.queued(UUID.randomUUID(), upload.id(), jobType, normalizedParameters, Instant.now());
-		this.jobs.put(job.id(), job);
+		var now = Instant.now();
+		var job = StoredProcessingJob.queued(
+			UUID.randomUUID(),
+			upload.id(),
+			jobType,
+			normalizedParameters,
+			now,
+			now.plus(this.processingProperties.getJobRetentionHours(), ChronoUnit.HOURS),
+			this.processingProperties.getPolicyVersion(),
+			UUID.randomUUID()
+		);
+		this.stateStore.createJob(ownerId, job);
 
 		var task = new FutureTask<Void>(() -> {
 			process(job.id());
@@ -139,7 +176,7 @@ public class ProcessingJobService {
 		}
 		catch (RejectedExecutionException exception) {
 			this.submittedJobs.remove(job.id(), task);
-			this.jobs.remove(job.id(), job);
+			this.stateStore.deleteJob(job.id());
 			throw new ResponseStatusException(
 				HttpStatus.TOO_MANY_REQUESTS,
 				"Очередь обработки заполнена. Повтори запрос позже.",
@@ -150,20 +187,21 @@ public class ProcessingJobService {
 	}
 
 	public StoredProcessingJob getRequiredJob(UUID jobId) {
-		return findJob(jobId)
+		return this.stateStore.findOwnedJob(jobId, this.ownerContext.ownerId(), Instant.now())
 			.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Processing job не найден."));
 	}
 
 	public Optional<StoredProcessingJob> findJob(UUID jobId) {
-		return Optional.ofNullable(this.jobs.get(jobId));
+		return this.stateStore.findJob(jobId);
+	}
+
+	private StoredProcessingJob getRequiredJobInternal(UUID jobId) {
+		return findJob(jobId)
+			.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Processing job не найден."));
 	}
 
 	public StoredArtifact getRequiredArtifact(UUID jobId, UUID artifactId) {
-		return getRequiredJob(jobId)
-			.artifacts()
-			.stream()
-			.filter(artifact -> artifact.id().equals(artifactId))
-			.findFirst()
+		return this.stateStore.findOwnedArtifact(jobId, artifactId, this.ownerContext.ownerId(), Instant.now())
 			.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Artifact не найден у указанного job."));
 	}
 
@@ -180,40 +218,15 @@ public class ProcessingJobService {
 	}
 
 	public Set<UUID> listActiveJobIds() {
-		return this.jobs.values().stream()
-			.filter(job -> !job.isTerminal())
-			.map(StoredProcessingJob::id)
-			.collect(Collectors.toUnmodifiableSet());
+		return this.stateStore.listActiveJobIds();
 	}
 
 	public Set<UUID> listActiveUploadIds() {
-		return this.jobs.values().stream()
-			.filter(job -> !job.isTerminal())
-			.map(StoredProcessingJob::uploadId)
-			.collect(Collectors.toUnmodifiableSet());
+		return this.stateStore.listActiveUploadIds();
 	}
 
 	public int purgeExpiredTerminalJobs(Instant cutoff) {
-		var deletedJobs = 0;
-
-		for (var entry : this.jobs.entrySet()) {
-			var job = entry.getValue();
-			if (!job.isTerminal()) {
-				continue;
-			}
-
-			var terminalAt = job.completedAt() != null ? job.completedAt() : job.createdAt();
-			if (!terminalAt.isBefore(cutoff)) {
-				continue;
-			}
-
-			this.submittedJobs.remove(entry.getKey());
-			if (this.jobs.remove(entry.getKey(), job)) {
-				deletedJobs++;
-			}
-		}
-
-		return deletedJobs;
+		return this.stateStore.purgeExpiredTerminalJobs(cutoff);
 	}
 
 	private Map<String, Object> sanitizeParameters(Map<String, Object> parameters) {
@@ -234,16 +247,22 @@ public class ProcessingJobService {
 	}
 
 	private void process(UUID jobId) {
+		Semaphore toolSemaphore = null;
+		var acquired = false;
 		try {
 			if (isCancellationRequested(jobId)) {
 				return;
 			}
 
+			var queuedJob = getRequiredJobInternal(jobId);
+			toolSemaphore = this.toolSemaphores.computeIfAbsent(queuedJob.type(), ignored -> new Semaphore(1));
+			toolSemaphore.acquire();
+			acquired = true;
 			updateJob(jobId, job -> job.status() == ProcessingJobStatus.CANCELLED ? job : job.start(Instant.now(), startMessage(job.type())));
 			throwIfCancellationRequested(jobId);
 
-			var job = getRequiredJob(jobId);
-			var upload = this.uploadStorageService.getRequiredUpload(job.uploadId());
+			var job = getRequiredJobInternal(jobId);
+			var upload = this.uploadStorageService.getRequiredUploadInternal(job.uploadId());
 
 			var result = switch (job.type()) {
 				case UPLOAD_INTAKE_ANALYSIS -> processUploadIntakeAnalysis(job.id(), upload);
@@ -277,8 +296,23 @@ public class ProcessingJobService {
 			failJob(jobId, exception);
 		}
 		finally {
+			if (acquired && toolSemaphore != null) {
+				toolSemaphore.release();
+			}
 			this.submittedJobs.remove(jobId);
 		}
+	}
+
+	@PreDestroy
+	void stopAdmission() {
+		this.acceptingJobs.set(false);
+		for (var entry : this.submittedJobs.entrySet()) {
+			entry.getValue().cancel(true);
+			updateJob(entry.getKey(), job -> job.isTerminal()
+				? job
+				: job.cancel(Instant.now(), "Job остановлен graceful shutdown и может быть запущен повторно."));
+		}
+		this.submittedJobs.clear();
 	}
 
 	private JobProcessingResult processUploadIntakeAnalysis(UUID jobId, StoredUpload upload) {
@@ -589,47 +623,47 @@ public class ProcessingJobService {
 	}
 
 	private void updateJob(UUID jobId, UnaryOperator<StoredProcessingJob> mutation) {
-		this.jobs.compute(jobId, (ignored, currentJob) -> currentJob == null ? null : mutation.apply(currentJob));
+		this.stateStore.updateJob(jobId, mutation);
 	}
 
 	private void completeJob(UUID jobId, JobProcessingResult result) {
-		var completed = new AtomicBoolean(false);
-		this.jobs.compute(jobId, (ignored, currentJob) -> {
+		var updated = this.stateStore.updateJob(jobId, currentJob -> {
 			if (currentJob == null || currentJob.status() == ProcessingJobStatus.CANCELLED) {
 				return currentJob;
 			}
-
-			completed.set(true);
 			return currentJob.complete(
 				Instant.now(),
 				result.message(),
 				result.artifacts()
 			);
 		});
-		if (completed.get()) {
+		if (updated != null && updated.status() == ProcessingJobStatus.COMPLETED) {
 			this.completedJobsCounter.increment();
 		}
 	}
 
 	private void failJob(UUID jobId, Exception exception) {
-		var failed = new AtomicBoolean(false);
-		this.jobs.compute(jobId, (ignored, currentJob) -> {
+		var correlationId = findJob(jobId).map(StoredProcessingJob::correlationId).orElse(null);
+		// Клиент получает безопасное сообщение, а полный stack trace остаётся в
+		// серверном логе и связывается с job через стабильный correlation id.
+		LOGGER.error("Processing job {} failed (correlationId={})", jobId, correlationId, exception);
+		var updated = this.stateStore.updateJob(jobId, currentJob -> {
 			if (currentJob == null || currentJob.status() == ProcessingJobStatus.CANCELLED) {
 				return currentJob;
 			}
-
-			failed.set(true);
-			return currentJob.fail(Instant.now(), resolveErrorMessage(exception));
+			return currentJob.fail(Instant.now(), resolveErrorCode(exception), resolveErrorMessage(exception));
 		});
-		if (failed.get()) {
+		if (updated != null && updated.status() == ProcessingJobStatus.FAILED) {
 			this.failedJobsCounter.increment();
 		}
 	}
 
 	private long countJobsByStatus(ProcessingJobStatus status) {
-		return this.jobs.values().stream()
-			.filter(job -> job.status() == status)
-			.count();
+		return this.stateStore.countJobsByStatus(status);
+	}
+
+	private long countAllJobs() {
+		return this.stateStore.countAllJobs();
 	}
 
 	private void throwIfCancellationRequested(UUID jobId) {
@@ -649,7 +683,28 @@ public class ProcessingJobService {
 			return responseStatusException.getReason();
 		}
 
-		return exception.getMessage() != null ? exception.getMessage() : "Неизвестная ошибка processing job.";
+		return "Обработка не завершена. Используй correlation id при обращении в поддержку.";
+	}
+
+	private String resolveErrorCode(Exception exception) {
+		if (exception instanceof ProcessingException processingException) {
+			return processingException.code();
+		}
+		if (exception instanceof ResponseStatusException responseStatusException) {
+			return switch (responseStatusException.getStatusCode().value()) {
+				case 400 -> "INVALID_FILE";
+				case 413 -> "FILE_TOO_LARGE";
+				case 429 -> "RATE_LIMITED";
+				case 503 -> "CAPABILITY_UNAVAILABLE";
+				default -> "PROCESSING_FAILED";
+			};
+		}
+		return "PROCESSING_FAILED";
+	}
+
+	@EventListener(ApplicationReadyEvent.class)
+	void reconcileInterruptedJobs() {
+		this.stateStore.reconcileInterruptedJobs(Instant.now());
 	}
 
 	private String startMessage(ProcessingJobType jobType) {
@@ -805,7 +860,7 @@ public class ProcessingJobService {
 		}
 		if (operation == PdfToolkitRequest.Operation.SIGN &&
 			((request.signatureText() == null || request.signatureText().isBlank()) && request.signatureImageUploadId() == null)) {
-			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "E-sign требует signatureText или signatureImageUploadId.");
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Visible stamp требует signatureText или signatureImageUploadId.");
 		}
 		if (operation == PdfToolkitRequest.Operation.REDACT && (request.redactTerms() == null || request.redactTerms().isEmpty())) {
 			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Redaction требует redactTerms.");

@@ -28,7 +28,30 @@ public record DocumentPreviewPayload(
 		List<List<String>> rows,
 		int totalRows,
 		int totalColumns,
-		String delimiter
+		String delimiter,
+		String revision,
+		boolean truncated,
+		String encoding,
+		Boolean hasHeader,
+		List<DocumentTableColumn> columnMetadata,
+		String nextCursor,
+		int rowOffset
+	) {
+		public DocumentTablePreview(
+			List<String> columns,
+			List<List<String>> rows,
+			int totalRows,
+			int totalColumns,
+			String delimiter
+		) {
+			this(columns, rows, totalRows, totalColumns, delimiter, null, false, null, null, List.of(), null, 0);
+		}
+	}
+
+	public record DocumentTableColumn(
+		String id,
+		String label,
+		String inferredType
 	) {
 	}
 

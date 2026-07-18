@@ -1,18 +1,6 @@
-FROM ubuntu:24.04 AS builder
+FROM amazoncorretto:26-al2023@sha256:3b702fe5f77fc9f6281f167deebd4f06d44dd560a7d3ccf9e7392f221454ad6b AS builder
 
-ENV JAVA_HOME=/opt/java/openjdk
-ENV PATH="${JAVA_HOME}/bin:${PATH}"
-
-RUN set -eux; \
-    apt-get update; \
-    apt-get install -y --no-install-recommends ca-certificates curl tar; \
-    mkdir -p /opt/java; \
-    curl -fsSL https://corretto.aws/downloads/latest/amazon-corretto-26-x64-linux-jdk.tar.gz -o /tmp/amazon-corretto.tar.gz; \
-    tar -xzf /tmp/amazon-corretto.tar.gz -C /opt/java; \
-    CORRETTO_DIR="$(find /opt/java -maxdepth 1 -type d -name 'amazon-corretto-*' | head -n 1)"; \
-    mv "$CORRETTO_DIR" "${JAVA_HOME}"; \
-    rm -f /tmp/amazon-corretto.tar.gz; \
-    rm -rf /var/lib/apt/lists/*
+RUN yum install -y findutils && yum clean all
 
 WORKDIR /workspace
 
@@ -26,9 +14,11 @@ COPY src src
 
 RUN ./gradlew --no-daemon bootJar
 
-FROM ubuntu:24.04
+FROM ubuntu:24.04@sha256:4fbb8e6a8395de5a7550b33509421a2bafbc0aab6c06ba2cef9ebffbc7092d90
 
-ENV JAVA_HOME=/opt/java/openjdk
+COPY --from=builder /usr/lib/jvm/java-26-amazon-corretto /usr/lib/jvm/java-26-amazon-corretto
+
+ENV JAVA_HOME=/usr/lib/jvm/java-26-amazon-corretto
 ENV PATH="${JAVA_HOME}/bin:${PATH}"
 ENV JAVA_TOOL_OPTIONS="-Djava.awt.headless=true"
 ENV TESSDATA_PREFIX=/usr/share/tesseract-ocr/5/tessdata
@@ -37,7 +27,6 @@ RUN set -eux; \
     apt-get update; \
     apt-get install -y --no-install-recommends \
       ca-certificates \
-      curl \
       ffmpeg \
       fontconfig \
       ghostscript \
@@ -47,14 +36,8 @@ RUN set -eux; \
       qpdf \
       librsvg2-bin \
       tesseract-ocr \
-      tesseract-ocr-rus \
-      tar; \
-    mkdir -p /opt/java /app /data/processing /tmp/jack-processing; \
-    curl -fsSL https://corretto.aws/downloads/latest/amazon-corretto-26-x64-linux-jdk.tar.gz -o /tmp/amazon-corretto.tar.gz; \
-    tar -xzf /tmp/amazon-corretto.tar.gz -C /opt/java; \
-    CORRETTO_DIR="$(find /opt/java -maxdepth 1 -type d -name 'amazon-corretto-*' | head -n 1)"; \
-    mv "$CORRETTO_DIR" "${JAVA_HOME}"; \
-    rm -f /tmp/amazon-corretto.tar.gz; \
+      tesseract-ocr-rus; \
+    mkdir -p /app /data/processing /tmp/jack-processing; \
     rm -rf /var/lib/apt/lists/*; \
     groupadd --gid 10001 jack; \
     useradd --uid 10001 --gid jack --no-create-home --shell /usr/sbin/nologin jack; \

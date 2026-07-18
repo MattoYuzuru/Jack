@@ -32,6 +32,11 @@ import {
   exportViewerMetadata,
 } from '../features/viewer/application/viewer-metadata-writer'
 import { stashEditorIncomingDraft } from '../features/editor/application/editor-handoff'
+import ViewerImageRenderer from '../features/viewer/components/renderers/ViewerImageRenderer.vue'
+import ViewerVideoRenderer from '../features/viewer/components/renderers/ViewerVideoRenderer.vue'
+import ViewerAudioRenderer from '../features/viewer/components/renderers/ViewerAudioRenderer.vue'
+import ViewerDocumentRenderer from '../features/viewer/components/renderers/ViewerDocumentRenderer.vue'
+import ViewerDataRenderer from '../features/viewer/components/renderers/ViewerDataRenderer.vue'
 
 const fileInput = ref<HTMLInputElement | null>(null)
 const subtitleInput = ref<HTMLInputElement | null>(null)
@@ -54,6 +59,7 @@ const metadataSaveMessage = ref('')
 const documentActionMessage = ref('')
 const documentDraftText = ref('')
 const documentDraftBaseline = ref('')
+let pickerReturnFocus: HTMLElement | null = null
 
 const router = useRouter()
 
@@ -409,17 +415,6 @@ const documentWorkbook = computed(() => {
   return selection.value.layout
 })
 
-const activeDocumentSheet = computed(() => {
-  if (!documentWorkbook.value) {
-    return null
-  }
-
-  const maxIndex = Math.max(documentWorkbook.value.sheets.length - 1, 0)
-  const safeIndex = Math.min(documentSheetIndex.value, maxIndex)
-
-  return documentWorkbook.value.sheets[safeIndex] ?? null
-})
-
 const documentParagraphs = computed(() => {
   if (selection.value?.kind !== 'document' || selection.value.layout.mode !== 'text') {
     return []
@@ -436,25 +431,12 @@ const documentSlides = computed(() => {
   return selection.value.layout.slides
 })
 
-const activeDocumentSlide = computed(() => documentSlides.value[documentSlideIndex.value] ?? null)
-
 const documentDatabase = computed(() => {
   if (selection.value?.kind !== 'document' || selection.value.layout.mode !== 'database') {
     return null
   }
 
   return selection.value.layout
-})
-
-const activeDocumentDatabaseTable = computed(() => {
-  if (!documentDatabase.value) {
-    return null
-  }
-
-  const maxIndex = Math.max(documentDatabase.value.tables.length - 1, 0)
-  const safeIndex = Math.min(documentDatabaseTableIndex.value, maxIndex)
-
-  return documentDatabase.value.tables[safeIndex] ?? null
 })
 
 const activeDocumentEditableDraft = computed(() =>
@@ -549,6 +531,7 @@ const activeDocumentMatch = computed(
 )
 
 function openFilePicker() {
+  pickerReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
   fileInput.value?.click()
 }
 
@@ -559,7 +542,14 @@ function handleStageClick() {
 }
 
 function openSubtitlePicker() {
+  pickerReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
   subtitleInput.value?.click()
+}
+
+function restorePickerFocus() {
+  const target = pickerReturnFocus
+  pickerReturnFocus = null
+  window.setTimeout(() => target?.focus(), 0)
 }
 
 function onFileChange(event: Event) {
@@ -567,11 +557,13 @@ function onFileChange(event: Event) {
   const file = target.files?.[0]
 
   if (!file) {
+    restorePickerFocus()
     return
   }
 
   void selectFile(file)
   target.value = ''
+  restorePickerFocus()
 }
 
 function onDragOver(event: DragEvent) {
@@ -602,12 +594,16 @@ async function toggleFullscreen() {
     return
   }
 
-  if (document.fullscreenElement) {
-    await document.exitFullscreen()
-    return
-  }
+  try {
+    if (document.fullscreenElement) {
+      await document.exitFullscreen()
+      return
+    }
 
-  await previewStage.value.requestFullscreen?.()
+    await previewStage.value.requestFullscreen?.()
+  } catch {
+    documentActionMessage.value = 'Браузер не разрешил переключить полноэкранный режим.'
+  }
 }
 
 function syncFullscreenState() {
@@ -658,8 +654,12 @@ async function copyDocumentText() {
     return
   }
 
-  await navigator.clipboard.writeText(selection.value.searchableText)
-  documentActionMessage.value = 'Извлечённый text layer скопирован в clipboard.'
+  try {
+    await navigator.clipboard.writeText(selection.value.searchableText)
+    documentActionMessage.value = 'Извлечённый text layer скопирован в clipboard.'
+  } catch {
+    documentActionMessage.value = 'Браузер не разрешил запись текста в clipboard.'
+  }
 }
 
 function downloadDocumentText() {
@@ -674,7 +674,9 @@ function downloadDocumentText() {
       : selection.value.file.name
 
   downloadBlob(
-    new Blob([selection.value.searchableText], { type: 'text/plain;charset=utf-8' }),
+    new Blob([selection.value.searchableText], {
+      type: 'text/plain;charset=utf-8',
+    }),
     `${baseName}.jack-extracted.txt`,
   )
   documentActionMessage.value = 'Извлечённый text layer собран в отдельный `.txt` файл.'
@@ -690,8 +692,12 @@ async function copyDocumentDraft() {
     return
   }
 
-  await navigator.clipboard.writeText(documentDraftText.value)
-  documentActionMessage.value = 'Рабочая копия документа скопирована в буфер.'
+  try {
+    await navigator.clipboard.writeText(documentDraftText.value)
+    documentActionMessage.value = 'Рабочая копия документа скопирована в буфер.'
+  } catch {
+    documentActionMessage.value = 'Браузер не разрешил запись рабочей копии в clipboard.'
+  }
 }
 
 function downloadDocumentDraft() {
@@ -756,51 +762,18 @@ function selectDocumentDatabaseTable(index: number) {
   documentDatabaseTableIndex.value = index
 }
 
-function onVideoSeekInput(event: Event) {
-  const target = event.target as HTMLInputElement
-  seekTo(Number(target.value))
-}
-
-function onVideoVolumeInput(event: Event) {
-  const target = event.target as HTMLInputElement
-  setVolume(Number(target.value))
-}
-
-function onVideoRateChange(event: Event) {
-  const target = event.target as HTMLSelectElement
-  setPlaybackRate(Number(target.value))
-}
-
-function onVideoFrameRateChange(event: Event) {
-  const target = event.target as HTMLSelectElement
-  setAssumedFrameRate(Number(target.value))
-}
-
-function onAudioSeekInput(event: Event) {
-  const target = event.target as HTMLInputElement
-  seekAudioTo(Number(target.value))
-}
-
-function onAudioVolumeInput(event: Event) {
-  const target = event.target as HTMLInputElement
-  setAudioVolume(Number(target.value))
-}
-
-function onAudioRateChange(event: Event) {
-  const target = event.target as HTMLSelectElement
-  setAudioPlaybackRate(Number(target.value))
-}
-
 async function onSubtitleChange(event: Event) {
   const target = event.target as HTMLInputElement
   const files = target.files
 
   if (!files?.length) {
+    restorePickerFocus()
     return
   }
 
   await loadSubtitleFiles(files)
   target.value = ''
+  restorePickerFocus()
 }
 
 function handleWorkspaceKeydown(event: KeyboardEvent) {
@@ -894,61 +867,24 @@ onBeforeUnmount(() => {
           </div>
 
           <div class="viewer-toolbar">
-            <button
-              class="icon-button"
-              type="button"
-              :disabled="selection?.kind !== 'image'"
-              @click="zoomOut"
-            >
-              -
-            </button>
-            <button
-              class="icon-button"
-              type="button"
-              :disabled="selection?.kind !== 'image'"
-              @click="zoomIn"
-            >
-              +
-            </button>
-            <button
-              class="icon-button"
-              type="button"
-              :disabled="selection?.kind !== 'image'"
-              @click="rotateLeft"
-            >
-              -90°
-            </button>
-            <button
-              class="icon-button"
-              type="button"
-              :disabled="selection?.kind !== 'image'"
-              @click="rotateRight"
-            >
-              +90°
-            </button>
-            <button
-              class="icon-button"
-              type="button"
-              :disabled="selection?.kind !== 'image'"
-              @click="resetViewportTransform"
-            >
-              Сброс
-            </button>
-            <button
-              class="icon-button"
-              type="button"
-              :disabled="!selection"
-              @click="toggleFullscreen"
-            >
+            <template v-if="selection?.kind === 'image'">
+              <button class="icon-button" type="button" aria-label="Уменьшить" @click="zoomOut">
+                -
+              </button>
+              <button class="icon-button" type="button" aria-label="Увеличить" @click="zoomIn">
+                +
+              </button>
+              <button class="icon-button" type="button" @click="rotateLeft">-90°</button>
+              <button class="icon-button" type="button" @click="rotateRight">+90°</button>
+              <button class="icon-button" type="button" @click="resetViewportTransform">
+                Сброс
+              </button>
+              <button class="icon-button" type="button" @click="toggleTransparencyGrid">
+                {{ isTransparencyGridVisible ? 'Без сетки' : 'Сетка' }}
+              </button>
+            </template>
+            <button v-if="selection" class="icon-button" type="button" @click="toggleFullscreen">
               {{ isFullscreen ? 'Окно' : 'Экран' }}
-            </button>
-            <button
-              class="icon-button"
-              type="button"
-              :disabled="selection?.kind !== 'image'"
-              @click="toggleTransparencyGrid"
-            >
-              {{ isTransparencyGridVisible ? 'Без сетки' : 'Сетка' }}
             </button>
           </div>
         </div>
@@ -976,554 +912,113 @@ onBeforeUnmount(() => {
             <span>{{ errorMessage }}</span>
           </div>
 
-          <div v-else-if="selection?.kind === 'image'" class="viewer-image-frame">
-            <img
-              ref="previewImage"
-              class="viewer-image-frame__image"
-              :src="selection.objectUrl"
-              :alt="selection.file.name"
-              :style="{ transform: viewportTransform }"
-              @pointermove="handlePointerMove"
-              @pointerleave="handlePointerLeave"
-              @click="storeActiveSwatch"
-            />
-          </div>
+          <ViewerImageRenderer
+            v-else-if="selection?.kind === 'image'"
+            :selection="selection"
+            :viewport-transform="viewportTransform"
+            @element-change="previewImage = $event"
+            @pointer-move="handlePointerMove"
+            @pointer-leave="handlePointerLeave"
+            @store-swatch="storeActiveSwatch"
+          />
 
-          <div v-else-if="selection?.kind === 'video'" class="viewer-video-frame">
-            <div class="video-stage-hud">
-              <div class="document-stage-hud__meta">
-                <span class="chip-pill chip-pill--compact chip-pill--accent">
-                  {{ selection.format.label }}
-                </span>
-                <span
-                  v-for="metric in videoStageMetrics"
-                  :key="metric"
-                  class="chip-pill chip-pill--compact"
-                >
-                  {{ metric }}
-                </span>
-              </div>
+          <ViewerVideoRenderer
+            v-else-if="selection?.kind === 'video'"
+            :selection="selection"
+            :metrics="videoStageMetrics"
+            :is-playing="isVideoPlaying"
+            :is-muted="isVideoMuted"
+            :volume="videoVolume"
+            :playback-rate="videoPlaybackRate"
+            :playback-rates="videoPlaybackRates"
+            :current-time="videoCurrentTime"
+            :duration-seconds="videoDurationSeconds"
+            :progress-percent="videoProgressPercent"
+            :current-time-label="videoCurrentTimeLabel"
+            :duration-label="videoDurationLabel"
+            :can-use-picture-in-picture="canUsePictureInPicture"
+            :is-picture-in-picture-active="isPictureInPictureActive"
+            :is-looping="isLooping"
+            :assumed-frame-rate="assumedFrameRate"
+            :frame-rate-options="videoFrameRateOptions"
+            :frame-step-label="frameStepLabel"
+            :approximate-frame-number="approximateFrameNumber"
+            :subtitle-tracks="subtitleTracks"
+            :active-subtitle-track="activeSubtitleTrack"
+            :active-subtitle-track-id="activeSubtitleTrackId"
+            :playback-message="playbackMessage"
+            :subtitle-message="subtitleMessage"
+            :poster-message="posterMessage"
+            :poster-count="posterCaptures.length"
+            @element-change="previewVideo = $event"
+            @toggle-playback="togglePlayback"
+            @step-frame="stepFrame"
+            @seek-by="seekBy"
+            @seek-to="seekTo"
+            @set-volume="setVolume"
+            @toggle-mute="toggleMute"
+            @set-playback-rate="setPlaybackRate"
+            @set-frame-rate="setAssumedFrameRate"
+            @toggle-loop="toggleLoop"
+            @open-subtitles="openSubtitlePicker"
+            @capture-poster="capturePoster"
+            @clear-subtitles="clearSubtitleTracks"
+            @toggle-picture-in-picture="togglePictureInPicture"
+            @copy-timestamp="copyCurrentTimestamp"
+          />
+          <ViewerAudioRenderer
+            v-else-if="selection?.kind === 'audio'"
+            :selection="selection"
+            :metrics="audioStageMetrics"
+            :is-playing="isAudioPlaying"
+            :is-muted="isAudioMuted"
+            :volume="audioVolume"
+            :playback-rate="audioPlaybackRate"
+            :playback-rates="audioPlaybackRates"
+            :current-time="audioCurrentTime"
+            :duration-seconds="audioDurationSeconds"
+            :progress-percent="audioProgressPercent"
+            :current-time-label="audioCurrentTimeLabel"
+            :duration-label="audioDurationLabel"
+            :is-looping="isAudioLooping"
+            :playback-message="audioPlaybackMessage"
+            @element-change="previewAudio = $event"
+            @toggle-playback="toggleAudioPlayback"
+            @seek-by="seekAudioBy"
+            @seek-to="seekAudioTo"
+            @set-volume="setAudioVolume"
+            @toggle-mute="toggleAudioMute"
+            @set-playback-rate="setAudioPlaybackRate"
+            @toggle-loop="toggleAudioLoop"
+            @copy-timestamp="copyAudioTimestamp"
+          />
+          <ViewerDataRenderer
+            v-else-if="
+              selection?.kind === 'document' &&
+              ['table', 'workbook', 'database'].includes(selection.layout.mode)
+            "
+            :selection="selection"
+            :sheet-index="documentSheetIndex"
+            :database-table-index="documentDatabaseTableIndex"
+            @select-sheet="selectDocumentSheet"
+            @select-database-table="selectDocumentDatabaseTable"
+          />
 
-              <div class="document-stage-hud__actions">
-                <button class="action-button" type="button" @click="togglePlayback">
-                  {{ isVideoPlaying ? 'Пауза' : 'Воспроизвести' }}
-                </button>
-                <button class="action-button" type="button" @click="stepFrame(-1)">-1f</button>
-                <button class="action-button" type="button" @click="stepFrame(1)">+1f</button>
-                <button class="action-button" type="button" @click="seekBy(-5)">-5s</button>
-                <button class="action-button" type="button" @click="seekBy(5)">+5s</button>
-                <button class="action-button" type="button" @click="toggleLoop">
-                  {{ isLooping ? 'Повтор включён' : 'Повтор выключен' }}
-                </button>
-                <button class="action-button" type="button" @click="openSubtitlePicker">
-                  Субтитры
-                </button>
-                <button class="action-button" type="button" @click="capturePoster">Кадр</button>
-                <button
-                  class="action-button"
-                  type="button"
-                  :disabled="!canUsePictureInPicture"
-                  @click="togglePictureInPicture"
-                >
-                  {{ isPictureInPictureActive ? 'Выйти из PiP' : 'PiP' }}
-                </button>
-              </div>
-            </div>
-
-            <video
-              ref="previewVideo"
-              class="viewer-video-frame__player"
-              :src="selection.layout.objectUrl"
-              :loop="isLooping"
-              preload="metadata"
-              playsinline
-            >
-              <track
-                v-for="track in subtitleTracks"
-                :key="track.id"
-                :kind="track.kind"
-                :label="track.label"
-                :srclang="track.language"
-                :src="track.objectUrl"
-                :default="track.id === activeSubtitleTrackId"
-              />
-            </video>
-
-            <div class="video-control-panel">
-              <label class="video-progress">
-                <span>{{ videoCurrentTimeLabel }}</span>
-                <input
-                  type="range"
-                  min="0"
-                  :max="videoDurationSeconds || selection.layout.durationSeconds || 0"
-                  step="0.1"
-                  :value="videoCurrentTime"
-                  @input="onVideoSeekInput"
-                />
-                <span>{{ videoDurationLabel }}</span>
-              </label>
-
-              <div v-if="playbackMessage" class="video-tool-message">
-                {{ playbackMessage }}
-              </div>
-              <div v-if="subtitleMessage" class="video-tool-message">
-                {{ subtitleMessage }}
-              </div>
-              <div v-if="posterMessage" class="video-tool-message">
-                {{ posterMessage }}
-              </div>
-
-              <div class="video-control-row">
-                <label class="video-slider">
-                  <span>Громкость</span>
-                  <input
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.01"
-                    :value="videoVolume"
-                    @input="onVideoVolumeInput"
-                  />
-                </label>
-                <button class="action-button" type="button" @click="toggleMute">
-                  {{ isVideoMuted ? 'Со звуком' : 'Без звука' }}
-                </button>
-                <label class="video-rate">
-                  <span>Скорость</span>
-                  <select :value="videoPlaybackRate" @change="onVideoRateChange">
-                    <option v-for="rate in videoPlaybackRates" :key="rate" :value="rate">
-                      {{ rate }}x
-                    </option>
-                  </select>
-                </label>
-                <label class="video-rate">
-                  <span>FPS</span>
-                  <select :value="assumedFrameRate" @change="onVideoFrameRateChange">
-                    <option v-for="rate in videoFrameRateOptions" :key="rate" :value="rate">
-                      {{ rate }} fps
-                    </option>
-                  </select>
-                </label>
-                <span class="chip-pill chip-pill--compact">
-                  {{ videoProgressPercent.toFixed(0) }}%
-                </span>
-                <span class="chip-pill chip-pill--compact"> {{ frameStepLabel }} / frame </span>
-                <span class="chip-pill chip-pill--compact">
-                  {{ approximateFrameNumber ? `Кадр #${approximateFrameNumber}` : 'Кадр —' }}
-                </span>
-              </div>
-
-              <div class="video-control-row">
-                <div class="viewer-dropzone__actions">
-                  <button class="action-button" type="button" @click="copyCurrentTimestamp">
-                    Скопировать время
-                  </button>
-                  <button class="action-button" type="button" @click="capturePoster">
-                    Сохранить кадр
-                  </button>
-                  <button class="action-button" type="button" @click="openSubtitlePicker">
-                    Добавить субтитры
-                  </button>
-                  <button
-                    class="action-button"
-                    type="button"
-                    :disabled="!subtitleTracks.length"
-                    @click="clearSubtitleTracks"
-                  >
-                    Очистить
-                  </button>
-                </div>
-                <div class="document-stage-hud__meta">
-                  <span class="chip-pill chip-pill--compact">
-                    {{ isLooping ? 'Повтор включён' : 'Один проход' }}
-                  </span>
-                  <span class="chip-pill chip-pill--compact">
-                    {{
-                      activeSubtitleTrack
-                        ? `Активно: ${activeSubtitleTrack.label}`
-                        : 'Субтитры выключены'
-                    }}
-                  </span>
-                  <span class="chip-pill chip-pill--compact chip-pill--accent">
-                    {{
-                      posterCaptures.length
-                        ? `${posterCaptures.length} кадров`
-                        : 'Кадры ещё не сохранены'
-                    }}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div v-else-if="selection?.kind === 'audio'" class="viewer-audio-frame">
-            <div class="video-stage-hud">
-              <div class="document-stage-hud__meta">
-                <span class="chip-pill chip-pill--compact chip-pill--accent">
-                  {{ selection.format.label }}
-                </span>
-                <span
-                  v-for="metric in audioStageMetrics"
-                  :key="metric"
-                  class="chip-pill chip-pill--compact"
-                >
-                  {{ metric }}
-                </span>
-              </div>
-
-              <div class="document-stage-hud__actions">
-                <button class="action-button" type="button" @click="toggleAudioPlayback">
-                  {{ isAudioPlaying ? 'Пауза' : 'Воспроизвести' }}
-                </button>
-                <button class="action-button" type="button" @click="seekAudioBy(-10)">-10s</button>
-                <button class="action-button" type="button" @click="seekAudioBy(10)">+10s</button>
-                <button class="action-button" type="button" @click="toggleAudioLoop">
-                  {{ isAudioLooping ? 'Повтор включён' : 'Повтор выключен' }}
-                </button>
-                <button class="action-button" type="button" @click="copyAudioTimestamp">
-                  Скопировать время
-                </button>
-              </div>
-            </div>
-
-            <div class="audio-stage-shell">
-              <div class="audio-stage-summary">
-                <div v-if="selection.artworkDataUrl" class="audio-stage-artwork">
-                  <img :src="selection.artworkDataUrl" :alt="`${selection.file.name} artwork`" />
-                </div>
-                <div v-else class="audio-stage-artwork audio-stage-artwork--empty">
-                  <strong>{{ selection.format.label }}</strong>
-                  <span>Обложка не найдена</span>
-                </div>
-
-                <div class="audio-stage-copy">
-                  <p class="eyebrow">Аудио</p>
-                  <h3>{{ selection.file.name }}</h3>
-                  <p>Прослушивание, волна, теги и обложка собраны в одном окне.</p>
-                </div>
-              </div>
-
-              <div class="audio-waveform" aria-label="Волна аудио">
-                <div
-                  v-for="(bucket, bucketIndex) in selection.layout.waveform"
-                  :key="`wave-${bucketIndex}`"
-                  class="audio-waveform__bar"
-                  :style="{ height: `${Math.max(bucket * 100, 8)}%` }"
-                ></div>
-              </div>
-
-              <audio
-                ref="previewAudio"
-                class="viewer-audio-frame__player"
-                :src="selection.layout.objectUrl"
-                :loop="isAudioLooping"
-                preload="metadata"
-              ></audio>
-
-              <div class="video-control-panel">
-                <label class="video-progress">
-                  <span>{{ audioCurrentTimeLabel }}</span>
-                  <input
-                    type="range"
-                    min="0"
-                    :max="audioDurationSeconds || selection.layout.durationSeconds || 0"
-                    step="0.1"
-                    :value="audioCurrentTime"
-                    @input="onAudioSeekInput"
-                  />
-                  <span>{{ audioDurationLabel }}</span>
-                </label>
-
-                <div v-if="audioPlaybackMessage" class="video-tool-message">
-                  {{ audioPlaybackMessage }}
-                </div>
-
-                <div class="video-control-row">
-                  <label class="video-slider">
-                    <span>Громкость</span>
-                    <input
-                      type="range"
-                      min="0"
-                      max="1"
-                      step="0.01"
-                      :value="audioVolume"
-                      @input="onAudioVolumeInput"
-                    />
-                  </label>
-                  <button class="action-button" type="button" @click="toggleAudioMute">
-                    {{ isAudioMuted ? 'Со звуком' : 'Без звука' }}
-                  </button>
-                  <label class="video-rate">
-                    <span>Скорость</span>
-                    <select :value="audioPlaybackRate" @change="onAudioRateChange">
-                      <option v-for="rate in audioPlaybackRates" :key="rate" :value="rate">
-                        {{ rate }}x
-                      </option>
-                    </select>
-                  </label>
-                  <span class="chip-pill chip-pill--compact">
-                    {{ audioProgressPercent.toFixed(0) }}%
-                  </span>
-                  <span class="chip-pill chip-pill--compact">
-                    {{ isAudioLooping ? 'Повтор включён' : 'Один проход' }}
-                  </span>
-                  <span class="chip-pill chip-pill--compact chip-pill--accent">
-                    {{ selection.layout.waveform.length ? 'Волна готова' : 'Волна недоступна' }}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div v-else-if="selection?.kind === 'document'" class="viewer-document-frame">
-            <div class="document-stage-hud">
-              <div class="document-stage-hud__meta">
-                <span class="chip-pill chip-pill--compact chip-pill--accent">
-                  {{ selection.format.label }}
-                </span>
-                <span class="chip-pill chip-pill--compact">
-                  {{ documentModeLabel }}
-                </span>
-                <span
-                  v-for="metric in documentStageMetrics"
-                  :key="metric"
-                  class="chip-pill chip-pill--compact"
-                >
-                  {{ metric }}
-                </span>
-              </div>
-
-              <div class="document-stage-hud__actions">
-                <button class="action-button" type="button" @click="copyDocumentText">
-                  Скопировать текст
-                </button>
-                <button class="action-button" type="button" @click="downloadDocumentText">
-                  Скачать текст
-                </button>
-                <button
-                  v-if="canQuickEditDocument"
-                  class="action-button action-button--accent"
-                  type="button"
-                  @click="openDocumentDraftInEditor"
-                >
-                  Открыть в Editor
-                </button>
-                <button
-                  class="action-button"
-                  type="button"
-                  :disabled="!documentQuery"
-                  @click="clearDocumentSearch"
-                >
-                  Сбросить поиск
-                </button>
-              </div>
-            </div>
-
-            <p v-if="documentActionMessage" class="document-action-message">
-              {{ documentActionMessage }}
-            </p>
-
-            <iframe
-              v-if="selection.layout.mode === 'pdf'"
-              class="viewer-document-frame__embed"
-              :src="selection.layout.objectUrl"
-              :title="selection.file.name"
-            ></iframe>
-
-            <iframe
-              v-else-if="selection.layout.mode === 'html'"
-              class="viewer-document-frame__embed"
-              sandbox=""
-              :srcdoc="selection.layout.srcDoc"
-              :title="selection.file.name"
-            ></iframe>
-
-            <div v-else-if="selection.layout.mode === 'table'" class="document-table">
-              <div class="document-table__summary">
-                <strong>{{ selection.layout.table.totalRows }} строк</strong>
-                <span>{{ selection.layout.table.totalColumns }} колонок</span>
-              </div>
-              <div class="document-table__scroll">
-                <table>
-                  <thead>
-                    <tr>
-                      <th v-for="column in selection.layout.table.columns" :key="column">
-                        {{ column }}
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr v-for="(row, rowIndex) in selection.layout.table.rows" :key="rowIndex">
-                      <td v-for="(cell, columnIndex) in row" :key="`${rowIndex}-${columnIndex}`">
-                        {{ cell || '—' }}
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            <div v-else-if="selection.layout.mode === 'workbook'" class="document-workbook">
-              <div class="document-workbook__tabs">
-                <button
-                  v-for="(sheet, sheetIndex) in selection.layout.sheets"
-                  :key="sheet.id"
-                  class="document-sheet-chip"
-                  :class="{ 'document-sheet-chip--active': documentSheetIndex === sheetIndex }"
-                  type="button"
-                  @click="selectDocumentSheet(sheetIndex)"
-                >
-                  {{ sheet.name }}
-                </button>
-              </div>
-
-              <div v-if="activeDocumentSheet" class="document-table">
-                <div class="document-table__summary">
-                  <strong>{{ activeDocumentSheet.table.totalRows }} строк</strong>
-                  <span>{{ activeDocumentSheet.table.totalColumns }} колонок</span>
-                </div>
-                <div class="document-table__scroll">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th v-for="column in activeDocumentSheet.table.columns" :key="column">
-                          {{ column }}
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr
-                        v-for="(row, rowIndex) in activeDocumentSheet.table.rows"
-                        :key="`${activeDocumentSheet.id}-${rowIndex}`"
-                      >
-                        <td v-for="(cell, columnIndex) in row" :key="`${rowIndex}-${columnIndex}`">
-                          {{ cell || '—' }}
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-
-            <div v-else-if="selection.layout.mode === 'database'" class="document-database">
-              <div class="document-workbook__tabs">
-                <button
-                  v-for="(table, tableIndex) in selection.layout.tables"
-                  :key="table.id"
-                  class="document-sheet-chip"
-                  :class="{
-                    'document-sheet-chip--active': documentDatabaseTableIndex === tableIndex,
-                  }"
-                  type="button"
-                  @click="selectDocumentDatabaseTable(tableIndex)"
-                >
-                  {{ table.name }}
-                </button>
-              </div>
-
-              <article v-if="activeDocumentDatabaseTable" class="document-database__schema">
-                <div class="document-table__summary">
-                  <strong>{{
-                    activeDocumentDatabaseTable.rowCount == null
-                      ? 'Строк: нет данных'
-                      : `${activeDocumentDatabaseTable.rowCount} строк`
-                  }}</strong>
-                  <span>{{ activeDocumentDatabaseTable.columns.length }} колонок</span>
-                </div>
-                <pre>{{ activeDocumentDatabaseTable.schemaSql }}</pre>
-              </article>
-
-              <div v-if="activeDocumentDatabaseTable" class="document-table">
-                <div class="document-table__summary">
-                  <strong>{{ activeDocumentDatabaseTable.sample.totalRows }} строк</strong>
-                  <span>{{ activeDocumentDatabaseTable.sample.totalColumns }} колонок</span>
-                </div>
-                <div class="document-table__scroll">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th
-                          v-for="column in activeDocumentDatabaseTable.sample.columns"
-                          :key="column"
-                        >
-                          {{ column }}
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr
-                        v-for="(row, rowIndex) in activeDocumentDatabaseTable.sample.rows"
-                        :key="`${activeDocumentDatabaseTable.id}-${rowIndex}`"
-                      >
-                        <td v-for="(cell, columnIndex) in row" :key="`${rowIndex}-${columnIndex}`">
-                          {{ cell || '—' }}
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              <p v-else class="viewer-panel__empty">В этой базе не найдено таблиц для просмотра.</p>
-            </div>
-
-            <div v-else-if="selection.layout.mode === 'slides'" class="document-slide-grid">
-              <article
-                v-if="activeDocumentSlide"
-                class="document-slide-card document-slide-card--focus"
-              >
-                <div class="document-slide-card__meta">
-                  <span class="chip-pill chip-pill--compact chip-pill--accent">
-                    Активный слайд {{ documentSlideIndex + 1 }}
-                  </span>
-                </div>
-                <h3>{{ activeDocumentSlide.title }}</h3>
-                <ul v-if="activeDocumentSlide.bullets.length" class="document-slide-card__list">
-                  <li v-for="bullet in activeDocumentSlide.bullets" :key="bullet">{{ bullet }}</li>
-                </ul>
-                <p v-else class="viewer-panel__empty">На выбранном слайде нет пунктов списка.</p>
-              </article>
-
-              <div class="document-slide-rail">
-                <button
-                  v-for="(slide, slideIndex) in selection.layout.slides"
-                  :key="slide.id"
-                  class="document-slide-chip"
-                  :class="{ 'document-slide-chip--active': documentSlideIndex === slideIndex }"
-                  type="button"
-                  @click="selectDocumentSlide(slideIndex)"
-                >
-                  {{ slideIndex + 1 }} · {{ slide.title }}
-                </button>
-              </div>
-
-              <article
-                v-for="(slide, slideIndex) in selection.layout.slides"
-                :key="slide.id"
-                class="document-slide-card"
-                :class="{ 'document-slide-card--selected': documentSlideIndex === slideIndex }"
-                @click="selectDocumentSlide(slideIndex)"
-              >
-                <div class="document-slide-card__meta">
-                  <span class="chip-pill chip-pill--compact">Слайд {{ slideIndex + 1 }}</span>
-                </div>
-                <h3>{{ slide.title }}</h3>
-                <ul v-if="slide.bullets.length" class="document-slide-card__list">
-                  <li v-for="bullet in slide.bullets" :key="bullet">{{ bullet }}</li>
-                </ul>
-                <p v-else class="viewer-panel__empty">
-                  На слайде не найден текстовый слой кроме заголовка.
-                </p>
-              </article>
-            </div>
-
-            <article v-else class="document-text">
-              <p v-for="(paragraph, index) in selection.layout.paragraphs" :key="index">
-                {{ paragraph }}
-              </p>
-            </article>
-          </div>
+          <ViewerDocumentRenderer
+            v-else-if="selection?.kind === 'document'"
+            :selection="selection"
+            :mode-label="documentModeLabel"
+            :metrics="documentStageMetrics"
+            :action-message="documentActionMessage"
+            :can-quick-edit="canQuickEditDocument"
+            :search-query="documentQuery"
+            :slide-index="documentSlideIndex"
+            @copy-text="copyDocumentText"
+            @download-text="downloadDocumentText"
+            @open-editor="openDocumentDraftInEditor"
+            @clear-search="clearDocumentSearch"
+            @select-slide="selectDocumentSlide"
+          />
 
           <div
             v-else-if="selection?.kind === 'unknown'"
@@ -1831,7 +1326,9 @@ onBeforeUnmount(() => {
           <button
             class="action-button"
             type="button"
-            :class="{ 'action-button--accent': activeSubtitleTrackId === 'off' }"
+            :class="{
+              'action-button--accent': activeSubtitleTrackId === 'off',
+            }"
             @click="setActiveSubtitleTrack('off')"
           >
             Выключить
@@ -1850,7 +1347,9 @@ onBeforeUnmount(() => {
             v-for="track in subtitleTracks"
             :key="track.id"
             class="subtitle-track-card"
-            :class="{ 'subtitle-track-card--active': activeSubtitleTrackId === track.id }"
+            :class="{
+              'subtitle-track-card--active': activeSubtitleTrackId === track.id,
+            }"
           >
             <button
               class="subtitle-track-card__select"
@@ -2059,7 +1558,9 @@ onBeforeUnmount(() => {
             v-for="(match, matchIndex) in documentMatches"
             :key="match.id"
             class="search-match-card"
-            :class="{ 'search-match-card--active': activeDocumentMatchIndex === matchIndex }"
+            :class="{
+              'search-match-card--active': activeDocumentMatchIndex === matchIndex,
+            }"
             type="button"
             @click="focusDocumentMatch(matchIndex)"
           >
@@ -2153,7 +1654,9 @@ onBeforeUnmount(() => {
             v-for="(sheet, sheetIndex) in documentWorkbook.sheets"
             :key="sheet.id"
             class="outline-card outline-card--interactive"
-            :class="{ 'outline-card--active': documentSheetIndex === sheetIndex }"
+            :class="{
+              'outline-card--active': documentSheetIndex === sheetIndex,
+            }"
             @click="selectDocumentSheet(sheetIndex)"
           >
             <strong>Лист</strong>
@@ -2166,7 +1669,9 @@ onBeforeUnmount(() => {
             v-for="(slide, slideIndex) in documentSlides"
             :key="slide.id"
             class="outline-card outline-card--interactive"
-            :class="{ 'outline-card--active': documentSlideIndex === slideIndex }"
+            :class="{
+              'outline-card--active': documentSlideIndex === slideIndex,
+            }"
             @click="selectDocumentSlide(slideIndex)"
           >
             <strong>S{{ slideIndex + 1 }}</strong>
@@ -2179,7 +1684,9 @@ onBeforeUnmount(() => {
             v-for="(table, tableIndex) in documentDatabase.tables"
             :key="table.id"
             class="outline-card outline-card--interactive"
-            :class="{ 'outline-card--active': documentDatabaseTableIndex === tableIndex }"
+            :class="{
+              'outline-card--active': documentDatabaseTableIndex === tableIndex,
+            }"
             @click="selectDocumentDatabaseTable(tableIndex)"
           >
             <strong>Таблица</strong>

@@ -74,4 +74,12 @@ Jack`,
     expect(result.cueCount).toBe(1)
     expect(await result.blob.text()).toContain('WEBVTT')
   })
+
+  it('rejects oversized subtitle sidecars before reading them', async () => {
+    const oversized = new File([new Uint8Array(2 * 1024 * 1024 + 1)], 'movie.vtt', {
+      type: 'text/vtt',
+    })
+
+    await expect(prepareViewerSubtitleFile(oversized)).rejects.toThrow('лимит 2 MiB')
+  })
 })

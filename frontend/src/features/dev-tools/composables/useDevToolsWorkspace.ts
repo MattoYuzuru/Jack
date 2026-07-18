@@ -15,6 +15,7 @@ import {
 } from '../application/quick-utils'
 import { validateStructuredText, type ValidationFormatId } from '../application/validation-tools'
 import { listDevTools, resolveDevTool, type DevToolId } from '../domain/dev-tools-registry'
+import { createProcessingTaskController } from '../../processing/application/processing-task-controller'
 
 type HashSourceMode = 'text' | 'file'
 
@@ -55,6 +56,7 @@ export function useDevToolsWorkspace() {
   const hashFile = ref<File | null>(null)
   const hashReport = ref<HashReport | null>(null)
   const hashErrorMessage = ref('')
+  const hashProgressMessage = ref('')
   const isHashing = ref(false)
 
   const linkInput = ref(
@@ -107,41 +109,60 @@ export function useDevToolsWorkspace() {
     buildBasicAuthHeader(basicAuthUsername.value, basicAuthPassword.value),
   )
 
-  let hashRunId = 0
+  const hashTaskController = createProcessingTaskController<{
+    sourceMode: HashSourceMode
+    sourceLabel: string
+  }>({ cloneSnapshot: (snapshot) => ({ ...snapshot }) })
   watch(
     [hashSourceMode, hashTextInput, hashSecret, hashFile],
     async () => {
-      const currentRunId = ++hashRunId
+      const task = hashTaskController.begin({
+        sourceMode: hashSourceMode.value,
+        sourceLabel:
+          hashSourceMode.value === 'file' ? hashFile.value?.name || '' : 'Встроенный текст',
+      })
 
       if (hashSourceMode.value === 'file' && !hashFile.value) {
         hashReport.value = null
         hashErrorMessage.value = ''
         isHashing.value = false
+        hashTaskController.complete(task)
         return
       }
 
       isHashing.value = true
       hashErrorMessage.value = ''
+      hashProgressMessage.value = 'Считаю хэши...'
 
       try {
         const report = await buildHashReport(
           hashSourceMode.value === 'file' ? hashFile.value! : hashTextInput.value,
           hashSecret.value,
+          {
+            signal: task.signal,
+            reportProgress: (message) => {
+              if (hashTaskController.isCurrent(task)) {
+                hashProgressMessage.value = message
+              }
+            },
+          },
         )
-        if (currentRunId !== hashRunId) {
+        if (!hashTaskController.isCurrent(task)) {
           return
         }
         hashReport.value = report
       } catch (error) {
-        if (currentRunId !== hashRunId) {
+        if (!hashTaskController.isCurrent(task)) {
           return
         }
         hashReport.value = null
         hashErrorMessage.value =
           error instanceof Error ? error.message : 'Не удалось собрать hash report.'
       } finally {
-        if (currentRunId === hashRunId) {
+        if (hashTaskController.isCurrent(task)) {
           isHashing.value = false
+          hashProgressMessage.value = ''
+          hashTaskController.complete(task)
         }
       }
     },
@@ -171,6 +192,7 @@ export function useDevToolsWorkspace() {
   )
 
   onBeforeUnmount(() => {
+    hashTaskController.dispose()
     jwtInput.value = ''
     hashSecret.value = ''
     basicAuthPassword.value = ''
@@ -254,6 +276,7 @@ export function useDevToolsWorkspace() {
     hashFile,
     hashReport,
     hashErrorMessage,
+    hashProgressMessage,
     isHashing,
     setHashFile,
     clearHashFile,

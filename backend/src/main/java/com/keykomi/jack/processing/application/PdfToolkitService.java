@@ -65,15 +65,21 @@ public class PdfToolkitService {
 	private final ProcessingProperties processingProperties;
 	private final ArtifactStorageService artifactStorageService;
 	private final UploadStorageService uploadStorageService;
+	private final NativeProcessExecutor nativeProcessExecutor;
+	private final ProcessingResourceBudgetService resourceBudgets;
 
 	public PdfToolkitService(
 		ProcessingProperties processingProperties,
 		ArtifactStorageService artifactStorageService,
-		UploadStorageService uploadStorageService
+		UploadStorageService uploadStorageService,
+		NativeProcessExecutor nativeProcessExecutor,
+		ProcessingResourceBudgetService resourceBudgets
 	) {
 		this.processingProperties = processingProperties;
 		this.artifactStorageService = artifactStorageService;
 		this.uploadStorageService = uploadStorageService;
+		this.nativeProcessExecutor = nativeProcessExecutor;
+		this.resourceBudgets = resourceBudgets;
 	}
 
 	public boolean isAvailable() {
@@ -110,12 +116,12 @@ public class PdfToolkitService {
 		try {
 			workingDirectory = Files.createTempDirectory(this.processingProperties.getStorageRoot(), "pdf-toolkit-");
 			var output = switch (request.operation()) {
-				case MERGE -> merge(upload, request, workingDirectory, progressCallback);
+				case MERGE -> merge(jobId, upload, request, workingDirectory, progressCallback);
 				case SPLIT -> split(upload, request, workingDirectory, progressCallback);
 				case ROTATE -> rotate(upload, request, workingDirectory, progressCallback);
 				case REORDER -> reorder(upload, request, workingDirectory, progressCallback);
 				case OCR -> ocr(upload, request, workingDirectory, progressCallback);
-				case SIGN -> sign(upload, request, workingDirectory, progressCallback);
+				case SIGN -> sign(jobId, upload, request, workingDirectory, progressCallback);
 				case REDACT -> redact(upload, request, workingDirectory, progressCallback);
 				case PROTECT -> protect(upload, request, workingDirectory, progressCallback);
 				case UNLOCK -> unlock(upload, request, workingDirectory, progressCallback);
@@ -132,12 +138,13 @@ public class PdfToolkitService {
 	}
 
 	private PdfToolkitOutput merge(
+		UUID jobId,
 		StoredUpload upload,
 		PdfToolkitRequest request,
 		Path workingDirectory,
 		ProgressCallback progressCallback
 	) {
-		var additionalUploads = resolveAdditionalPdfUploads(request.additionalUploadIds());
+		var additionalUploads = resolveAdditionalPdfUploads(jobId, request.additionalUploadIds());
 		if (additionalUploads.isEmpty()) {
 			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Merge требует хотя бы один дополнительный PDF upload.");
 		}
@@ -368,6 +375,27 @@ public class PdfToolkitService {
 		}
 	}
 
+	private void verifyRedactionPostconditions(Path outputPath, List<String> terms) throws IOException {
+		try (var verified = Loader.loadPDF(outputPath.toFile())) {
+			var extracted = new PDFTextStripper().getText(verified).toLowerCase(Locale.ROOT);
+			if (terms.stream().map(value -> value.toLowerCase(Locale.ROOT)).anyMatch(extracted::contains)) {
+				throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Redaction postcondition: скрытый текст остался в результате.");
+			}
+			for (var page : verified.getPages()) {
+				if (!page.getAnnotations().isEmpty()) {
+					throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Redaction postcondition: annotations остались в результате.");
+				}
+			}
+			var names = verified.getDocumentCatalog().getNames();
+			if (names != null && names.getEmbeddedFiles() != null) {
+				throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Redaction postcondition: attachments остались в результате.");
+			}
+			if (!verified.getDocumentInformation().getMetadataKeys().isEmpty()) {
+				throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Redaction postcondition: source metadata осталась в результате.");
+			}
+		}
+	}
+
 	private PdfToolkitOutput ocr(
 		StoredUpload upload,
 		PdfToolkitRequest request,
@@ -493,85 +521,37 @@ public class PdfToolkitService {
 	}
 
 	private Set<String> listInstalledOcrLanguages(Path tesseractExecutable, Path workingDirectory) {
-		Process process = null;
-		Thread outputReader = null;
-		var output = new ByteArrayOutputStream();
-		var outputFailure = new AtomicReference<IOException>();
-
-		try {
-			process = new ProcessBuilder(tesseractExecutable.toString(), "--list-langs")
-				.directory(workingDirectory.toFile())
-				.redirectErrorStream(true)
-				.start();
-
-			var runningProcess = process;
-			outputReader = Thread.ofVirtual()
-				.name("jack-pdf-toolkit-ocr-langs")
-				.start(() -> {
-					try (var inputStream = runningProcess.getInputStream()) {
-						inputStream.transferTo(output);
-					}
-					catch (IOException exception) {
-						outputFailure.set(exception);
-					}
-				});
-
-			var finished = process.waitFor(timeout().toMillis(), TimeUnit.MILLISECONDS);
-			if (!finished) {
-				process.destroyForcibly();
-				process.waitFor(5, TimeUnit.SECONDS);
-				throw new ResponseStatusException(HttpStatus.REQUEST_TIMEOUT, "Не удалось вовремя получить список OCR языков.");
-			}
-
-			outputReader.join(1_000L);
-			if (outputFailure.get() != null) {
-				throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Не удалось прочитать список OCR языков.", outputFailure.get());
-			}
-			if (process.exitValue() != 0) {
-				throw new ResponseStatusException(
-					HttpStatus.SERVICE_UNAVAILABLE,
-					"Не удалось получить список OCR языков: %s".formatted(normalizeCommandOutput(output.toByteArray()))
-				);
-			}
-
-			var installedLanguages = new LinkedHashSet<String>();
-			for (String line : new String(output.toByteArray(), StandardCharsets.UTF_8).split("\\R")) {
+		var result = this.nativeProcessExecutor.execute(
+			List.of(tesseractExecutable.toString(), "--list-langs"),
+			workingDirectory,
+			timeout()
+		);
+		var installedLanguages = new LinkedHashSet<String>();
+		for (String line : result.utf8Output().split("\\R")) {
 				var normalizedLine = line.trim();
 				if (normalizedLine.isBlank() || normalizedLine.startsWith("List of available languages")) {
 					continue;
 				}
 				installedLanguages.add(normalizedLine);
-			}
-
-			if (installedLanguages.isEmpty()) {
-				throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Tesseract не вернул ни одного доступного OCR языка.");
-			}
-
-			return Set.copyOf(installedLanguages);
 		}
-		catch (IOException exception) {
-			throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Не удалось запросить список OCR языков.", exception);
+		if (installedLanguages.isEmpty()) {
+			throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Tesseract не вернул ни одного доступного OCR языка.");
 		}
-		catch (InterruptedException exception) {
-			if (process != null) {
-				process.destroy();
-			}
-			Thread.currentThread().interrupt();
-			throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Получение OCR языков было прервано.", exception);
-		}
+		return Set.copyOf(installedLanguages);
 	}
 
 	private PdfToolkitOutput sign(
+		UUID jobId,
 		StoredUpload upload,
 		PdfToolkitRequest request,
 		Path workingDirectory,
 		ProgressCallback progressCallback
 	) {
 		progressCallback.report(34, "Подготавливаю visible signature/stamp placement.");
-		var signatureImage = resolveSignatureImage(request.signatureImageUploadId());
+		var signatureImage = resolveSignatureImage(jobId, request.signatureImageUploadId());
 		var signatureText = request.signatureText() == null ? "" : request.signatureText().trim();
 		if ((signatureImage == null) && signatureText.isBlank()) {
-			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "E-sign требует signatureText или signatureImageUploadId.");
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Visible stamp требует signatureText или signatureImageUploadId.");
 		}
 
 		try (var document = loadPdf(upload, request.currentPassword(), "sign source")) {
@@ -672,6 +652,7 @@ public class PdfToolkitService {
 			var outputPath = workingDirectory.resolve(baseFileName(upload.originalFileName()) + ".redacted.pdf");
 			var previewPath = workingDirectory.resolve(derivedPreviewFileName(upload.originalFileName(), "pdf"));
 			resultDocument.save(outputPath.toFile());
+			verifyRedactionPostconditions(outputPath, terms);
 			Files.copy(outputPath, previewPath);
 
 			return new PdfToolkitOutput(
@@ -866,14 +847,14 @@ public class PdfToolkitService {
 		return List.copyOf(artifacts);
 	}
 
-	private List<StoredUpload> resolveAdditionalPdfUploads(List<UUID> uploadIds) {
+	private List<StoredUpload> resolveAdditionalPdfUploads(UUID jobId, List<UUID> uploadIds) {
 		if (uploadIds == null || uploadIds.isEmpty()) {
 			return List.of();
 		}
 
 		var uploads = new ArrayList<StoredUpload>();
 		for (UUID uploadId : uploadIds) {
-			var upload = this.uploadStorageService.getRequiredUpload(uploadId);
+			var upload = this.uploadStorageService.getRequiredUploadForJob(uploadId, jobId);
 			if (!isPdfUpload(upload)) {
 				throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Merge принимает только дополнительные PDF uploads.");
 			}
@@ -882,12 +863,12 @@ public class PdfToolkitService {
 		return List.copyOf(uploads);
 	}
 
-	private BufferedImage resolveSignatureImage(UUID signatureImageUploadId) {
+	private BufferedImage resolveSignatureImage(UUID jobId, UUID signatureImageUploadId) {
 		if (signatureImageUploadId == null) {
 			return null;
 		}
 
-		var upload = this.uploadStorageService.getRequiredUpload(signatureImageUploadId);
+		var upload = this.uploadStorageService.getRequiredUploadForJob(signatureImageUploadId, jobId);
 		if (!"image".equals(ProcessingFileFamilyResolver.detectFamily(upload))) {
 			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "signatureImageUploadId должен указывать на image upload.");
 		}
@@ -902,10 +883,22 @@ public class PdfToolkitService {
 
 	private PDDocument loadPdf(StoredUpload upload, String password, String operationLabel) {
 		try {
-			if (password != null && !password.isBlank()) {
-				return Loader.loadPDF(upload.storagePath().toFile(), password);
+			var document = password != null && !password.isBlank()
+				? Loader.loadPDF(upload.storagePath().toFile(), password)
+				: Loader.loadPDF(upload.storagePath().toFile());
+			try {
+				this.resourceBudgets.verifyDocumentPages(document.getNumberOfPages());
+				return document;
 			}
-			return Loader.loadPDF(upload.storagePath().toFile());
+			catch (RuntimeException exception) {
+				try {
+					document.close();
+				}
+				catch (IOException ignored) {
+					// Исходная budget-ошибка важнее best-effort закрытия уже отвергнутого PDF.
+				}
+				throw exception;
+			}
 		}
 		catch (InvalidPasswordException exception) {
 			throw new ResponseStatusException(
@@ -1215,57 +1208,7 @@ public class PdfToolkitService {
 	}
 
 	private void execute(List<String> command, Path workingDirectory, Duration timeout, String startupErrorMessage) {
-		Process process = null;
-		Thread outputReader = null;
-		var output = new ByteArrayOutputStream();
-		var outputFailure = new AtomicReference<IOException>();
-
-		try {
-			process = new ProcessBuilder(command)
-				.directory(workingDirectory.toFile())
-				.redirectErrorStream(true)
-				.start();
-
-			var runningProcess = process;
-			outputReader = Thread.ofVirtual()
-				.name("jack-pdf-toolkit-output")
-				.start(() -> {
-					try (var inputStream = runningProcess.getInputStream()) {
-						inputStream.transferTo(output);
-					}
-					catch (IOException exception) {
-						outputFailure.set(exception);
-					}
-				});
-
-			var finished = process.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS);
-			if (!finished) {
-				process.destroyForcibly();
-				process.waitFor(5, TimeUnit.SECONDS);
-				throw new ResponseStatusException(HttpStatus.REQUEST_TIMEOUT, "PDF toolkit operation превысила допустимый timeout.");
-			}
-
-			outputReader.join(1_000L);
-			if (outputFailure.get() != null) {
-				throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Не удалось прочитать вывод внешнего PDF processor.", outputFailure.get());
-			}
-			if (process.exitValue() != 0) {
-				throw new ResponseStatusException(
-					HttpStatus.UNPROCESSABLE_ENTITY,
-					"Команда завершилась с кодом %s: %s".formatted(process.exitValue(), normalizeCommandOutput(output.toByteArray()))
-				);
-			}
-		}
-		catch (IOException exception) {
-			throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, startupErrorMessage, exception);
-		}
-		catch (InterruptedException exception) {
-			if (process != null) {
-				process.destroy();
-			}
-			Thread.currentThread().interrupt();
-			throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "PDF toolkit operation была прервана.", exception);
-		}
+		this.nativeProcessExecutor.execute(command, workingDirectory, timeout);
 	}
 
 	private String normalizeCommandOutput(byte[] bytes) {

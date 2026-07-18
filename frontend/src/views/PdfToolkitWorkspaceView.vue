@@ -110,8 +110,8 @@ function formatBytes(value: number): string {
         <p class="eyebrow">PDF Toolkit</p>
         <h1>Открой PDF и сразу запусти нужную операцию.</h1>
         <p class="lead">
-          Объединение, разбиение, OCR, подпись, защита и скрытие данных собраны в одном рабочем
-          окне.
+          Объединение, разбиение, OCR, visible stamp, защита и скрытие данных собраны в одном
+          рабочем окне.
         </p>
 
         <div class="hero-chip-row">
@@ -334,7 +334,7 @@ function formatBytes(value: number): string {
           <div v-if="workspace.activeOperation.id === 'sign'" class="control-stack">
             <div class="control-grid">
               <label class="field-block">
-                <span>Текст подписи</span>
+                <span>Текст visible stamp</span>
                 <input v-model="workspace.signatureText" placeholder="Jack QA" type="text" />
               </label>
               <label class="field-block">
@@ -352,7 +352,7 @@ function formatBytes(value: number): string {
             </div>
 
             <label class="upload-field upload-field--secondary">
-              <span>Изображение подписи</span>
+              <span>Изображение visible stamp</span>
               <input accept="image/*" type="file" @change="handleSignatureImageChange" />
             </label>
 

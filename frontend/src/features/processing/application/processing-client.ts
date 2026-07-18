@@ -71,6 +71,7 @@ export interface ProcessingPlatformModuleCapability {
 
 export interface ProcessingUploadResponse {
   id: string
+  sha256?: string
 }
 
 export interface ProcessingArtifact {
@@ -79,7 +80,9 @@ export interface ProcessingArtifact {
   fileName: string
   mediaType: string
   sizeBytes: number
+  sha256?: string
   createdAt: string
+  expiresAt?: string
   downloadPath: string
 }
 
@@ -90,10 +93,14 @@ export interface ProcessingJobResponse {
   status: ProcessingJobStatus
   progressPercent: number
   message: string
+  errorCode?: string | null
   errorMessage: string | null
+  correlationId?: string
   createdAt: string
   startedAt: string | null
   completedAt: string | null
+  expiresAt?: string
+  policyVersion?: string
   artifacts: ProcessingArtifact[]
 }
 
@@ -126,6 +133,7 @@ export interface AwaitProcessingJobOptions {
   onUpdate?: (job: ProcessingJobResponse) => void
   signal?: AbortSignal
   cancelOnAbort?: boolean
+  cancelOnTimeout?: boolean
 }
 
 const DEFAULT_API_BASE_URL = 'http://localhost:8080'
@@ -268,6 +276,7 @@ export async function awaitProcessingJob(
     onUpdate,
     signal,
     cancelOnAbort = true,
+    cancelOnTimeout = true,
   } = options
   let lastMessage = ''
 
@@ -308,6 +317,9 @@ export async function awaitProcessingJob(
     throw error
   }
 
+  if (cancelOnTimeout) {
+    await cancelProcessingJob(jobId).catch(() => undefined)
+  }
   throw new Error(timeoutMessage)
 }
 
@@ -393,8 +405,18 @@ export async function requestProcessingBlob(path: string, init: RequestInit = {}
 async function processingFetch(path: string, init: RequestInit): Promise<Response> {
   throwIfProcessingAborted(init.signal)
 
+  const method = (init.method || 'GET').toUpperCase()
+  const headers = new Headers(init.headers)
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+    headers.set('X-Jack-Request', 'processing')
+  }
+
   try {
-    return await fetch(resolveProcessingApiUrl(path), init)
+    return await fetch(resolveProcessingApiUrl(path), {
+      credentials: 'include',
+      ...init,
+      headers,
+    })
   } catch (error) {
     if (isProcessingAbort(error, init.signal)) {
       throw new ProcessingJobAbortedError()

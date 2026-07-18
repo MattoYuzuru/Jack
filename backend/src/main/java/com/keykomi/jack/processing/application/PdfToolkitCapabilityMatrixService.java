@@ -76,15 +76,15 @@ public class PdfToolkitCapabilityMatrixService {
 		),
 		new PdfOperationSpec(
 			"sign",
-			"Подпись и штамп",
-			"Добавляет видимую подпись или штамп в документ как текстовую или графическую отметку.",
-			List.of("Подпись", "Штамп", "Отметка"),
+			"Visible stamp",
+			"Добавляет видимый текстовый или графический stamp. Это не certificate-based digital signature.",
+			List.of("Visible stamp", "Без сертификата", "Отметка"),
 			false,
 			true,
 			false,
 			true,
 			List.of(ProcessingJobType.PDF_TOOLKIT),
-			"Операция подписи сейчас недоступна."
+			"Visible stamp сейчас недоступен."
 		),
 		new PdfOperationSpec(
 			"redact",

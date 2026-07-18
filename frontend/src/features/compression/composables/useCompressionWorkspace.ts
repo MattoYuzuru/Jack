@@ -6,10 +6,10 @@ import {
   type ServerCompressionManifest,
 } from '../application/compression-server-runtime'
 import {
-  cancelProcessingJob,
   ProcessingJobCancelledError,
   type ProcessingJobStatus,
 } from '../../processing/application/processing-client'
+import { createProcessingTaskController } from '../../processing/application/processing-task-controller'
 import {
   getCompressionAcceptAttribute,
   getCompressionCapabilityMatrix,
@@ -182,6 +182,9 @@ export function useCompressionWorkspace() {
   const activeJobProgressPercent = ref(0)
   const lastRequest = shallowRef<CompressionRunRequest | null>(null)
   let capabilityRequest: Promise<void> | null = null
+  const taskController = createProcessingTaskController<CompressionRunRequest>({
+    cloneSnapshot: (request) => ({ ...request }),
+  })
 
   const activeMode = computed(
     () => availableModes.value.find((mode) => mode.id === selectedModeId.value) ?? null,
@@ -289,6 +292,8 @@ export function useCompressionWorkspace() {
   }
 
   async function selectFile(file: File): Promise<void> {
+    taskController.cancelActive()
+    isCompressing.value = false
     isLoading.value = true
     errorMessage.value = ''
     processingMessage.value = 'Проверяю доступные режимы и форматы сжатия...'
@@ -332,6 +337,8 @@ export function useCompressionWorkspace() {
   }
 
   function clearSelection(): void {
+    taskController.cancelActive()
+    isCompressing.value = false
     prepared.value = null
     availableTargets.value = []
     selectedTargetExtension.value = 'auto'
@@ -373,6 +380,11 @@ export function useCompressionWorkspace() {
     }
 
     lastRequest.value = request
+    await runCompression(request)
+  }
+
+  async function runCompression(request: CompressionRunRequest): Promise<void> {
+    const task = taskController.begin(request)
     errorMessage.value = ''
     isCompressing.value = true
     processingMessage.value = 'Запускаю сжатие...'
@@ -380,33 +392,47 @@ export function useCompressionWorkspace() {
     try {
       const response = await runServerCompression({
         ...request,
+        signal: task.signal,
         reportProgress: (message) => {
-          processingMessage.value = message
+          if (taskController.isCurrent(task)) {
+            processingMessage.value = message
+          }
         },
         onJobCreated: (job) => {
+          if (!taskController.isCurrent(task)) {
+            return
+          }
+          taskController.registerJob(task, job.id)
           activeJobId.value = job.id
           activeJobStatus.value = job.status
           activeJobProgressPercent.value = job.progressPercent
         },
         onJobUpdate: (job) => {
+          if (!taskController.isCurrent(task)) {
+            return
+          }
           activeJobStatus.value = job.status
           activeJobProgressPercent.value = job.progressPercent
         },
       })
 
-      const resultEntry = createResultEntry(prepared.value, response)
-      resultHistory.value = [resultEntry, ...resultHistory.value].slice(0, MAX_RESULT_HISTORY)
-      selectedResultId.value = resultEntry.id
-      while (resultHistory.value.length > MAX_RESULT_HISTORY) {
-        const removed = resultHistory.value.pop()
-        if (removed) {
-          revokeResultUrls(removed)
-        }
+      if (!taskController.isCurrent(task)) {
+        return
       }
+
+      const resultEntry = createResultEntry(request.file, response)
+      const nextEntries = [resultEntry, ...resultHistory.value]
+      const removedEntries = nextEntries.slice(MAX_RESULT_HISTORY)
+      resultHistory.value = nextEntries.slice(0, MAX_RESULT_HISTORY)
+      removedEntries.forEach(revokeResultUrls)
+      selectedResultId.value = resultEntry.id
       processingMessage.value = response.manifest.targetMet
         ? 'Сжатие завершено и уложилось в выбранный лимит.'
         : 'Сжатие завершено. Сервис сохранил лучший найденный вариант в рамках заданных ограничений.'
     } catch (error) {
+      if (!taskController.isCurrent(task)) {
+        return
+      }
       if (error instanceof ProcessingJobCancelledError) {
         processingMessage.value = 'Сжатие остановлено.'
       } else {
@@ -415,7 +441,10 @@ export function useCompressionWorkspace() {
         processingMessage.value = ''
       }
     } finally {
-      isCompressing.value = false
+      if (taskController.isCurrent(task)) {
+        isCompressing.value = false
+        taskController.complete(task)
+      }
     }
   }
 
@@ -424,7 +453,7 @@ export function useCompressionWorkspace() {
       return
     }
 
-    await compress()
+    await runCompression(lastRequest.value)
   }
 
   async function cancelCompression(): Promise<void> {
@@ -436,12 +465,10 @@ export function useCompressionWorkspace() {
     errorMessage.value = ''
 
     try {
-      const cancelledJob = await cancelProcessingJob(activeJobId.value)
-      activeJobStatus.value = cancelledJob.status
-      activeJobProgressPercent.value = cancelledJob.progressPercent
-      processingMessage.value = cancelledJob.message || 'Сжатие остановлено.'
-    } catch (error) {
-      errorMessage.value = error instanceof Error ? error.message : 'Не удалось остановить сжатие.'
+      taskController.cancelActive()
+      activeJobStatus.value = 'CANCELLED'
+      isCompressing.value = false
+      processingMessage.value = 'Сжатие остановлено.'
     } finally {
       isCancelling.value = false
     }
@@ -460,6 +487,7 @@ export function useCompressionWorkspace() {
   }
 
   onBeforeUnmount(() => {
+    taskController.dispose()
     for (const entry of resultHistory.value) {
       revokeResultUrls(entry)
     }
@@ -518,19 +546,19 @@ export function useCompressionWorkspace() {
 }
 
 function createResultEntry(
-  prepared: CompressionPreparedSource,
+  sourceFile: File,
   response: Awaited<ReturnType<typeof runServerCompression>>,
 ): CompressionResultViewModel {
   const resultObjectUrl = URL.createObjectURL(response.resultBlob)
   const previewObjectUrl = URL.createObjectURL(response.previewBlob)
   const reductionPercent =
-    prepared.file.size > 0
-      ? ((prepared.file.size - response.manifest.resultSizeBytes) / prepared.file.size) * 100
+    sourceFile.size > 0
+      ? ((sourceFile.size - response.manifest.resultSizeBytes) / sourceFile.size) * 100
       : 0
 
   return {
     id: crypto.randomUUID(),
-    sourceFileName: prepared.file.name,
+    sourceFileName: sourceFile.name,
     fileName: response.resultArtifact.fileName,
     family: response.manifest.family,
     mode: response.manifest.mode,

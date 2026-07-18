@@ -1,4 +1,5 @@
 import type { DevToolFact } from './dev-tools-types'
+import { uploadProcessingFile } from '../../processing/application/processing-client'
 
 export interface HashValueEntry {
   id: string
@@ -24,16 +25,41 @@ const HMAC_ALGORITHMS = [
   { id: 'hmac-sha512', label: 'HMAC-SHA-512', hash: 'SHA-512' },
 ] as const
 
-export async function buildHashReport(source: string | File, secret: string): Promise<HashReport> {
+export async function buildHashReport(
+  source: string | File,
+  secret: string,
+  options: { signal?: AbortSignal; reportProgress?: (message: string) => void } = {},
+): Promise<HashReport> {
   const subtle = globalThis.crypto?.subtle
   if (!subtle) {
     throw new Error('Криптография браузера недоступна, поэтому локальный расчёт хэшей невозможен.')
   }
 
-  const bytes =
-    typeof source === 'string'
-      ? new TextEncoder().encode(source)
-      : new Uint8Array(await source.arrayBuffer())
+  if (source instanceof File) {
+    if (secret) {
+      throw new Error(
+        'HMAC файла требует локального streaming worker; секрет не отправляется на backend.',
+      )
+    }
+    options.reportProgress?.('Потоково загружаю файл для backend SHA-256...')
+    const upload = await uploadProcessingFile(source, { signal: options.signal })
+    if (!upload.sha256) {
+      throw new Error('Backend не вернул content SHA-256 для загруженного файла.')
+    }
+    return {
+      facts: [
+        { label: 'Источник', value: source.name || 'локальный-файл' },
+        { label: 'Тип', value: source.type || 'application/octet-stream' },
+        { label: 'Байты', value: String(source.size) },
+        { label: 'Pipeline', value: 'Backend streaming hash' },
+        { label: 'HMAC', value: 'Выключен' },
+      ],
+      digests: [{ id: 'sha256', label: 'SHA-256', value: upload.sha256 }],
+      hmacDigests: [],
+    }
+  }
+
+  const bytes = new TextEncoder().encode(source)
 
   const digests = await Promise.all(
     DIGEST_ALGORITHMS.map(async (entry) => ({
@@ -54,20 +80,12 @@ export async function buildHashReport(source: string | File, secret: string): Pr
     : []
 
   return {
-    facts:
-      typeof source === 'string'
-        ? [
-            { label: 'Источник', value: 'Встроенный текст' },
-            { label: 'Символы', value: String(source.length) },
-            { label: 'Байты', value: String(bytes.byteLength) },
-            { label: 'HMAC', value: secret ? 'Включён' : 'Выключен' },
-          ]
-        : [
-            { label: 'Источник', value: source.name || 'локальный-файл' },
-            { label: 'Тип', value: source.type || 'application/octet-stream' },
-            { label: 'Байты', value: String(bytes.byteLength) },
-            { label: 'HMAC', value: secret ? 'Включён' : 'Выключен' },
-          ],
+    facts: [
+      { label: 'Источник', value: 'Встроенный текст' },
+      { label: 'Символы', value: String(source.length) },
+      { label: 'Байты', value: String(bytes.byteLength) },
+      { label: 'HMAC', value: secret ? 'Включён' : 'Выключен' },
+    ],
     digests,
     hmacDigests,
   }

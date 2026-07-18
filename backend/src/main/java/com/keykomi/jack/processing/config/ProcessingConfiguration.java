@@ -9,9 +9,21 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import javax.sql.DataSource;
+import org.flywaydb.core.Flyway;
 
 @Configuration(proxyBeanMethods = false)
 public class ProcessingConfiguration {
+
+	@Bean(initMethod = "migrate")
+	Flyway processingFlyway(DataSource dataSource) {
+		// Boot 4 разделяет infrastructure auto-configuration; явный bean гарантирует,
+		// что durable schema существует до startup reconciliation и при локальном H2.
+		return Flyway.configure()
+			.dataSource(dataSource)
+			.locations("classpath:db/migration")
+			.load();
+	}
 
 	@Bean(destroyMethod = "shutdown")
 	ExecutorService processingExecutor(ProcessingProperties properties) {

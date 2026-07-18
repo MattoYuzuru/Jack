@@ -279,12 +279,16 @@ export function useViewerVideoPlayback(
       return
     }
 
-    if (document.pictureInPictureElement === element) {
-      await document.exitPictureInPicture()
-      return
-    }
+    try {
+      if (document.pictureInPictureElement === element) {
+        await document.exitPictureInPicture()
+        return
+      }
 
-    await element.requestPictureInPicture()
+      await element.requestPictureInPicture()
+    } catch {
+      playbackMessage.value = 'Браузер не разрешил переключить режим Picture-in-Picture.'
+    }
   }
 
   async function loadSubtitleFiles(source: FileList | File[]) {
@@ -419,8 +423,12 @@ export function useViewerVideoPlayback(
       return
     }
 
-    await navigator.clipboard.writeText(currentTimeLabel.value)
-    playbackMessage.value = `Текущий timestamp ${currentTimeLabel.value} скопирован в clipboard.`
+    try {
+      await navigator.clipboard.writeText(currentTimeLabel.value)
+      playbackMessage.value = `Текущий timestamp ${currentTimeLabel.value} скопирован в clipboard.`
+    } catch {
+      playbackMessage.value = 'Браузер не разрешил запись таймкода в clipboard.'
+    }
   }
 
   async function handleShortcutKeydown(event: KeyboardEvent) {

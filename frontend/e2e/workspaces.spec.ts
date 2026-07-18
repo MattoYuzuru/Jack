@@ -64,10 +64,12 @@ for (const workspace of workspaces) {
     await openWorkspace(page, workspace.path)
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
 
-    const overflow = await page.evaluate(
-      () => document.documentElement.scrollWidth - window.innerWidth,
-    )
-    expect(overflow).toBeLessThanOrEqual(1)
+    const pageMetrics = await page.evaluate(() => ({
+      overflow: document.documentElement.scrollWidth - window.innerWidth,
+      domNodes: document.getElementsByTagName('*').length,
+    }))
+    expect(pageMetrics.overflow).toBeLessThanOrEqual(1)
+    expect(pageMetrics.domNodes).toBeLessThanOrEqual(2_500)
   })
 
   test(`${workspace.name} empty state passes axe`, async ({ page }) => {

@@ -46,13 +46,19 @@ public class ImageProcessingService {
 
 	private final ProcessingProperties processingProperties;
 	private final ArtifactStorageService artifactStorageService;
+	private final NativeProcessExecutor nativeProcessExecutor;
+	private final ProcessingResourceBudgetService resourceBudgets;
 
 	public ImageProcessingService(
 		ProcessingProperties processingProperties,
-		ArtifactStorageService artifactStorageService
+		ArtifactStorageService artifactStorageService,
+		NativeProcessExecutor nativeProcessExecutor,
+		ProcessingResourceBudgetService resourceBudgets
 	) {
 		this.processingProperties = processingProperties;
 		this.artifactStorageService = artifactStorageService;
+		this.nativeProcessExecutor = nativeProcessExecutor;
+		this.resourceBudgets = resourceBudgets;
 	}
 
 	public boolean isAvailable() {
@@ -63,6 +69,14 @@ public class ImageProcessingService {
 	}
 
 	public ImageProcessingResult process(UUID jobId, StoredUpload upload, ImageProcessingRequest request) {
+		return process(jobId, upload, request, true);
+	}
+
+	ImageProcessingResult processTransient(UUID jobId, StoredUpload upload, ImageProcessingRequest request) {
+		return process(jobId, upload, request, false);
+	}
+
+	private ImageProcessingResult process(UUID jobId, StoredUpload upload, ImageProcessingRequest request, boolean durableArtifacts) {
 		var family = ProcessingFileFamilyResolver.detectFamily(upload);
 		if (!"image".equals(family)) {
 			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "IMAGE_CONVERT job принимает только image uploads.");
@@ -90,7 +104,8 @@ public class ImageProcessingService {
 				transformedRaster,
 				encodedResult,
 				runtimeLabel,
-				warnings
+				warnings,
+				durableArtifacts
 			);
 			return new ImageProcessingResult(artifacts, runtimeLabel, warnings);
 		}
@@ -111,7 +126,8 @@ public class ImageProcessingService {
 		TransformedRaster transformedRaster,
 		EncodedImageResult encodedResult,
 		String runtimeLabel,
-		List<String> warnings
+		List<String> warnings,
+		boolean durableArtifacts
 	) {
 		var operationPrefix = "preview".equals(request.operation()) ? "image-preview" : "image-convert";
 		var manifestFileName = "%s-manifest.json".formatted(operationPrefix);
@@ -135,37 +151,56 @@ public class ImageProcessingService {
 			warnings
 		);
 
-		var manifestArtifact = this.artifactStorageService.storeJsonArtifact(
+		var manifestArtifact = durableArtifacts
+			? this.artifactStorageService.storeJsonArtifact(
 			jobId,
 			operationPrefix + "-manifest",
 			manifestFileName,
 			manifest
-		);
+		)
+			: this.artifactStorageService.storeTransientJsonArtifact(
+				jobId, operationPrefix + "-manifest", manifestFileName, manifest
+			);
 		if ("preview".equals(request.operation())) {
-			var previewArtifact = this.artifactStorageService.storeFileArtifact(
+			var previewArtifact = durableArtifacts
+				? this.artifactStorageService.storeFileArtifact(
 				jobId,
 				"image-preview-binary",
 				encodedResult.previewFileName(),
 				encodedResult.previewMediaType(),
 				encodedResult.previewPath()
-			);
+			)
+				: this.artifactStorageService.storeTransientFileArtifact(
+					jobId, "image-preview-binary", encodedResult.previewFileName(),
+					encodedResult.previewMediaType(), encodedResult.previewPath()
+				);
 			return List.of(manifestArtifact, previewArtifact);
 		}
 
-		var resultArtifact = this.artifactStorageService.storeFileArtifact(
+		var resultArtifact = durableArtifacts
+			? this.artifactStorageService.storeFileArtifact(
 			jobId,
 			"image-convert-binary",
 			encodedResult.resultFileName(),
 			encodedResult.resultMediaType(),
 			encodedResult.resultPath()
-		);
-		var previewArtifact = this.artifactStorageService.storeFileArtifact(
+		)
+			: this.artifactStorageService.storeTransientFileArtifact(
+				jobId, "image-convert-binary", encodedResult.resultFileName(),
+				encodedResult.resultMediaType(), encodedResult.resultPath()
+			);
+		var previewArtifact = durableArtifacts
+			? this.artifactStorageService.storeFileArtifact(
 			jobId,
 			"image-convert-preview",
 			encodedResult.previewFileName(),
 			encodedResult.previewMediaType(),
 			encodedResult.previewPath()
-		);
+		)
+			: this.artifactStorageService.storeTransientFileArtifact(
+				jobId, "image-convert-preview", encodedResult.previewFileName(),
+				encodedResult.previewMediaType(), encodedResult.previewPath()
+			);
 		return List.of(manifestArtifact, resultArtifact, previewArtifact);
 	}
 
@@ -689,6 +724,7 @@ public class ImageProcessingService {
 				throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "Не удалось прочитать raster dimensions у собранного image artifact.");
 			}
 
+			this.resourceBudgets.verifyDecodedPixels(image.getWidth(), image.getHeight());
 			return new RasterInfo(image.getWidth(), image.getHeight(), hasTransparency(image));
 		}
 		catch (IOException exception) {
@@ -728,73 +764,7 @@ public class ImageProcessingService {
 	}
 
 	private BinaryCommandResult executeBinary(List<String> command, Path workingDirectory, Duration timeout) {
-		Process process = null;
-		Thread outputReader = null;
-		var output = new ByteArrayOutputStream();
-		var outputFailure = new AtomicReference<IOException>();
-
-		try {
-			process = new ProcessBuilder(command)
-				.directory(workingDirectory.toFile())
-				.redirectErrorStream(true)
-				.start();
-
-			var runningProcess = process;
-			// stdout/stderr читаем отдельно, чтобы не зависнуть на внешнем processor
-			// и одинаково работать и с бинарным stdout, и с текстовыми ошибками.
-			outputReader = Thread.ofVirtual()
-				.name("jack-image-processing-output")
-				.start(() -> {
-					try (var inputStream = runningProcess.getInputStream()) {
-						inputStream.transferTo(output);
-					}
-					catch (IOException exception) {
-						outputFailure.set(exception);
-					}
-				});
-
-			var finished = process.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS);
-
-			if (!finished) {
-				process.destroyForcibly();
-				process.waitFor(5, TimeUnit.SECONDS);
-				throw new ResponseStatusException(HttpStatus.REQUEST_TIMEOUT, "Image processing превысил допустимый timeout.");
-			}
-
-			outputReader.join(1_000L);
-			if (outputFailure.get() != null) {
-				throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Не удалось прочитать вывод внешнего image processor.", outputFailure.get());
-			}
-
-			var stdout = output.toByteArray();
-			if (process.exitValue() != 0) {
-				throw new ResponseStatusException(
-					HttpStatus.UNPROCESSABLE_ENTITY,
-					"Команда завершилась с кодом %s: %s".formatted(process.exitValue(), normalizeCommandOutput(stdout))
-				);
-			}
-
-			return new BinaryCommandResult(stdout);
-		}
-		catch (IOException exception) {
-			throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Не удалось запустить внешний image processor.", exception);
-		}
-		catch (InterruptedException exception) {
-			if (process != null) {
-				process.destroy();
-				try {
-					if (!process.waitFor(5, TimeUnit.SECONDS)) {
-						process.destroyForcibly();
-						process.waitFor(5, TimeUnit.SECONDS);
-					}
-				}
-				catch (InterruptedException ignored) {
-					Thread.currentThread().interrupt();
-				}
-			}
-			Thread.currentThread().interrupt();
-			throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Image processing был прерван.", exception);
-		}
+		return new BinaryCommandResult(this.nativeProcessExecutor.execute(command, workingDirectory, timeout).output());
 	}
 
 	private void execute(List<String> command, Path workingDirectory, Duration timeout) {

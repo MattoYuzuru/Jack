@@ -18,9 +18,14 @@ import java.sql.DriverManager;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
+import org.apache.pdfbox.pdmodel.common.PDRectangle;
+import org.apache.pdfbox.pdmodel.encryption.AccessPermission;
+import org.apache.pdfbox.pdmodel.encryption.StandardProtectionPolicy;
 import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
 import org.apache.pdfbox.pdmodel.font.PDType1Font;
 import org.apache.poi.xslf.usermodel.XMLSlideShow;
@@ -97,6 +102,28 @@ class DocumentPreviewApiTests {
 	}
 
 	@Test
+	void pdfPreviewReportsRotationCropAndTypedFailures() throws Exception {
+		var uploadId = upload("rotated.pdf", "application/pdf", createRotatedPdfBytes());
+		var completedJob = awaitJobCompletion(createDocumentJob(uploadId));
+		var manifest = parseJson(
+			this.mockMvc.perform(get(artifactIndex(completedJob).get("document-preview-manifest").path("downloadPath").asText()))
+				.andExpect(status().isOk())
+				.andReturn()
+		);
+
+		assertThat(manifest.path("summary").toString()).contains("90°", "Crop boxes", "Media boxes");
+		assertThat(manifest.path("warnings").toString()).contains("повёрнутые", "Crop box");
+
+		var encryptedJob = awaitJobCompletion(createDocumentJob(upload("locked.pdf", "application/pdf", createEncryptedPdfBytes())));
+		assertThat(encryptedJob.path("status").asText()).isEqualTo("FAILED");
+		assertThat(encryptedJob.path("errorCode").asText()).isEqualTo("PDF_PASSWORD_REQUIRED");
+
+		var corruptJob = awaitJobCompletion(createDocumentJob(upload("broken.pdf", "application/pdf", "%PDF-1.7\nnot-a-pdf".getBytes(StandardCharsets.US_ASCII))));
+		assertThat(corruptJob.path("status").asText()).isEqualTo("FAILED");
+		assertThat(corruptJob.path("errorCode").asText()).isEqualTo("CORRUPT_PDF");
+	}
+
+	@Test
 	void htmlPreviewFlowSanitizesMarkupAndBuildsOutline() throws Exception {
 		var uploadId = upload(
 			"index.html",
@@ -106,7 +133,11 @@ class DocumentPreviewApiTests {
 			<html>
 			  <body>
 			    <h1>Viewer Docs</h1>
-			    <p>Document intelligence is active.</p>
+			    <p onclick="fetch('https://example.test/track')">Document intelligence is active.</p>
+			    <form action="https://example.test/submit"><input name="secret"></form>
+			    <iframe src="https://example.test/frame"></iframe>
+			    <img src="https://example.test/pixel.png">
+			    <a href="javascript:alert(2)" style="background:url(https://example.test/css)">unsafe</a>
 			    <script>alert('x')</script>
 			  </body>
 			</html>
@@ -121,9 +152,27 @@ class DocumentPreviewApiTests {
 		);
 
 		assertThat(manifest.path("layout").path("mode").asText()).isEqualTo("html");
-		assertThat(manifest.path("layout").path("srcDoc").asText()).doesNotContain("<script>");
+		assertThat(manifest.path("layout").path("srcDoc").asText())
+			.contains("Content-Security-Policy")
+			.doesNotContain("<script>", "<form", "<iframe", "onclick", "javascript:", "example.test", "style=\"");
 		assertThat(manifest.path("layout").path("outline").get(0).path("label").asText()).isEqualTo("Viewer Docs");
 		assertThat(manifest.path("warnings")).hasSize(1);
+	}
+
+	@Test
+	void epubPreviewRemovesActiveContentAndExternalResources() throws Exception {
+		var uploadId = upload("unsafe.epub", "application/epub+zip", createEpubBytes());
+		var completedJob = awaitJobCompletion(createDocumentJob(uploadId));
+		var manifest = parseJson(
+			this.mockMvc.perform(get(artifactIndex(completedJob).get("document-preview-manifest").path("downloadPath").asText()))
+				.andExpect(status().isOk())
+				.andReturn()
+		);
+
+		assertThat(manifest.path("layout").path("srcDoc").asText())
+			.contains("Safe chapter", "Content-Security-Policy")
+			.doesNotContain("script", "iframe", "example.test", "onload");
+		assertThat(manifest.path("warnings").toString()).contains("Активный контент");
 	}
 
 	@Test
@@ -244,6 +293,42 @@ class DocumentPreviewApiTests {
 		assertThat(manifest.path("layout").path("sheets")).hasSize(1);
 		assertThat(manifest.path("layout").path("sheets").get(0).path("table").path("columns").get(0).asText()).isEqualTo("Name");
 		assertThat(manifest.path("layout").path("sheets").get(0).path("table").path("rows").get(0).get(0).asText()).isEqualTo("Jack");
+
+		var range = parseJson(
+			this.mockMvc.perform(
+				get("/api/uploads/{uploadId}/workbook-range", uploadId)
+					.param("rows", "4")
+					.param("columns", "3")
+			).andExpect(status().isOk()).andReturn()
+		);
+		assertThat(range.path("rows").get(2).get(1).path("formula").asText()).isEqualTo("1+1");
+		assertThat(range.path("rows").get(2).get(1).path("cachedResult").asText()).isEqualTo("2.0");
+		assertThat(range.path("mergedRanges").get(0).asText()).isEqualTo("A4:B4");
+		assertThat(range.path("frozenRows").asInt()).isEqualTo(1);
+	}
+
+	@Test
+	void odsPreviewUsesLazySemanticSheetRanges() throws Exception {
+		var uploadId = upload("sheet.ods", "application/vnd.oasis.opendocument.spreadsheet", createOdsBytes());
+		var completedJob = awaitJobCompletion(createDocumentJob(uploadId));
+		var artifacts = artifactIndex(completedJob);
+		var manifest = parseJson(
+			this.mockMvc.perform(get(artifacts.get("document-preview-manifest").path("downloadPath").asText()))
+				.andExpect(status().isOk()).andReturn()
+		);
+		assertThat(manifest.path("layout").path("mode").asText()).isEqualTo("workbook");
+		assertThat(manifest.path("layout").path("sheets")).hasSize(2);
+		assertThat(manifest.path("layout").path("sheets").get(1).path("table").path("rows")).isEmpty();
+
+		var secondSheet = parseJson(
+			this.mockMvc.perform(
+				get("/api/uploads/{uploadId}/workbook-range", uploadId)
+					.param("sheetIndex", "1")
+					.param("rows", "2")
+					.param("columns", "2")
+			).andExpect(status().isOk()).andReturn()
+		);
+		assertThat(secondSheet.path("rows").get(1).get(0).path("formattedValue").asText()).isEqualTo("Beta");
 	}
 
 	@Test
@@ -285,6 +370,20 @@ class DocumentPreviewApiTests {
 		assertThat(manifest.path("layout").path("tables").get(0).path("rowCount").isNull()).isTrue();
 		assertThat(manifest.path("layout").path("tables").get(0).path("sample").path("rows").get(0).get(1).asText()).isEqualTo("viewer payload");
 		assertThat(manifest.path("warnings").toString()).contains("COUNT(*)");
+
+		var range = parseJson(
+			this.mockMvc.perform(
+				get("/api/uploads/{uploadId}/database-range", uploadId)
+					.param("table", "notes")
+					.param("limit", "1")
+			).andExpect(status().isOk()).andReturn()
+		);
+		assertThat(range.path("rows").get(0).get(2).asText()).isEqualTo("<BLOB 1048576 bytes>");
+		assertThat(range.path("nextCursor").isTextual()).isTrue();
+
+		this.mockMvc.perform(
+			get("/api/uploads/{uploadId}/database-range", uploadId).param("table", "notes; DROP TABLE notes")
+		).andExpect(status().isNotFound());
 	}
 
 	private String upload(String fileName, String mediaType, byte[] bytes) throws Exception {
@@ -363,6 +462,57 @@ class DocumentPreviewApiTests {
 		}
 	}
 
+	private static byte[] createRotatedPdfBytes() throws IOException {
+		try (var document = new PDDocument(); var outputStream = new ByteArrayOutputStream()) {
+			var page = new PDPage(PDRectangle.A4);
+			page.setRotation(90);
+			page.setCropBox(new PDRectangle(20, 30, 500, 700));
+			document.addPage(page);
+			document.save(outputStream);
+			return outputStream.toByteArray();
+		}
+	}
+
+	private static byte[] createEncryptedPdfBytes() throws IOException {
+		try (var document = new PDDocument(); var outputStream = new ByteArrayOutputStream()) {
+			document.addPage(new PDPage());
+			var policy = new StandardProtectionPolicy("owner-secret", "viewer-secret", new AccessPermission());
+			policy.setEncryptionKeyLength(128);
+			document.protect(policy);
+			document.save(outputStream);
+			return outputStream.toByteArray();
+		}
+	}
+
+	private static byte[] createEpubBytes() throws IOException {
+		try (var outputStream = new ByteArrayOutputStream(); var zip = new ZipOutputStream(outputStream)) {
+			writeZipEntry(zip, "META-INF/container.xml", """
+				<container xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+				  <rootfiles><rootfile full-path="OEBPS/content.opf"/></rootfiles>
+				</container>
+				""");
+			writeZipEntry(zip, "OEBPS/content.opf", """
+				<package xmlns="http://www.idpf.org/2007/opf">
+				  <metadata><title>Unsafe book</title></metadata>
+				  <manifest><item id="chapter" href="chapter.xhtml" media-type="application/xhtml+xml"/></manifest>
+				  <spine><itemref idref="chapter"/></spine>
+				</package>
+				""");
+			writeZipEntry(zip, "OEBPS/chapter.xhtml", """
+				<html><body onload="alert(1)"><h1>Safe chapter</h1><script>alert(2)</script>
+				<iframe src="https://example.test/frame"></iframe><img src="https://example.test/pixel.png"></body></html>
+				""");
+			zip.finish();
+			return outputStream.toByteArray();
+		}
+	}
+
+	private static void writeZipEntry(ZipOutputStream zip, String name, String content) throws IOException {
+		zip.putNextEntry(new ZipEntry(name));
+		zip.write(content.getBytes(StandardCharsets.UTF_8));
+		zip.closeEntry();
+	}
+
 	private static byte[] createDocxBytes() throws IOException {
 		try (var document = new XWPFDocument();
 			var outputStream = new ByteArrayOutputStream()) {
@@ -385,7 +535,13 @@ class DocumentPreviewApiTests {
 			sheet.createRow(0).createCell(0).setCellValue("Name");
 			sheet.getRow(0).createCell(1).setCellValue("Value");
 			sheet.createRow(1).createCell(0).setCellValue("Jack");
-			sheet.getRow(1).createCell(1).setCellValue("42");
+				sheet.getRow(1).createCell(1).setCellValue("42");
+				sheet.createFreezePane(0, 1);
+				var formula = sheet.createRow(2).createCell(1);
+				formula.setCellFormula("1+1");
+				workbook.getCreationHelper().createFormulaEvaluator().evaluateFormulaCell(formula);
+				sheet.createRow(3).createCell(0).setCellValue("Merged");
+				sheet.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(3, 3, 0, 1));
 			workbook.write(outputStream);
 			return outputStream.toByteArray();
 		}
@@ -402,13 +558,48 @@ class DocumentPreviewApiTests {
 		}
 	}
 
+	private static byte[] createOdsBytes() throws IOException {
+		var content = """
+			<?xml version="1.0" encoding="UTF-8"?>
+			<office:document-content
+			 xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+			 xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0"
+			 xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0">
+			 <office:body><office:spreadsheet>
+			  <table:table table:name="First">
+			   <table:table-row><table:table-cell office:value-type="string"><text:p>Name</text:p></table:table-cell></table:table-row>
+			   <table:table-row><table:table-cell office:value-type="string"><text:p>Alpha</text:p></table:table-cell></table:table-row>
+			  </table:table>
+			  <table:table table:name="Second">
+			   <table:table-row><table:table-cell office:value-type="string"><text:p>Name</text:p></table:table-cell></table:table-row>
+			   <table:table-row><table:table-cell office:value-type="string"><text:p>Beta</text:p></table:table-cell></table:table-row>
+			  </table:table>
+			 </office:spreadsheet></office:body>
+			</office:document-content>
+			""";
+		try (var output = new ByteArrayOutputStream(); var zip = new ZipOutputStream(output)) {
+			zip.putNextEntry(new ZipEntry("content.xml"));
+			zip.write(content.getBytes(StandardCharsets.UTF_8));
+			zip.closeEntry();
+			zip.finish();
+			return output.toByteArray();
+		}
+	}
+
 	private static void createSampleSqliteDatabase(Path databasePath) throws Exception {
 		Files.deleteIfExists(databasePath);
 		try (var connection = DriverManager.getConnection("jdbc:sqlite:" + databasePath.toAbsolutePath())) {
 			try (var statement = connection.createStatement()) {
-				statement.execute("CREATE TABLE notes (id INTEGER PRIMARY KEY, body TEXT)");
-				statement.execute("INSERT INTO notes(body) VALUES ('viewer payload')");
-			}
+					statement.execute("CREATE TABLE notes (id INTEGER PRIMARY KEY, body TEXT, payload BLOB)");
+				}
+				try (var statement = connection.prepareStatement("INSERT INTO notes(body, payload) VALUES (?, ?)")) {
+					statement.setString(1, "viewer payload");
+					statement.setBytes(2, new byte[1_048_576]);
+					statement.executeUpdate();
+					statement.setString(1, "second row");
+					statement.setBytes(2, new byte[8]);
+					statement.executeUpdate();
+				}
 		}
 	}
 

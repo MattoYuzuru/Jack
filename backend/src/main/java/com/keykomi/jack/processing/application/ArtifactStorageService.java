@@ -6,8 +6,12 @@ import com.keykomi.jack.processing.domain.StoredArtifact;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.DigestInputStream;
+import java.security.MessageDigest;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
+import java.util.HexFormat;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
@@ -19,14 +23,31 @@ public class ArtifactStorageService {
 
 	private final ProcessingProperties processingProperties;
 	private final ObjectMapper objectMapper;
+	private final ProcessingStateStore stateStore;
+	private final ProcessingResourceBudgetService resourceBudgets;
 
-	public ArtifactStorageService(ProcessingProperties processingProperties, ObjectMapper objectMapper) throws IOException {
+	public ArtifactStorageService(
+		ProcessingProperties processingProperties,
+		ObjectMapper objectMapper,
+		ProcessingStateStore stateStore,
+		ProcessingResourceBudgetService resourceBudgets
+	) throws IOException {
 		this.processingProperties = processingProperties;
 		this.objectMapper = objectMapper;
+		this.stateStore = stateStore;
+		this.resourceBudgets = resourceBudgets;
 		Files.createDirectories(processingProperties.artifactsDirectory());
 	}
 
 	public StoredArtifact storeJsonArtifact(UUID jobId, String kind, String fileName, Object payload) {
+		return storeJsonArtifact(jobId, kind, fileName, payload, true);
+	}
+
+	StoredArtifact storeTransientJsonArtifact(UUID jobId, String kind, String fileName, Object payload) {
+		return storeJsonArtifact(jobId, kind, fileName, payload, false);
+	}
+
+	private StoredArtifact storeJsonArtifact(UUID jobId, String kind, String fileName, Object payload, boolean durable) {
 		var artifactId = UUID.randomUUID();
 		var artifactDirectory = this.processingProperties.artifactsDirectory().resolve(jobId.toString());
 		var storagePath = artifactDirectory.resolve(artifactId + "-" + fileName);
@@ -35,16 +56,7 @@ public class ArtifactStorageService {
 			Files.createDirectories(artifactDirectory);
 			this.objectMapper.writerWithDefaultPrettyPrinter().writeValue(storagePath.toFile(), payload);
 
-			return new StoredArtifact(
-				artifactId,
-				jobId,
-				kind,
-				fileName,
-				"application/json",
-				Files.size(storagePath),
-				Instant.now(),
-				storagePath
-			);
+			return registerArtifact(jobId, artifactId, kind, fileName, "application/json", storagePath, durable);
 		}
 		catch (IOException exception) {
 			throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Не удалось сохранить job artifact.", exception);
@@ -52,6 +64,21 @@ public class ArtifactStorageService {
 	}
 
 	public StoredArtifact storeFileArtifact(UUID jobId, String kind, String fileName, String mediaType, java.nio.file.Path sourcePath) {
+		return storeFileArtifact(jobId, kind, fileName, mediaType, sourcePath, true);
+	}
+
+	StoredArtifact storeTransientFileArtifact(UUID jobId, String kind, String fileName, String mediaType, Path sourcePath) {
+		return storeFileArtifact(jobId, kind, fileName, mediaType, sourcePath, false);
+	}
+
+	private StoredArtifact storeFileArtifact(
+		UUID jobId,
+		String kind,
+		String fileName,
+		String mediaType,
+		Path sourcePath,
+		boolean durable
+	) {
 		var artifactId = UUID.randomUUID();
 		var artifactDirectory = this.processingProperties.artifactsDirectory().resolve(jobId.toString());
 		var storagePath = artifactDirectory.resolve(artifactId + "-" + fileName);
@@ -60,16 +87,7 @@ public class ArtifactStorageService {
 			Files.createDirectories(artifactDirectory);
 			Files.copy(sourcePath, storagePath);
 
-			return new StoredArtifact(
-				artifactId,
-				jobId,
-				kind,
-				fileName,
-				mediaType,
-				Files.size(storagePath),
-				Instant.now(),
-				storagePath
-			);
+			return registerArtifact(jobId, artifactId, kind, fileName, mediaType, storagePath, durable);
 		}
 		catch (IOException exception) {
 			throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Не удалось сохранить binary artifact.", exception);
@@ -85,19 +103,59 @@ public class ArtifactStorageService {
 			Files.createDirectories(artifactDirectory);
 			Files.write(storagePath, bytes);
 
-			return new StoredArtifact(
-				artifactId,
-				jobId,
-				kind,
-				fileName,
-				mediaType,
-				Files.size(storagePath),
-				Instant.now(),
-				storagePath
-			);
+			return registerArtifact(jobId, artifactId, kind, fileName, mediaType, storagePath, true);
 		}
 		catch (IOException exception) {
 			throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Не удалось сохранить in-memory artifact.", exception);
+		}
+	}
+
+	private StoredArtifact registerArtifact(
+		UUID jobId,
+		UUID artifactId,
+		String kind,
+		String fileName,
+		String mediaType,
+		Path storagePath,
+		boolean durable
+	) throws IOException {
+		var createdAt = Instant.now();
+		var sizeBytes = Files.size(storagePath);
+		try {
+			this.resourceBudgets.verifyResultSize(sizeBytes);
+		}
+		catch (RuntimeException exception) {
+			Files.deleteIfExists(storagePath);
+			throw exception;
+		}
+		var artifact = new StoredArtifact(
+			artifactId,
+			jobId,
+			kind,
+			fileName,
+			mediaType,
+			sizeBytes,
+			sha256(storagePath),
+			createdAt,
+			createdAt.plus(this.processingProperties.getArtifactRetentionHours(), ChronoUnit.HOURS),
+			storagePath
+		);
+		if (durable) {
+			this.stateStore.saveArtifact(jobId, artifact);
+		}
+		return artifact;
+	}
+
+	private String sha256(Path path) throws IOException {
+		try {
+			var digest = MessageDigest.getInstance("SHA-256");
+			try (var input = new DigestInputStream(Files.newInputStream(path), digest)) {
+				input.transferTo(java.io.OutputStream.nullOutputStream());
+			}
+			return HexFormat.of().formatHex(digest.digest());
+		}
+		catch (java.security.NoSuchAlgorithmException exception) {
+			throw new IllegalStateException("SHA-256 должен быть доступен в стандартной JDK.", exception);
 		}
 	}
 

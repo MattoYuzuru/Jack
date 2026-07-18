@@ -180,8 +180,12 @@ export function useViewerAudioPlayback(
       return
     }
 
-    await navigator.clipboard.writeText(currentTimeLabel.value)
-    playbackMessage.value = `Таймкод ${currentTimeLabel.value} скопирован в clipboard.`
+    try {
+      await navigator.clipboard.writeText(currentTimeLabel.value)
+      playbackMessage.value = `Таймкод ${currentTimeLabel.value} скопирован в clipboard.`
+    } catch {
+      playbackMessage.value = 'Браузер не разрешил запись таймкода в clipboard.'
+    }
   }
 
   function handleShortcutKeydown(event: KeyboardEvent) {

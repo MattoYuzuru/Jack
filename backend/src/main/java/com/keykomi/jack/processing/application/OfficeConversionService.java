@@ -87,15 +87,21 @@ public class OfficeConversionService {
 	private final ProcessingProperties processingProperties;
 	private final ArtifactStorageService artifactStorageService;
 	private final DocumentPreviewService documentPreviewService;
+	private final ProcessingResourceBudgetService resourceBudgets;
+	private final NativeProcessExecutor nativeProcessExecutor;
 
 	public OfficeConversionService(
 		ProcessingProperties processingProperties,
 		ArtifactStorageService artifactStorageService,
-		DocumentPreviewService documentPreviewService
+		DocumentPreviewService documentPreviewService,
+		ProcessingResourceBudgetService resourceBudgets,
+		NativeProcessExecutor nativeProcessExecutor
 	) {
 		this.processingProperties = processingProperties;
 		this.artifactStorageService = artifactStorageService;
 		this.documentPreviewService = documentPreviewService;
+		this.resourceBudgets = resourceBudgets;
+		this.nativeProcessExecutor = nativeProcessExecutor;
 	}
 
 	public boolean isAvailable() {
@@ -1672,14 +1678,7 @@ public class OfficeConversionService {
 	}
 
 	private Optional<String> readZipEntryAsText(ZipFile zipFile, String entryName) throws IOException {
-		var entry = zipFile.getEntry(entryName);
-		if (entry == null) {
-			return Optional.empty();
-		}
-
-		try (var inputStream = zipFile.getInputStream(entry)) {
-			return Optional.of(new String(inputStream.readAllBytes(), StandardCharsets.UTF_8));
-		}
+		return this.resourceBudgets.readZipEntryAsText(zipFile, entryName, 8_388_608L);
 	}
 
 	private org.w3c.dom.Document parseXml(String content) {
@@ -1818,58 +1817,7 @@ public class OfficeConversionService {
 	}
 
 	private void execute(List<String> command, Path workingDirectory, Duration timeout) {
-		Process process = null;
-		Thread outputReader = null;
-		var output = new ByteArrayOutputStream();
-		var outputFailure = new AtomicReference<IOException>();
-
-		try {
-			process = new ProcessBuilder(command)
-				.directory(workingDirectory.toFile())
-				.redirectErrorStream(true)
-				.start();
-
-			var runningProcess = process;
-			outputReader = Thread.ofVirtual()
-				.name("jack-office-conversion-output")
-				.start(() -> {
-					try (var inputStream = runningProcess.getInputStream()) {
-						inputStream.transferTo(output);
-					}
-					catch (IOException exception) {
-						outputFailure.set(exception);
-					}
-				});
-
-			var finished = process.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS);
-			if (!finished) {
-				process.destroyForcibly();
-				process.waitFor(5, TimeUnit.SECONDS);
-				throw new ResponseStatusException(HttpStatus.REQUEST_TIMEOUT, "Office conversion превысил допустимый timeout.");
-			}
-
-			outputReader.join(1_000L);
-			if (outputFailure.get() != null) {
-				throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Не удалось прочитать вывод внешнего office processor.", outputFailure.get());
-			}
-
-			if (process.exitValue() != 0) {
-				throw new ResponseStatusException(
-					HttpStatus.UNPROCESSABLE_ENTITY,
-					"Команда завершилась с кодом %s: %s".formatted(process.exitValue(), normalizeCommandOutput(output.toByteArray()))
-				);
-			}
-		}
-		catch (IOException exception) {
-			throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Не удалось запустить внешний office processor.", exception);
-		}
-		catch (InterruptedException exception) {
-			if (process != null) {
-				process.destroy();
-			}
-			Thread.currentThread().interrupt();
-			throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Office conversion был прерван.", exception);
-		}
+		this.nativeProcessExecutor.execute(command, workingDirectory, timeout);
 	}
 
 	private Optional<Path> resolveExecutable(String executable) {

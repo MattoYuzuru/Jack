@@ -4,13 +4,13 @@ import com.keykomi.jack.processing.application.ProcessingJobService;
 import com.keykomi.jack.processing.domain.ProcessingJobType;
 import com.keykomi.jack.processing.domain.StoredArtifact;
 import com.keykomi.jack.processing.domain.StoredProcessingJob;
-import java.io.IOException;
-import java.nio.file.Files;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import org.springframework.core.io.ByteArrayResource;
+import org.springframework.core.io.FileSystemResource;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.support.ResourceRegion;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -57,23 +57,52 @@ public class ProcessingJobController {
 	}
 
 	@GetMapping("/{jobId}/artifacts/{artifactId}")
-	public ResponseEntity<ByteArrayResource> downloadArtifact(@PathVariable UUID jobId, @PathVariable UUID artifactId) {
+	public ResponseEntity<?> downloadArtifact(
+		@PathVariable UUID jobId,
+		@PathVariable UUID artifactId,
+		@org.springframework.web.bind.annotation.RequestHeader(value = HttpHeaders.RANGE, required = false) String rangeHeader
+	) {
 		var artifact = this.processingJobService.getRequiredArtifact(jobId, artifactId);
+		var resource = new FileSystemResource(artifact.storagePath());
+		var headers = downloadHeaders(artifact);
 
-		try {
-			var body = new ByteArrayResource(Files.readAllBytes(artifact.storagePath()));
-			var headers = new HttpHeaders();
-			headers.setContentType(MediaType.parseMediaType(artifact.mediaType()));
-			headers.setContentDisposition(
-				ContentDisposition.attachment()
-					.filename(artifact.fileName())
-					.build()
-			);
-
-			return new ResponseEntity<>(body, headers, HttpStatus.OK);
+		if (rangeHeader == null || rangeHeader.isBlank()) {
+			headers.setContentLength(artifact.sizeBytes());
+			return new ResponseEntity<Resource>(resource, headers, HttpStatus.OK);
 		}
-		catch (IOException exception) {
-			throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Не удалось прочитать artifact с диска.", exception);
+
+		var range = parseRange(rangeHeader, artifact.sizeBytes());
+		headers.set(HttpHeaders.CONTENT_RANGE, "bytes %d-%d/%d".formatted(range.start(), range.end(), artifact.sizeBytes()));
+		headers.setContentLength(range.length());
+		return new ResponseEntity<>(new ResourceRegion(resource, range.start(), range.length()), headers, HttpStatus.PARTIAL_CONTENT);
+	}
+
+	private HttpHeaders downloadHeaders(StoredArtifact artifact) {
+		var headers = new HttpHeaders();
+		headers.setContentType(MediaType.parseMediaType(artifact.mediaType()));
+		headers.setContentDisposition(ContentDisposition.attachment().filename(artifact.fileName()).build());
+		headers.setCacheControl("no-store");
+		headers.set("X-Content-Type-Options", "nosniff");
+		headers.set(HttpHeaders.ACCEPT_RANGES, "bytes");
+		return headers;
+	}
+
+	private DownloadRange parseRange(String header, long sizeBytes) {
+		if (!header.startsWith("bytes=") || header.contains(",") || sizeBytes <= 0L) {
+			throw new ResponseStatusException(HttpStatus.REQUESTED_RANGE_NOT_SATISFIABLE, "Range не поддерживается.");
+		}
+		var parts = header.substring("bytes=".length()).split("-", -1);
+		try {
+			var start = parts[0].isBlank() ? Math.max(0L, sizeBytes - Long.parseLong(parts[1])) : Long.parseLong(parts[0]);
+			var requestedEnd = parts.length < 2 || parts[1].isBlank() ? sizeBytes - 1L : Long.parseLong(parts[1]);
+			var end = Math.min(requestedEnd, Math.min(sizeBytes - 1L, start + 8_388_607L));
+			if (start < 0L || start >= sizeBytes || end < start) {
+				throw new NumberFormatException("invalid bounds");
+			}
+			return new DownloadRange(start, end);
+		}
+		catch (NumberFormatException exception) {
+			throw new ResponseStatusException(HttpStatus.REQUESTED_RANGE_NOT_SATISFIABLE, "Range не поддерживается.");
 		}
 	}
 
@@ -85,10 +114,14 @@ public class ProcessingJobController {
 			job.status(),
 			job.progressPercent(),
 			job.message(),
+			job.errorCode(),
 			job.errorMessage(),
+			job.correlationId(),
 			job.createdAt(),
 			job.startedAt(),
 			job.completedAt(),
+			job.expiresAt(),
+			job.policyVersion(),
 			job.artifacts()
 				.stream()
 				.map(this::toArtifactResponse)
@@ -103,7 +136,9 @@ public class ProcessingJobController {
 			artifact.fileName(),
 			artifact.mediaType(),
 			artifact.sizeBytes(),
+			artifact.sha256(),
 			artifact.createdAt(),
+			artifact.expiresAt(),
 			"/api/jobs/%s/artifacts/%s".formatted(artifact.jobId(), artifact.id())
 		);
 	}
@@ -122,10 +157,14 @@ public class ProcessingJobController {
 		com.keykomi.jack.processing.domain.ProcessingJobStatus status,
 		int progressPercent,
 		String message,
+		String errorCode,
 		String errorMessage,
+		UUID correlationId,
 		Instant createdAt,
 		Instant startedAt,
 		Instant completedAt,
+		Instant expiresAt,
+		String policyVersion,
 		List<ArtifactResponse> artifacts
 	) {
 	}
@@ -136,9 +175,17 @@ public class ProcessingJobController {
 		String fileName,
 		String mediaType,
 		long sizeBytes,
+		String sha256,
 		Instant createdAt,
+		Instant expiresAt,
 		String downloadPath
 	) {
+	}
+
+	private record DownloadRange(long start, long end) {
+		long length() {
+			return this.end - this.start + 1L;
+		}
 	}
 
 }

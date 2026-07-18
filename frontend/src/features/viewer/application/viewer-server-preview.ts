@@ -123,6 +123,7 @@ export type ViewerServerResolvedPayload =
     }
   | {
       kind: 'document'
+      sourceUploadId?: string | null
       summary: ViewerDocumentFact[]
       searchableText: string
       warnings: string[]
@@ -234,6 +235,7 @@ async function buildDocumentPayload(
   try {
     return {
       kind: 'document',
+      sourceUploadId: manifest.uploadId,
       summary: manifest.documentPayload.summary,
       searchableText: manifest.documentPayload.searchableText,
       warnings: deduplicateWarnings(manifest.documentPayload.warnings),
