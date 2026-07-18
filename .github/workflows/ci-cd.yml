@@ -21,6 +21,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          fetch-depth: 0
 
       - name: Scan repository for secrets
         uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2
@@ -109,7 +111,7 @@ jobs:
           path: |
             frontend/frontend-sbom.cdx.json
             backend/build/reports/dependency-check-report.*
-            backend/build/reports/cyclonedx/*.json
+            backend/build/reports/cyclonedx-direct/*.json
           if-no-files-found: warn
 
       - name: Validate Compose config
