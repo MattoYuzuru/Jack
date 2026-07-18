@@ -8,3 +8,14 @@ spec:
     maxRequestBodyBytes: 67108864
     memRequestBodyBytes: 2097152
     retryExpression: IsNetworkError() && Attempts() < 2
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: redirect-https
+  namespace: jack
+spec:
+  # Secure owner cookie требует принудительного TLS даже при прямом HTTP-входе.
+  redirectScheme:
+    scheme: https
+    permanent: true
