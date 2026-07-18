@@ -121,6 +121,8 @@ class ProcessingFoundationApiTests {
 			.andExpect(jsonPath("$.jobTypes[5].implemented").value(true))
 			.andExpect(jsonPath("$.jobTypes[6].implemented").value(true))
 			.andExpect(jsonPath("$.viewerMatrix.acceptAttribute").value(org.hamcrest.Matchers.containsString(".jpg")))
+			.andExpect(jsonPath("$.viewerMatrix.acceptAttribute").value(org.hamcrest.Matchers.containsString(".xlsm")))
+			.andExpect(jsonPath("$.viewerMatrix.acceptAttribute").value(org.hamcrest.Matchers.containsString(".ods")))
 			.andExpect(jsonPath("$.viewerMatrix.formats[0].extension").value("jpg"));
 
 		this.mockMvc.perform(get("/api/capabilities/converter"))
