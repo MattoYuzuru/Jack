@@ -168,6 +168,10 @@ Manifests намеренно содержат `sha-RELEASE_SHA`: apply без п
 является production rollout. Horizontal scaling требует shared object storage, distributed
 queue/lease и единого cleanup coordinator.
 
+Bootstrap принимает только `sha-<commit>`, подставляет images до `apply` и поэтому не создаёт
+временный ReplicaSet с placeholder image. Ограниченный init container с единственной `CHOWN`
+capability нормализует ownership processing PVC после перехода со старого root-runtime.
+
 ## Roadmap и Выполненная Работа
 
 Проект уже прошёл несколько завершённых итераций:

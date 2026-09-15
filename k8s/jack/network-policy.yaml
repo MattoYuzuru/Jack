@@ -22,9 +22,14 @@ spec:
     - Ingress
   ingress:
     - from:
+        # В k3s встроенный Traefik живёт в kube-system; pod selector не даёт
+        # остальным системным workload использовать frontend ingress rule.
         - namespaceSelector:
             matchLabels:
-              kubernetes.io/metadata.name: traefik
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: traefik
       ports:
         - protocol: TCP
           port: 8080
@@ -48,7 +53,10 @@ spec:
               app: jack-frontend
         - namespaceSelector:
             matchLabels:
-              kubernetes.io/metadata.name: traefik
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: traefik
       ports:
         - protocol: TCP
           port: 8080

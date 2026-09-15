@@ -6,9 +6,18 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 KUBECTL_BIN="${KUBECTL_BIN:-sudo k3s kubectl}"
 NAMESPACE="jack"
 IMAGE_OWNER="${JACK_IMAGE_OWNER:-mattoyuzuru}"
-IMAGE_TAG="${JACK_IMAGE_TAG:-edge}"
+IMAGE_TAG="${JACK_IMAGE_TAG:-}"
 FRONTEND_IMAGE="ghcr.io/${IMAGE_OWNER}/jack/frontend:${IMAGE_TAG}"
 BACKEND_IMAGE="ghcr.io/${IMAGE_OWNER}/jack/backend:${IMAGE_TAG}"
+
+if [[ ! "${IMAGE_OWNER}" =~ ^[a-z0-9][a-z0-9-]*$ ]]; then
+  echo "JACK_IMAGE_OWNER содержит недопустимое registry owner значение." >&2
+  exit 1
+fi
+if [[ ! "${IMAGE_TAG}" =~ ^sha-[0-9a-f]{7,40}$ ]]; then
+  echo "JACK_IMAGE_TAG должен быть immutable tag вида sha-<commit>." >&2
+  exit 1
+fi
 
 POSTGRES_USER="${JACK_POSTGRES_USER:-}"
 POSTGRES_DB="${JACK_POSTGRES_DB:-}"
@@ -52,9 +61,23 @@ ${KUBECTL_BIN} -n "${NAMESPACE}" create secret generic jack-secrets \
   --dry-run=client \
   -o yaml | ${KUBECTL_BIN} apply -f -
 
-${KUBECTL_BIN} apply -k "${ROOT_DIR}/k8s/jack"
-${KUBECTL_BIN} -n "${NAMESPACE}" set image deployment/backend backend="${BACKEND_IMAGE}"
-${KUBECTL_BIN} -n "${NAMESPACE}" set image deployment/frontend frontend="${FRONTEND_IMAGE}"
+RENDERED_MANIFEST="$(mktemp)"
+trap 'rm -f "${RENDERED_MANIFEST}"' EXIT
+
+# Подставляем immutable images до apply: иначе placeholder создаёт лишний
+# ReplicaSet и кратковременно запускает заведомо неразрешимый image pull.
+${KUBECTL_BIN} kustomize "${ROOT_DIR}/k8s/jack" \
+  | sed \
+    -e "s#ghcr.io/mattoyuzuru/jack/backend:sha-RELEASE_SHA#${BACKEND_IMAGE}#g" \
+    -e "s#ghcr.io/mattoyuzuru/jack/frontend:sha-RELEASE_SHA#${FRONTEND_IMAGE}#g" \
+  > "${RENDERED_MANIFEST}"
+
+if grep -q 'sha-RELEASE_SHA' "${RENDERED_MANIFEST}"; then
+  echo "Не удалось подставить immutable release images в manifests." >&2
+  exit 1
+fi
+
+${KUBECTL_BIN} apply -f "${RENDERED_MANIFEST}"
 
 ${KUBECTL_BIN} -n "${NAMESPACE}" rollout status statefulset/postgres --timeout=180s
 ${KUBECTL_BIN} -n "${NAMESPACE}" rollout status deployment/backend --timeout=240s

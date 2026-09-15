@@ -25,6 +25,29 @@ spec:
         fsGroup: 10001
         seccompProfile:
           type: RuntimeDefault
+      initContainers:
+        - name: processing-permissions
+          image: postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
+          command:
+            - sh
+            - -c
+            # Старый root-runtime мог оставить каталоги PVC недоступными для UID 10001.
+            # Init получает только CAP_CHOWN и завершается до запуска backend.
+            - chown -R 10001:10001 /data/processing
+          securityContext:
+            runAsNonRoot: false
+            runAsUser: 0
+            runAsGroup: 0
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+              add:
+                - CHOWN
+          volumeMounts:
+            - name: processing-data
+              mountPath: /data/processing
       containers:
         - name: backend
           image: ghcr.io/mattoyuzuru/jack/backend:sha-RELEASE_SHA
